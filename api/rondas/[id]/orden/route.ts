@@ -1,12 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma"; // ajusta a tu proyecto
 
 type PUTBody = { ordenIds: number[] };
 
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: Request | NextRequest, { params }: any) {
   try {
     const rondaId = Number(params.id);
     if (!rondaId || Number.isNaN(rondaId)) {

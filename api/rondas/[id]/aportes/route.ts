@@ -1,15 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 
 type AporteLite = { socioId: number; monto: Decimal; multa: Decimal };
 type AhorroAgg = { socioId: number; _sum: { monto: Decimal | null } };
-type Context = { params: Promise<{ id: string; n: string }> };
 
-export async function GET(_req: Request, context: Context) {
-  const { params } = await context;
-  const rondaId = Number((await params).id);
-  const semana = Number((await params).n);
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const rondaId = Number(params.id);
+
+  // si semana viene como query param
+  const { searchParams } = new URL(req.url);
+  const semana = Number(searchParams.get("semana"));
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
@@ -18,7 +22,7 @@ export async function GET(_req: Request, context: Context) {
       nombre: true,
       semanaActual: true,
       montoAporte: true,
-      ahorroObjetivoPorSocio: true,  // 👈 traer este campo
+      ahorroObjetivoPorSocio: true,
       participaciones: {
         select: {
           id: true,
@@ -27,11 +31,13 @@ export async function GET(_req: Request, context: Context) {
           socio: true,
         },
         orderBy: { orden: "asc" },
-      }
+      },
     },
   });
 
-  if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  if (!ronda) {
+    return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  }
 
   // Aportes de la semana
   const aportes = (await prisma.aporte.findMany({
@@ -39,13 +45,12 @@ export async function GET(_req: Request, context: Context) {
     select: { socioId: true, monto: true, multa: true },
   })) as AporteLite[];
 
-  // Ahorro acumulado hasta la semana actual (1..semana)
+  // Ahorro acumulado
   const ahorroAgg = await prisma.ahorro.groupBy({
     by: ["socioId"],
     where: { rondaId, semana: { lte: semana } },
     _sum: { monto: true },
   });
-
 
   const ahorroBySocio: Record<number, Decimal> = {};
   for (const a of ahorroAgg) {
@@ -75,9 +80,8 @@ export async function GET(_req: Request, context: Context) {
       pagado: !!ap,
       monto: ap ? ap.monto.toString() : null,
       multa: ap ? ap.multa.toString() : "0",
-
-      ahorroAcumulado: ah.toString(),     // 👈 NUEVO
-      ahorroRestante: restanteStr,        // 👈 NUEVO
+      ahorroAcumulado: ah.toString(),
+      ahorroRestante: restanteStr,
     };
   });
 
@@ -87,7 +91,7 @@ export async function GET(_req: Request, context: Context) {
       nombre: ronda.nombre,
       semanaActual: ronda.semanaActual,
       montoAporte: ronda.montoAporte.toString(),
-      ahorroObjetivoPorSocio: ronda.ahorroObjetivoPorSocio.toString(), // 👈 NUEVO
+      ahorroObjetivoPorSocio: ronda.ahorroObjetivoPorSocio.toString(),
     },
     semana,
     totalParticipantes: ronda.participaciones.length,
@@ -95,27 +99,25 @@ export async function GET(_req: Request, context: Context) {
   });
 }
 
-export async function POST(req: Request, context: Context) {
-  const { params } = await context;
-  const rondaId = Number((await params).id);
-
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const rondaId = Number(params.id);
   const { socioId, semana, monto, multa } = await req.json();
+
   if (!socioId || !semana || monto == null) {
     return NextResponse.json({ error: "Faltan parámetros" }, { status: 400 });
   }
 
-  // Verifica que la ronda exista
   const ronda = await prisma.ronda.findUnique({ where: { id: rondaId } });
-  if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  if (!ronda) {
+    return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  }
 
-  // Crear aporte o reemplazar si ya existía
   const reg = await prisma.aporte.upsert({
     where: {
-      rondaId_socioId_semana: {
-        rondaId,
-        socioId,
-        semana,
-      },
+      rondaId_socioId_semana: { rondaId, socioId, semana },
     },
     update: { monto, multa },
     create: { rondaId, socioId, semana, monto, multa },

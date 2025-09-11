@@ -1,9 +1,9 @@
 // app/api/rondas/[id]/participantes/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 export const runtime = "nodejs";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request | NextRequest, { params }: any) {
   const rondaId = Number(params.id);
   const { sociosIds } = await req.json(); // [number]
 
