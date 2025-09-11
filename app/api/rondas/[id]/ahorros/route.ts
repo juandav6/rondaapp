@@ -4,14 +4,18 @@ import prisma from "@/lib/prisma";
 
 export async function POST(
   req: Request | NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Record<string, string | string[]> }
 ) {
-  const rondaId = Number(params.id);
-  const body = await req.json() as { socioId?: number; semana?: number; monto?: number };
+  // id puede ser string | string[]
+  const rawId = params?.id;
+  const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
+  const rondaId = Number(idStr);
 
-  const { socioId, semana, monto } = body;
+  const { socioId, semana, monto } = (await req.json()) as {
+    socioId?: number; semana?: number; monto?: number;
+  };
 
-  if (!socioId || !semana || !monto || Number(monto) <= 0) {
+  if (!socioId || !semana || !monto || Number(monto) <= 0 || !Number.isFinite(rondaId)) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
@@ -25,7 +29,6 @@ export async function POST(
 
   const objetivo = Number(ronda.ahorroObjetivoPorSocio ?? 0);
 
-  // acumulado actual
   const { _sum } = await prisma.ahorro.aggregate({
     where: { rondaId, socioId },
     _sum: { monto: true },
@@ -40,13 +43,9 @@ export async function POST(
     );
   }
 
-  // máximo un registro por semana
   const ya = await prisma.ahorro.count({ where: { rondaId, socioId, semana } });
   if (ya > 0) {
-    return NextResponse.json(
-      { error: "Ya registraste un ahorro esta semana" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Ya registraste un ahorro esta semana" }, { status: 400 });
   }
 
   await prisma.ahorro.create({
