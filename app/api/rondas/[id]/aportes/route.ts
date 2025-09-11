@@ -4,12 +4,15 @@ import { Decimal } from "@prisma/client/runtime/library";
 
 type AporteLite = { socioId: number; monto: Decimal; multa: Decimal };
 type AhorroAgg = { socioId: number; _sum: { monto: Decimal | null } };
-type Context = { params: Promise<{ id: string; n: string }> };
+type Context = { params: { id: string } };
 
-export async function GET(_req: Request, context: Context) {
-  const { params } = await context;
-  const rondaId = Number((await params).id);
-  const semana = Number((await params).n);
+
+export async function GET(_req: Request, { params }: Context) {
+  const rondaId = Number(params.id);
+
+  // Si quieres recibir `semana` como query param (?semana=3):
+  const { searchParams } = new URL(_req.url);
+  const semana = Number(searchParams.get("semana"));
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
@@ -97,7 +100,7 @@ export async function GET(_req: Request, context: Context) {
 
 export async function POST(req: Request, context: Context) {
   const { params } = await context;
-  const rondaId = Number((await params).id);
+  const rondaId = Number(params.id);
 
   const { socioId, semana, monto, multa } = await req.json();
   if (!socioId || !semana || monto == null) {
