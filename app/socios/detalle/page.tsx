@@ -1,7 +1,11 @@
+// app/socios/detalle/page.tsx
 import Link from "next/link";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+// (opcional pero recomendado) Reutiliza Prisma en dev para evitar demasiados clientes
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 function fmtMoney(n: number | bigint, currency = "USD", locale = "es-EC") {
   return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(n || 0));
@@ -17,14 +21,7 @@ function fmtDate(iso: string | Date | null | undefined, locale = "es-EC") {
 async function getSocios() {
   return prisma.socio.findMany({
     orderBy: [{ apellidos: "asc" }, { nombres: "asc" }],
-    select: {
-      id: true,
-      numeroCuenta: true,
-      nombres: true,
-      apellidos: true,
-      cedula: true,
-      multas: true,
-    },
+    select: { id: true, numeroCuenta: true, nombres: true, apellidos: true, cedula: true, multas: true },
   });
 }
 
@@ -46,24 +43,11 @@ async function getDetalleSocio(socioId: number) {
     const totalAportes = r.aportes.reduce((acc, a) => acc + Number(a.monto), 0);
     const totalMultas = r.aportes.reduce((acc, a) => acc + Number(a.multa), 0);
     const totalAhorros = r.ahorros.reduce((acc, a) => acc + Number(a.monto), 0);
-    return {
-      id: r.id,
-      nombre: r.nombre,
-      fechaInicio: r.fechaInicio,
-      fechaFin: r.fechaFin,
-      totalAportes,
-      totalAhorros,
-      totalMultas,
-    };
+    return { id: r.id, nombre: r.nombre, fechaInicio: r.fechaInicio, fechaFin: r.fechaFin, totalAportes, totalAhorros, totalMultas };
   });
 
   const totalGeneral = detallePorRonda.reduce(
-    (acc, d) => {
-      acc.aportes += d.totalAportes;
-      acc.ahorros += d.totalAhorros;
-      acc.multas += d.totalMultas;
-      return acc;
-    },
+    (acc, d) => ({ aportes: acc.aportes + d.totalAportes, ahorros: acc.ahorros + d.totalAhorros, multas: acc.multas + d.totalMultas }),
     { aportes: 0, ahorros: 0, multas: 0 }
   );
 
@@ -84,10 +68,17 @@ async function getDetalleSocio(socioId: number) {
   };
 }
 
-export default async function Page({ searchParams }: { searchParams: { socioId?: string } }) {
+// ✅ searchParams ahora es Promise y lo desenvuelves
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ socioId?: string }>;
+}) {
+  const { socioId } = await searchParams;
   const socios = await getSocios();
-  const selectedId = searchParams?.socioId ? Number(searchParams.socioId) : undefined;
-  const detalle = selectedId ? await getDetalleSocio(selectedId) : null;
+
+  const selectedId = socioId ? Number.parseInt(socioId, 10) : undefined;
+  const detalle = Number.isFinite(selectedId as number) ? await getDetalleSocio(selectedId as number) : null;
 
   return (
     <div className="space-y-6">
