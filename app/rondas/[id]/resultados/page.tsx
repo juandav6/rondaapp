@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { NextRequest } from "next/server";
 
 // ===== Tipos de datos =====
 export type Resumen = {
@@ -55,7 +56,7 @@ const fmtDate = (iso: string | null, locale = "es-EC") => {
 };
 
 // ===== Componente principal =====
-export default function ResultadosPage({ params }: { params: { id: string } }) {
+export default function ResultadosPage(req: Request | NextRequest, { params }: any){
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [socios, setSocios] = useState<SocioDetalle[]>([]);
   const [loading, setLoading] = useState(true);

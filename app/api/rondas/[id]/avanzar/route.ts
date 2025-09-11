@@ -1,21 +1,31 @@
-import { NextResponse } from "next/server";
+// app/api/rondas/[id]/avanzar/route.ts
+import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
+  req: Request | NextRequest,
+  // ❌ no tipar el 2º argumento para evitar el check estricto de Next
+  { params }: any
 ) {
-  const rondaId = Number(params.id);
+  const rawId = params?.id;
+  const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
+  const rondaId = Number(idStr);
+  if (!Number.isFinite(rondaId)) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
     include: { participaciones: true },
   });
-  if (!ronda?.activa) return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
+  if (!ronda?.activa) {
+    return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
+  }
 
   const duracion = ronda.participaciones.length;
-  const siguiente = ronda.semanaActual + 1;
+  const siguiente = (ronda.semanaActual ?? 0) + 1;
 
   // si ya terminó
   if (siguiente > duracion) {
@@ -30,5 +40,6 @@ export async function POST(
     where: { id: rondaId },
     data: { semanaActual: siguiente },
   });
+
   return NextResponse.json(r);
 }

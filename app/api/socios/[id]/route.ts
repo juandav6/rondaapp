@@ -1,15 +1,15 @@
 // app/api/socios/[id]/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request | NextRequest, { params }: any) {
   const id = Number(params.id);
   const socio = await prisma.socio.findUnique({ where: { id } });
   if (!socio) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   return NextResponse.json(socio);
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request | NextRequest, { params }: any){
   try {
     const id = Number(params.id);
     const body = await req.json();
@@ -34,7 +34,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request | NextRequest, { params }: any) {
   const id = Number(params.id);
   await prisma.socio.delete({ where: { id } });
   return NextResponse.json({ ok: true });
