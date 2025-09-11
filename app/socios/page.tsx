@@ -1,20 +1,32 @@
 "use client";
 import { useEffect, useState } from "react";
 
-interface Socio {
+interface SocioRow {
   id: number;
   numeroCuenta: string;
   nombres: string;
   apellidos: string;
   cedula: string;
   edad: number;
-  ahorros: number;
-  multas: number;
+  ahorros: number; // agregado (sumado en GET)
+  multas: number;  // agregado (aportes.multa + socio.multas si sumas)
 }
 
+// Tipo de creación (lo que SÍ acepta el POST)
+interface CreateSocioPayload {
+  cedula: string;
+  nombres: string;
+  apellidos: string;
+  edad: number;
+  multas?: number;
+  ahorroInicial?: number;     // 👈 este es el campo correcto
+}
+
+
 export default function SociosPage() {
-  const [socios, setSocios] = useState<Socio[]>([]);
-  const [form, setForm] = useState<Partial<Socio>>({});
+  const [socios, setSocios] = useState<SocioRow[]>([]);
+  const [form, setForm] = useState<Partial<CreateSocioPayload>>({});
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -44,27 +56,39 @@ export default function SociosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload: CreateSocioPayload = {
+        // Si el server autogenera CTA, no envíes numeroCuenta:
+        cedula: form.cedula!.trim(),
+        nombres: form.nombres!.trim(),
+        apellidos: form.apellidos!.trim(),
+        edad: Number(form.edad) || 0,
+        ...(form.multas != null ? { multas: Number(form.multas) } : {}),
+        ...(form.ahorroInicial ? { ahorroInicial: Number(form.ahorroInicial) } : {}),
+      };
+
       const response = await fetch("/api/socios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
-      
+
       if (!response.ok) {
-        throw new Error("Error al crear socio");
+        const errBody = await response.json().catch(() => ({}));
+        throw new Error(errBody?.error || "Error al crear socio");
       }
-      
+
       setForm({});
       setSuccess("Socio agregado correctamente");
       setError(null);
       setTimeout(() => setSuccess(null), 3000);
       await fetchSocios();
-      setActiveTab('lista');
+      setActiveTab("lista");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear socio");
       setSuccess(null);
     }
   };
+
 
   const handleDelete = async (id: number) => {
     if (!confirm("¿Está seguro de que desea eliminar este socio?")) {
@@ -184,18 +208,6 @@ export default function SociosPage() {
             
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Número de Cuenta</label>
-                <input
-                  type="text"
-                  placeholder="Ej: CU001"
-                  value={form.numeroCuenta || ""}
-                  onChange={(e) => setForm({ ...form, numeroCuenta: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cédula</label>
                 <input
                   type="text"
@@ -249,8 +261,8 @@ export default function SociosPage() {
                 <input
                   type="number"
                   placeholder="0.00"
-                  value={form.ahorros || ""}
-                  onChange={(e) => setForm({ ...form, ahorros: Number(e.target.value) })}
+                  value={form.ahorroInicial || ""}
+                  onChange={(e) => setForm({ ...form, ahorroInicial: Number(e.target.value) })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   step="0.01"
                   min="0"

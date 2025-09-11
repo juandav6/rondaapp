@@ -6,8 +6,9 @@ import Link from "next/link";
 type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: string };
 type Ronda = { id: number; codigo: string; nombre: string; montoAporte: number; fechaInicio: string; ahorroObjetivo: number; fechaFin?: string | null };
 
+// NOTA: hacemos 'codigo' opcional en el payload; el backend lo generará al crear.
 type CrearRondaPayload = {
-  codigo: string;
+  // codigo?: string;  // <- se omite para que lo genere el backend
   nombre: string;
   montoAporte: number;
   fechaInicio: string;
@@ -26,20 +27,6 @@ const fmtDate = (iso: string | null | undefined, locale = "es-EC") => {
 
 const classNames = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-// Genera un código con prefijo RD + 4 dígitos (intenta pedirlo al backend, si no, fallback local)
-async function getNextCodigo(): Promise<string> {
-  try {
-    const r = await fetch("/api/rondas/next-codigo");
-    if (r.ok) {
-      const { codigo } = await r.json();
-      if (typeof codigo === "string" && codigo.startsWith("RD")) return codigo;
-    }
-  } catch {}
-  // Fallback local: RD + últimos 4 de timestamp
-  const seq = (Date.now() % 10000).toString().padStart(4, "0");
-  return `RD${seq}`;
-}
-
 // ===== Componente =====
 export default function RegistrarRondaPage() {
   const [socios, setSocios] = useState<Socio[]>([]);
@@ -47,7 +34,7 @@ export default function RegistrarRondaPage() {
   const [orden, setOrden] = useState<number[]>([]); // ids en orden de recibir
 
   const [form, setForm] = useState<CrearRondaPayload>({
-    codigo: "",
+    // codigo: "",  // <- ya no se usa en el formulario
     nombre: "",
     montoAporte: 0,
     fechaInicio: "",
@@ -64,14 +51,12 @@ export default function RegistrarRondaPage() {
   const [savingOrden, setSavingOrden] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
-  // Carga inicial de socios y código
+  // Carga inicial de socios (SIN solicitar secuencial)
   useEffect(() => {
     fetch("/api/socios")
       .then((r) => r.json())
       .then((list) => setSocios(Array.isArray(list) ? list : []))
       .catch(() => setSocios([]));
-
-    getNextCodigo().then((codigo) => setForm((f) => ({ ...f, codigo })));
   }, []);
 
   // Búsqueda de socios
@@ -102,11 +87,17 @@ export default function RegistrarRondaPage() {
       setError(null);
       setLoading(true);
 
-      // 1) Crear ronda
+      // 1) Crear ronda (sin enviar 'codigo'; el backend lo genera)
       const resR = await fetch("/api/rondas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        // Enviamos únicamente los campos necesarios (sin codigo)
+        body: JSON.stringify({
+          nombre: form.nombre,
+          montoAporte: form.montoAporte,
+          fechaInicio: form.fechaInicio,
+          ahorroObjetivo: form.ahorroObjetivo,
+        }),
       });
       const dataR = await resR.json();
       if (!resR.ok) throw new Error(dataR?.error || "No se pudo crear la ronda");
@@ -401,24 +392,11 @@ export default function RegistrarRondaPage() {
           </header>
 
           <div className="grid gap-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Código (auto)</label>
-              <input
-                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                value={form.codigo}
-                readOnly
-              />
-              <p className="mt-1 text-xs text-gray-500">Formato: RD0000</p>
+            {/* Campo de código removido: el secuencial se genera al guardar */}
+            <div className="rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
+              El código de la ronda se generará automáticamente al guardar.
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Nombre</label>
-              <input
-                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                placeholder="Ronda de ejemplo"
-                value={form.nombre}
-                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-              />
-            </div>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Monto por aporte</label>
@@ -454,25 +432,32 @@ export default function RegistrarRondaPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Resumen</label>
-                <div className="rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                  {seleccion.length ? (
-                    <>
-                      {seleccion.length} socios • Total por socio al final: <strong>{fmtMoney(totalAportarPorSocio)}</strong>
-                    </>
-                  ) : (
-                    <span>Selecciona socios para ver totales</span>
-                  )}
-                </div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Nombre de la ronda</label>
+                <input
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Ej: Ronda familiar julio"
+                  value={form.nombre}
+                  onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
+                />
               </div>
+            </div>
+
+            <div className="rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
+              {seleccion.length ? (
+                <>
+                  {seleccion.length} socios • Total por socio al final: <strong>{fmtMoney(totalAportarPorSocio)}</strong>
+                </>
+              ) : (
+                <span>Selecciona socios para ver totales</span>
+              )}
             </div>
 
             <button
               onClick={crearRondaYParticipantes}
-              disabled={loading || !form.nombre || !form.fechaInicio || !form.montoAporte || !seleccion.length}
+              disabled={loading || !form.fechaInicio || !form.montoAporte || !seleccion.length || !form.nombre}
               className={classNames(
                 "mt-2 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-white",
-                loading || !form.nombre || !form.fechaInicio || !form.montoAporte || !seleccion.length
+                loading || !form.fechaInicio || !form.montoAporte || !seleccion.length || !form.nombre
                   ? "bg-blue-400 opacity-70"
                   : "bg-blue-600 hover:bg-blue-700"
               )}

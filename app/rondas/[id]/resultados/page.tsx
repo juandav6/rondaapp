@@ -339,25 +339,6 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                 ))
               )}
             </tbody>
-            {/* Totales visibles en la página actual */}
-            {visible.length > 0 && (
-              <tfoot>
-                <tr className="border-t bg-gray-50 font-medium">
-                  <td className="px-4 py-3 text-right" colSpan={2}>
-                    Subtotal (página)
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {fmtCurrency(visible.reduce((acc, s) => acc + (s.aportes ?? 0), 0))}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {fmtCurrency(visible.reduce((acc, s) => acc + (s.ahorros ?? 0), 0))}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {fmtCurrency(visible.reduce((acc, s) => acc + (s.multas ?? 0), 0))}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
 

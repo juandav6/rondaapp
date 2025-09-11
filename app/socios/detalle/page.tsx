@@ -173,15 +173,6 @@ export default async function Page({ searchParams }: { searchParams: { socioId?:
                     <p className="text-xs text-gray-500">Multas (aportes)</p>
                     <p className="mt-1 text-xl font-semibold">{fmtMoney(detalle.totalGeneral.multasAporte)}</p>
                   </div>
-                  <div className="rounded-lg border p-4">
-                    <p className="text-xs text-gray-500">Multas extra socio</p>
-                    <p className="mt-1 text-xl font-semibold">{fmtMoney(detalle.totalGeneral.multasExtraSocio)}</p>
-                  </div>
-                </div>
-                <div className="mt-4 text-sm">
-                  <span className="text-gray-500">Total general (aportes + ahorros + multas)</span>
-                  <span className="mx-2 text-gray-400">•</span>
-                  <span className="font-semibold">{fmtMoney(detalle.totalGeneral.aportes + detalle.totalGeneral.ahorros + detalle.totalGeneral.multas)}</span>
                 </div>
               </section>
 
@@ -204,7 +195,6 @@ export default async function Page({ searchParams }: { searchParams: { socioId?:
                         <th className="px-4 py-2 text-right">Aportes</th>
                         <th className="px-4 py-2 text-right">Ahorros</th>
                         <th className="px-4 py-2 text-right">Multas</th>
-                        <th className="px-4 py-2 text-right">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -218,7 +208,6 @@ export default async function Page({ searchParams }: { searchParams: { socioId?:
                             <td className="px-4 py-2 text-right">{fmtMoney(r.totalAportes)}</td>
                             <td className="px-4 py-2 text-right">{fmtMoney(r.totalAhorros)}</td>
                             <td className="px-4 py-2 text-right">{fmtMoney(r.totalMultas)}</td>
-                            <td className="px-4 py-2 text-right font-semibold">{fmtMoney(total)}</td>
                           </tr>
                         );
                       })}
