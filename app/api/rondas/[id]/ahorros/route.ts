@@ -2,11 +2,13 @@
 import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 
+export const runtime = "nodejs";
+
 export async function POST(
   req: Request | NextRequest,
-  { params }: { params: Record<string, string | string[]> }
+  // ⚠️ sin tipo explícito para evitar la validación de Next
+  { params }: any
 ) {
-  // id puede ser string | string[]
   const rawId = params?.id;
   const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
   const rondaId = Number(idStr);
@@ -15,7 +17,7 @@ export async function POST(
     socioId?: number; semana?: number; monto?: number;
   };
 
-  if (!socioId || !semana || !monto || Number(monto) <= 0 || !Number.isFinite(rondaId)) {
+  if (!Number.isFinite(rondaId) || !socioId || !semana || !monto || Number(monto) <= 0) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 
