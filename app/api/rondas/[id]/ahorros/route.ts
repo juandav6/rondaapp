@@ -1,12 +1,15 @@
 // app/api/rondas/[id]/ahorros/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 
-type Params = { params: { id: string } };
-
-export async function POST(req: Request, { params }: Params) {
+export async function POST(
+  req: Request | NextRequest,
+  { params }: { params: { id: string } }
+) {
   const rondaId = Number(params.id);
-  const { socioId, semana, monto } = await req.json();
+  const body = await req.json() as { socioId?: number; semana?: number; monto?: number };
+
+  const { socioId, semana, monto } = body;
 
   if (!socioId || !semana || !monto || Number(monto) <= 0) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
@@ -16,7 +19,9 @@ export async function POST(req: Request, { params }: Params) {
     where: { id: rondaId },
     select: { ahorroObjetivoPorSocio: true },
   });
-  if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  if (!ronda) {
+    return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  }
 
   const objetivo = Number(ronda.ahorroObjetivoPorSocio ?? 0);
 
@@ -35,10 +40,13 @@ export async function POST(req: Request, { params }: Params) {
     );
   }
 
-  // Si quieres forzar máximo UN registro por semana, verifica:
+  // máximo un registro por semana
   const ya = await prisma.ahorro.count({ where: { rondaId, socioId, semana } });
   if (ya > 0) {
-    return NextResponse.json({ error: "Ya registraste un ahorro esta semana" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Ya registraste un ahorro esta semana" },
+      { status: 400 }
+    );
   }
 
   await prisma.ahorro.create({
