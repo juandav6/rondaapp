@@ -3,7 +3,6 @@ import prisma from "@/lib/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 
 type AporteLite = { socioId: number; monto: Decimal; multa: Decimal };
-type AhorroAgg = { socioId: number; _sum: { monto: Decimal | null } };
 
 export async function GET(
   req: NextRequest,
@@ -11,7 +10,6 @@ export async function GET(
 ) {
   const rondaId = Number(params.id);
 
-  // si semana viene como query param
   const { searchParams } = new URL(req.url);
   const semana = Number(searchParams.get("semana"));
 
@@ -39,13 +37,11 @@ export async function GET(
     return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
   }
 
-  // Aportes de la semana
   const aportes = (await prisma.aporte.findMany({
     where: { rondaId, semana },
     select: { socioId: true, monto: true, multa: true },
   })) as AporteLite[];
 
-  // Ahorro acumulado
   const ahorroAgg = await prisma.ahorro.groupBy({
     by: ["socioId"],
     where: { rondaId, semana: { lte: semana } },
@@ -116,9 +112,7 @@ export async function POST(
   }
 
   const reg = await prisma.aporte.upsert({
-    where: {
-      rondaId_socioId_semana: { rondaId, socioId, semana },
-    },
+    where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
     update: { monto, multa },
     create: { rondaId, socioId, semana, monto, multa },
   });
