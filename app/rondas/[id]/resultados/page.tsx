@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 // ===== Tipos de datos =====
@@ -55,7 +55,9 @@ const fmtDate = (iso: string | null, locale = "es-EC") => {
 };
 
 // ===== Componente principal =====
-export default function ResultadosPage({ params }: { params: { id: string } }) {
+export default function ResultadosPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params); // 👈 desenrolla el Promise de Next 15
+
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [socios, setSocios] = useState<SocioDetalle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,20 +74,18 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/rondas/${params.id}/resultados`)
+    fetch(`/api/rondas/${id}/resultados`)
       .then((r) => {
         if (!r.ok) throw new Error("No se pudo obtener los resultados");
         return r.json();
       })
       .then((data: any) => {
-        // Soportar el shape original { resumen, socios }
         setResumen(data?.resumen ?? null);
         setSocios(Array.isArray(data?.socios) ? data.socios : []);
       })
       .catch((err: any) => setError(err?.message ?? "Error desconocido"))
       .finally(() => setLoading(false));
-  }, [params.id]);
-
+  }, [id]); // 👈 deps actualizadas
   // Derivados: filtro y orden
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -127,7 +127,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const visible = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
 
   // Export CSV
-  function exportCSV() {
+  async function exportCSV() {
     const headers = ["Socio", "Cuenta", "Aportes", "Ahorros", "Multas"];
     const rows = filtered.map((s) => [
       `${s.nombres} ${s.apellidos}`.trim(),
@@ -143,16 +143,16 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `resultados_ronda_${resumen?.id ?? params.id}.csv`;
+    a.download = `resultados_ronda_${resumen?.id ?? (await params).id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   // Retry handler
-  function retry() {
+  async function retry() {
     setError(null);
     setLoading(true);
-    fetch(`/api/rondas/${params.id}/resultados`)
+    fetch(`/api/rondas/${(await params).id}/resultados`)
       .then((r) => r.json())
       .then((data: any) => {
         setResumen(data?.resumen ?? null);
