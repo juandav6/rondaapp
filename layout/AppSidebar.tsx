@@ -49,7 +49,6 @@ const navItems: NavItem[] = [
       { name: "Registrar ronda", path: "/rondas/registro_ronda" },
       { name: "Ronda actual", path: "/rondas/actual" },
       { name: "Historial de rondas", path: "/historial" },
-      { name: "Resultados ronda", path: "/rondas/resumen" },
     ],
   },
   {
@@ -57,7 +56,6 @@ const navItems: NavItem[] = [
     name: "Aportes / Pagos",
     subItems: [
       { name: "Registrar aporte", path: "/aportes/registrar" },
-      { name: "Registrar multa", path: "/aportes/multa" },
       { name: "Aportes pendientes", path: "/aportes/pendientes" },
     ],
   },
