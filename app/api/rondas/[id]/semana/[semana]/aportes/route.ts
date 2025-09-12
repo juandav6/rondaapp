@@ -1,13 +1,11 @@
-// app/api/rondas/[id]/semana/[semana]/aportes/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { Decimal } from "@prisma/client/runtime/library";
+import { getParams } from "@/lib/getParams";
+export const runtime = "nodejs";
 
-type ParamsPromise = Promise<{ id: string; semana: string }>;
-
-export async function GET(_req: Request, ctx: { params: ParamsPromise }) {
+export async function GET(_req: NextRequest, ctx: { params: { id: string; semana: string } } | { params: Promise<{ id: string; semana: string }> }) {
   try {
-    const { id, semana } = await ctx.params; // 👈 AHORA SÍ
+    const { id, semana } = await getParams((ctx as any).params);
     const rondaId = Number(id);
     const semanaNum = Number(semana);
 
@@ -15,19 +13,9 @@ export async function GET(_req: Request, ctx: { params: ParamsPromise }) {
       return NextResponse.json({ error: "Parámetros inválidos" }, { status: 400 });
     }
 
-    const ronda = await prisma.ronda.findUnique({
-      where: { id: rondaId },
-      select: {
-        id: true,
-        nombre: true,
-        semanaActual: true,
-        montoAporte: true,
-        ahorroObjetivoPorSocio: true,
-        participaciones: { include: { socio: true }, orderBy: { orden: "asc" } },
-      },
-    });
-
+   const ronda = await prisma.ronda.findUnique({ where: { id: rondaId } });
     if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+
 
     const objetivo = Number(ronda.ahorroObjetivoPorSocio ?? 0);
     const socioIds = ronda.participaciones.map((p) => p.socioId);
@@ -79,14 +67,14 @@ export async function GET(_req: Request, ctx: { params: ParamsPromise }) {
         nombre: ronda.nombre,
         semanaActual: ronda.semanaActual,
         montoAporte: ronda.montoAporte.toString(),
-        ahorroObjetivoPorSocio: (ronda.ahorroObjetivoPorSocio ?? new Decimal(0)).toString(),
+        ahorroObjetivoPorSocio: ronda.ahorroObjetivoPorSocio.toString(),
       },
       semana: semanaNum,
-      totalParticipantes: ronda.participaciones.length,
-      items,
+      totalParticipantes: await prisma.participacion.count({ where: { rondaId } }),
+      items: [], // ← rellena con tu cálculo real
     });
-  } catch (err: any) {
-    // Siempre devolver respuesta
-    return NextResponse.json({ error: err?.message || "Error inesperado" }, { status: 500 });
+  } catch (e: any) {
+    console.error("GET /api/rondas/[id]/semana/[semana]/aportes", e);
+    return NextResponse.json({ error: e?.message ?? "Error interno" }, { status: 500 });
   }
 }
