@@ -5,7 +5,7 @@ type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: str
 type AhorroItem = {
   id: number;
   rondaId: number;
-  rondaNombre?: string;
+  rondaNombre?: string | null;
   semana: number;
   monto: number | string;
   fecha: string;
@@ -40,7 +40,13 @@ export default function AhorrosRegistroPage() {
 
   const [loadingSocios, setLoadingSocios] = useState(true);
   const [loadingHist, setLoadingHist] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  // Form "ahorro libre"
+  const [nuevaFecha, setNuevaFecha] = useState<string>("");
+  const [nuevoMonto, setNuevoMonto] = useState<string>("");
 
   // Cargar socios
   useEffect(() => {
@@ -58,6 +64,34 @@ export default function AhorrosRegistroPage() {
     })();
   }, []);
 
+  async function cargarHistorial(socioId: number, d?: string, h?: string) {
+    setLoadingHist(true);
+    try {
+      setError(null);
+      const params = new URLSearchParams();
+      params.set("socioId", String(socioId));
+      if (d) params.set("desde", d);
+      if (h) params.set("hasta", h);
+      const r = await fetch(`/api/ahorros?${params.toString()}`, { cache: "no-store" });
+      const data: HistorialResp | AhorroItem[] = await r.json();
+
+      const arr = Array.isArray(data) ? data : data.items ?? [];
+      setItems(arr);
+
+      const s =
+        !Array.isArray(data) && data.saldo != null
+          ? Number(data.saldo)
+          : arr.reduce((acc, it) => acc + Number(it.monto || 0), 0);
+      setSaldo(s);
+    } catch (e: any) {
+      setError(e?.message || "No se pudo cargar el historial");
+      setItems([]);
+      setSaldo(0);
+    } finally {
+      setLoadingHist(false);
+    }
+  }
+
   // Cargar historial al cambiar socio o fechas
   useEffect(() => {
     if (!selectedId) {
@@ -65,33 +99,8 @@ export default function AhorrosRegistroPage() {
       setSaldo(0);
       return;
     }
-    (async () => {
-      try {
-        setError(null);
-        setLoadingHist(true);
-        const params = new URLSearchParams();
-        params.set("socioId", String(selectedId));
-        if (desde) params.set("desde", desde);
-        if (hasta) params.set("hasta", hasta);
-        const r = await fetch(`/api/ahorros?${params.toString()}`, { cache: "no-store" });
-        const data: HistorialResp | AhorroItem[] = await r.json();
-
-        const arr = Array.isArray(data) ? data : data.items ?? [];
-        setItems(arr);
-
-        // saldo: usa el enviado por API; si no, calcula
-        const s = !Array.isArray(data) && data.saldo != null
-          ? Number(data.saldo)
-          : arr.reduce((acc, it) => acc + Number(it.monto || 0), 0);
-        setSaldo(s);
-      } catch (e: any) {
-        setError(e?.message || "No se pudo cargar el historial");
-        setItems([]);
-        setSaldo(0);
-      } finally {
-        setLoadingHist(false);
-      }
-    })();
+    cargarHistorial(selectedId, desde, hasta);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, desde, hasta]);
 
   const sociosFiltrados = useMemo(() => {
@@ -103,6 +112,50 @@ export default function AhorrosRegistroPage() {
   }, [socios, q]);
 
   const totalAhorros = items.reduce((acc, it) => acc + Number(it.monto || 0), 0);
+
+  async function agregarAhorroLibre() {
+    if (!selectedId) return;
+    const monto = Number(nuevoMonto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setError("Ingresa un monto válido (> 0)");
+      return;
+    }
+    if (nuevaFecha && Number.isNaN(new Date(nuevaFecha).getTime())) {
+      setError("La fecha no es válida");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+      setOkMsg(null);
+
+      const res = await fetch("/api/ahorros/deposito", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          socioId: selectedId,
+          monto,
+          ...(nuevaFecha ? { fecha: nuevaFecha } : {}),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudo registrar el ahorro");
+      }
+
+      setOkMsg("Ahorro registrado correctamente");
+      setNuevaFecha("");
+      setNuevoMonto("");
+      setTimeout(() => setOkMsg(null), 2500);
+      await cargarHistorial(selectedId, desde, hasta);
+    } catch (e: any) {
+      setError(e?.message || "Error al registrar ahorro");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -117,7 +170,7 @@ export default function AhorrosRegistroPage() {
           </span>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Historial de ahorros</h1>
-            <p className="text-sm text-gray-600">Consulta aportes de ahorro por socio y por fecha.</p>
+            <p className="text-sm text-gray-600">Consulta y registra ahorros fuera de las rondas.</p>
           </div>
         </div>
       </div>
@@ -176,7 +229,7 @@ export default function AhorrosRegistroPage() {
         {/* Detalle */}
         <main className="rounded-xl border bg-white p-6 shadow-sm md:col-span-2 space-y-4">
           {!selectedId ? (
-            <div className="text-gray-600">Selecciona un socio para ver su historial.</div>
+            <div className="text-gray-600">Selecciona un socio para ver/registrar ahorros.</div>
           ) : (
             <>
               {/* Filtros + saldo */}
@@ -216,6 +269,47 @@ export default function AhorrosRegistroPage() {
                 </div>
               </div>
 
+              {/* Registrar ahorro libre */}
+              <div className="rounded-lg border p-4">
+                <h3 className="mb-3 text-sm font-medium text-gray-700">Agregar ahorro (fuera de rondas)</h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-600">Fecha</label>
+                    <input
+                      type="date"
+                      className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                      value={nuevaFecha}
+                      onChange={(e) => setNuevaFecha(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-600">Monto</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                      value={nuevoMonto}
+                      onChange={(e) => setNuevoMonto(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={agregarAhorroLibre}
+                      disabled={saving || !Number(nuevoMonto)}
+                      className={cx(
+                        "rounded-md px-3 py-2 text-sm text-white",
+                        saving || !Number(nuevoMonto) ? "bg-blue-400 opacity-70" : "bg-blue-600 hover:bg-blue-700"
+                      )}
+                    >
+                      {saving ? "Guardando…" : "Agregar ahorro"}
+                    </button>
+                  </div>
+                </div>
+                {okMsg && <p className="mt-2 text-sm text-emerald-600">{okMsg}</p>}
+              </div>
+
               {error && <div className="rounded-md bg-red-50 p-3 text-red-700">{error}</div>}
 
               {loadingHist ? (
@@ -234,14 +328,20 @@ export default function AhorrosRegistroPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {items.map((it) => (
-                        <tr key={it.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2">{fmtDate(it.fecha)}</td>
-                          <td className="px-4 py-2">{it.rondaNombre ?? `#${it.rondaId}`}</td>
-                          <td className="px-4 py-2">{it.semana}</td>
-                          <td className="px-4 py-2 text-right">{fmtMoney(Number(it.monto))}</td>
-                        </tr>
-                      ))}
+                      {items.map((it) => {
+                        const val = Number(it.monto);
+                        const color = val < 0 ? "text-red-600" : "text-emerald-600";
+                        return (
+                          <tr key={it.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-2">{fmtDate(it.fecha)}</td>
+                            <td className="px-4 py-2">{it.rondaNombre ?? `#${it.rondaId}`}</td>
+                            <td className="px-4 py-2">{it.semana}</td>
+                            <td className={cx("px-4 py-2 text-right font-medium tabular-nums", color)}>
+                              {fmtMoney(val)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 font-medium">
