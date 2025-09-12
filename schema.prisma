@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["connectionLimit"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Socio {
+  id              Int             @id @default(autoincrement())
+  numeroCuenta    String          @unique @map("numero_cuenta")
+  nombres         String
+  apellidos       String
+  cedula          String          @unique
+  edad            Int
+  ahorros         Ahorro[]
+  multas          Float           @default(0)
+  fechaCreacion   DateTime        @default(now()) @map("fecha_creacion")
+  aportes         Aporte[]
+  participaciones Participacion[]
+
+  @@map("socios")
+}
+
+model Ronda {
+  id              Int             @id @default(autoincrement())
+  nombre          String
+  montoAporte     Decimal         @db.Decimal(12, 2)
+  activa          Boolean         @default(true)
+  fechaInicio     DateTime        @map("fecha_inicio")
+  fechaFin        DateTime?       @map("fecha_fin")
+  semanaActual    Int             @default(1) @map("semana_actual")
+  aportes         Aporte[]
+  participaciones Participacion[]
+  ahorroObjetivoPorSocio Decimal @db.Decimal(12,2) @default(0)
+  ahorros         Ahorro[]  
+  @@map("rondas")
+}
+
+model Participacion {
+  id      Int     @id @default(autoincrement())
+  rondaId Int     @map("ronda_id")
+  socioId Int     @map("socio_id")
+  orden   Int
+  activo  Boolean @default(true)
+  ronda   Ronda   @relation(fields: [rondaId], references: [id])
+  socio   Socio   @relation(fields: [socioId], references: [id])
+
+  @@unique([rondaId, socioId])
+  @@map("participaciones")
+}
+
+model Aporte {
+  id      Int      @id @default(autoincrement())
+  rondaId Int      @map("ronda_id")
+  socioId Int      @map("socio_id")
+  semana  Int
+  monto   Decimal  @db.Decimal(12, 2)
+  multa   Decimal  @default(0) @db.Decimal(12, 2)
+  fecha   DateTime @default(now())
+  ronda   Ronda    @relation(fields: [rondaId], references: [id])
+  socio   Socio    @relation(fields: [socioId], references: [id])
+
+  @@unique([rondaId, socioId, semana])
+  @@map("aportes")
+}
+
+model Ahorro { 
+  id Int @id @default(autoincrement())
+  rondaId Int @map("ronda_id")
+  socioId Int @map("socio_id")
+  semana Int 
+  monto Decimal @db.Decimal(12, 2)
+  fecha DateTime @default(now())
+  ronda Ronda @relation(fields: [rondaId], references: [id])
+  socio Socio @relation(fields: [socioId], references: [id])
+  @@unique([rondaId, socioId, semana]) 
+  @@map("ahorros") 
+}
