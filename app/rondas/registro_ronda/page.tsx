@@ -208,7 +208,20 @@ export default function RegistrarRondaPage() {
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <div className="rounded-xl border bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                      <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+                    </svg>
+                  </span>
+                  <div>
+                    <h1 className="text-2xl font-semibold tracking-tight">Registrar nueva ronda</h1>
+                    <p className="text-sm text-gray-600">El código se generará automáticamente al crearla.</p>
+                  </div>
+                </div>
+              </div>
+
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
                     <path d="M4 6a2 2 0 0 1 2-2h2.5a1 1 0 0 1 .8.4l1.4 1.8H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" />
@@ -516,3 +529,4 @@ export default function RegistrarRondaPage() {
     </div>
   );
 }
+
