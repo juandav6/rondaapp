@@ -73,7 +73,7 @@ const navItems: NavItem[] = [
     name: "Ahorros",
     subItems: [
       { name: "Registro de ahorros", path: "/ahorros/registro" },
-      { name: "Resumen por socio", path: "/ahorros/resumen" },
+      { name: "Retiro de ahorros", path: "/ahorros/resumen" },
       { name: "Reportes de beneficios", path: "/ahorros/reportes" },
     ],
   },
