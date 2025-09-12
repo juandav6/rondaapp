@@ -1,11 +1,16 @@
 // app/api/rondas/[id]/avanzar/route.ts
-import { NextResponse, NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-export const runtime = "nodejs";
+// Next.js provee un tipo para el contexto de rutas dinámicas
+type RouteContext = {
+  params: {
+    id: string;
+  };
+};
 
-export async function GET(req: NextRequest, { params }: any) {
-  const rawId = params?.id;
+export async function GET(req: Request, context: RouteContext) {
+  const rawId = context.params.id;
   const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
   const rondaId = Number(idStr);
 
@@ -25,7 +30,6 @@ export async function GET(req: NextRequest, { params }: any) {
   const duracion = ronda.participaciones.length;
   const siguiente = (ronda.semanaActual ?? 0) + 1;
 
-  // si ya terminó
   if (siguiente > duracion) {
     await prisma.ronda.update({
       where: { id: rondaId },
