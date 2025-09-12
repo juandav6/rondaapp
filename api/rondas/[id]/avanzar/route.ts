@@ -2,46 +2,52 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-// Next.js provee un tipo para el contexto de rutas dinámicas
-type RouteContext = {
-  params: {
-    id: string;
-  };
-};
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // Esperar a que los params se resuelvan
+    const resolvedParams = await params;
+    const rawId = resolvedParams.id;
+    const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
+    const rondaId = Number(idStr);
 
-export async function GET(req: Request, context: RouteContext) {
-  const rawId = context.params.id;
-  const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
-  const rondaId = Number(idStr);
+    if (!Number.isFinite(rondaId)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
 
-  if (!Number.isFinite(rondaId)) {
-    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-  }
-
-  const ronda = await prisma.ronda.findUnique({
-    where: { id: rondaId },
-    include: { participaciones: true },
-  });
-
-  if (!ronda?.activa) {
-    return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
-  }
-
-  const duracion = ronda.participaciones.length;
-  const siguiente = (ronda.semanaActual ?? 0) + 1;
-
-  if (siguiente > duracion) {
-    await prisma.ronda.update({
+    const ronda = await prisma.ronda.findUnique({
       where: { id: rondaId },
-      data: { activa: false, fechaFin: new Date() },
+      include: { participaciones: true },
     });
-    return NextResponse.json({ finalizada: true });
+
+    if (!ronda?.activa) {
+      return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
+    }
+
+    const duracion = ronda.participaciones.length;
+    const siguiente = (ronda.semanaActual ?? 0) + 1;
+
+    if (siguiente > duracion) {
+      await prisma.ronda.update({
+        where: { id: rondaId },
+        data: { activa: false, fechaFin: new Date() },
+      });
+      return NextResponse.json({ finalizada: true });
+    }
+
+    const r = await prisma.ronda.update({
+      where: { id: rondaId },
+      data: { semanaActual: siguiente },
+    });
+
+    return NextResponse.json(r);
+  } catch (error) {
+    console.error("Error en GET /api/rondas/[id]/avanzar:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
-
-  const r = await prisma.ronda.update({
-    where: { id: rondaId },
-    data: { semanaActual: siguiente },
-  });
-
-  return NextResponse.json(r);
 }
