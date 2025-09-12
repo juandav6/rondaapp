@@ -4,11 +4,8 @@ import { Decimal } from "@prisma/client/runtime/library";
 
 type AporteLite = { socioId: number; monto: Decimal; multa: Decimal };
 
-export async function GET(
-  req: NextRequest,
-  context: { params: { [key: string]: string } }
-) {
-  const rondaId = Number(context.params.id);
+export async function GET(req: NextRequest, { params }: any) {
+  const rondaId = Number(params.id);
 
   const { searchParams } = new URL(req.url);
   const semana = Number(searchParams.get("semana"));
@@ -95,11 +92,8 @@ export async function GET(
   });
 }
 
-export async function POST(
-  req: NextRequest,
-  context: { params: { [key: string]: string } }
-) {
-  const rondaId = Number(context.params.id);
+export async function POST(req: NextRequest, { params }: any) {
+  const rondaId = Number(params.id);
   const { socioId, semana, monto, multa } = await req.json();
 
   if (!socioId || !semana || monto == null) {
