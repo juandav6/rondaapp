@@ -19,6 +19,7 @@ export async function GET() {
 
   return NextResponse.json({
     id: ronda.id,
+    codigo,
     nombre: ronda.nombre,
     semanaActual: ronda.semanaActual,
     montoAporte: ronda.montoAporte.toString(),
@@ -88,3 +89,4 @@ export async function POST(req: Request) {
     semanaActual: ronda.semanaActual,
   });
 }
+
