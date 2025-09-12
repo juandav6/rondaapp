@@ -4,11 +4,11 @@ import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function POST(
-  req: Request | NextRequest,
-  // ❌ no tipar el 2º argumento para evitar el check estricto de Next
-  { params }: any
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
 ) {
+  const { id } = params;
   const rawId = params?.id;
   const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
   const rondaId = Number(idStr);
