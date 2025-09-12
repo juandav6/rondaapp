@@ -1,50 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // ajusta a tu proyecto
+import prisma from "@/lib/prisma";
+import { getParams } from "@/lib/getParams";
+export const runtime = "nodejs";
 
-type PUTBody = { ordenIds: number[] };
-
-export async function PUT(req: Request | NextRequest, { params }: any) {
+export async function PUT(req: NextRequest, ctx: { params: { id: string } } | { params: Promise<{ id: string }> }) {
   try {
-    const rondaId = Number(params.id);
-    if (!rondaId || Number.isNaN(rondaId)) {
-      return NextResponse.json({ error: "ID de ronda inválido" }, { status: 400 });
-    }
+    const { id } = await getParams((ctx as any).params);
+    const rondaId = Number(id);
 
-    const body = (await req.json()) as PUTBody;
-    const ordenIds = Array.isArray(body?.ordenIds) ? body.ordenIds : [];
+    let body: any;
+    try { body = await req.json(); }
+    catch { return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 }); }
+
+    const ordenIds: number[] = Array.isArray(body?.ordenIds) ? body.ordenIds.map(Number) : [];
     if (!ordenIds.length) {
       return NextResponse.json({ error: "ordenIds vacío" }, { status: 400 });
     }
 
-    // Verifica que los socios pertenezcan a la ronda (opcional pero recomendado)
-    const participantes = await prisma.participacion.findMany({
-      where: { rondaId },
-      select: { socioId: true },
+    await prisma.$transaction(async (tx) => {
+      await Promise.all(
+        ordenIds.map((socioId, i) =>
+          tx.participacion.updateMany({
+            where: { rondaId, socioId },
+            data: { orden: i + 1 },
+          })
+        )
+      );
     });
-    const setValidos = new Set(participantes.map((p) => p.socioId));
-    const todosValidos = ordenIds.every((id) => setValidos.has(id));
-    if (!todosValidos) {
-      return NextResponse.json({ error: "Hay socios que no pertenecen a la ronda" }, { status: 400 });
-    }
 
-    // Persistir el orden: una de estas dos estrategias
-
-    // A) Campo "orden" en la tabla participante
-    // Actualiza cada participante con su posición
-    await Promise.all(
-      ordenIds.map((socioId, index) =>
-        prisma.participacion.update({
-          where: { rondaId_socioId: { rondaId, socioId } }, // índice compuesto recomendado
-          data: { orden: index + 1 },
-        })
-      )
-    );
-
-    // B) Tabla separada 'ronda_orden' (si manejas historial) — omitir si no aplica.
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e: any) {
-    console.error(e);
-    return NextResponse.json({ error: "No se pudo guardar el nuevo orden" }, { status: 500 });
+    console.error("PUT /api/rondas/[id]/orden", e);
+    return NextResponse.json({ error: e?.message ?? "Error interno" }, { status: 500 });
   }
 }
