@@ -1,15 +1,21 @@
-// app/rondas/registro_ronda/page.tsx
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: string };
-type Ronda = { id: number; codigo: string; nombre: string; montoAporte: number; fechaInicio: string; ahorroObjetivo: number; fechaFin?: string | null };
 
-// NOTA: hacemos 'codigo' opcional en el payload; el backend lo generará al crear.
+// En la API tu “código” se guarda en `nombre`
+type Ronda = {
+  id: number;
+  nombre: string; // ← aquí viene el código generado (RD0001, etc.)
+  montoAporte: number | string;
+  fechaInicio: string;
+  ahorroObjetivo: number | string;
+  fechaFin?: string | null;
+};
+
+// Payload sin “nombre”
 type CrearRondaPayload = {
-  // codigo?: string;  // <- se omite para que lo genere el backend
-  nombre: string;
   montoAporte: number;
   fechaInicio: string;
   ahorroObjetivo: number;
@@ -27,15 +33,12 @@ const fmtDate = (iso: string | null | undefined, locale = "es-EC") => {
 
 const classNames = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-// ===== Componente =====
 export default function RegistrarRondaPage() {
   const [socios, setSocios] = useState<Socio[]>([]);
   const [seleccion, setSeleccion] = useState<number[]>([]);
-  const [orden, setOrden] = useState<number[]>([]); // ids en orden de recibir
+  const [orden, setOrden] = useState<number[]>([]);
 
   const [form, setForm] = useState<CrearRondaPayload>({
-    // codigo: "",  // <- ya no se usa en el formulario
-    nombre: "",
     montoAporte: 0,
     fechaInicio: "",
     ahorroObjetivo: 0,
@@ -45,13 +48,11 @@ export default function RegistrarRondaPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // estados para reordenar
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [savingOrden, setSavingOrden] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
-  // Carga inicial de socios (SIN solicitar secuencial)
   useEffect(() => {
     fetch("/api/socios")
       .then((r) => r.json())
@@ -59,7 +60,6 @@ export default function RegistrarRondaPage() {
       .catch(() => setSocios([]));
   }, []);
 
-  // Búsqueda de socios
   const [q, setQ] = useState("");
   const sociosFiltrados = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -69,16 +69,14 @@ export default function RegistrarRondaPage() {
     );
   }, [socios, q]);
 
-  // Selección
   const toggleSocio = (id: number) =>
     setSeleccion((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const seleccionarTodos = () => setSeleccion(sociosFiltrados.map((s) => s.id));
   const limpiarSeleccion = () => setSeleccion([]);
 
-  // Cálculos informativos
   const totalSocios = seleccion.length;
-  const totalAportarPorSocio = totalSocios * (form.montoAporte || 0); // asumiendo 1 aporte por socio por ciclo
+  const totalAportarPorSocio = totalSocios * (form.montoAporte || 0);
   const ahorroFinalPorSocio = form.ahorroObjetivo || 0;
 
   // Crear ronda + participantes + sorteo
@@ -87,13 +85,11 @@ export default function RegistrarRondaPage() {
       setError(null);
       setLoading(true);
 
-      // 1) Crear ronda (sin enviar 'codigo'; el backend lo genera)
+      // 1) Crear ronda (el backend genera el código y lo guarda en `nombre`)
       const resR = await fetch("/api/rondas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Enviamos únicamente los campos necesarios (sin codigo)
         body: JSON.stringify({
-          nombre: form.nombre,
           montoAporte: form.montoAporte,
           fechaInicio: form.fechaInicio,
           ahorroObjetivo: form.ahorroObjetivo,
@@ -104,7 +100,7 @@ export default function RegistrarRondaPage() {
 
       const ronda: Ronda = dataR;
 
-      // 2) Participantes + sorteo (el backend podría devolver el orden). Si no, hacemos shuffle local.
+      // 2) Participantes + sorteo
       const resP = await fetch(`/api/rondas/${ronda.id}/participantes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,16 +109,14 @@ export default function RegistrarRondaPage() {
       const dataP = await resP.json();
       if (!resP.ok) throw new Error(dataP?.error || "No se pudieron agregar participantes");
 
-
       // Orden desde backend o local
       let ordenIds: number[] | undefined = dataP?.ordenIds;
       if (!Array.isArray(ordenIds) || !ordenIds.length) {
-        // shuffle local
         ordenIds = [...seleccion].sort(() => Math.random() - 0.5);
       }
 
       setOrden(ordenIds);
-      setRondaCreada({ ...ronda, fechaFin: dataP?.fechaFin ?? ronda.fechaFin ?? null });
+      setRondaCreada({ ...ronda, fechaFin: (dataP?.fechaFin ?? (ronda as any).fechaFin ?? null) as any });
     } catch (e: any) {
       setError(e?.message ?? "Error desconocido");
     } finally {
@@ -130,12 +124,11 @@ export default function RegistrarRondaPage() {
     }
   }
 
-  // ==== Reordenamiento (drag & drop) ====
   function onDragStart(index: number) {
     setDragIndex(index);
   }
   function onDragOver(e: React.DragEvent<HTMLLIElement>) {
-    e.preventDefault(); // necesario para permitir drop
+    e.preventDefault();
   }
   function onDrop(overIndex: number) {
     if (dragIndex === null || dragIndex === overIndex) return;
@@ -149,12 +142,11 @@ export default function RegistrarRondaPage() {
     setSavedMsg(null);
   }
 
-  // ==== Reordenamiento (swap click a click) ====
   function handleSwapClick(index: number) {
     if (swapIndex === null) {
       setSwapIndex(index);
     } else if (swapIndex === index) {
-      setSwapIndex(null); // cancelar
+      setSwapIndex(null);
     } else {
       setOrden((prev) => {
         const next = [...prev];
@@ -166,7 +158,6 @@ export default function RegistrarRondaPage() {
     }
   }
 
-  // Acciones rápidas ↑ / ↓
   function moveUp(i: number) {
     if (i <= 0) return;
     setOrden((prev) => {
@@ -186,7 +177,6 @@ export default function RegistrarRondaPage() {
     setSavedMsg(null);
   }
 
-  // Guardar nuevo orden en backend
   async function guardarOrden() {
     if (!rondaCreada) return;
     try {
@@ -219,7 +209,6 @@ export default function RegistrarRondaPage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                {/* Icono */}
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
                     <path d="M4 6a2 2 0 0 1 2-2h2.5a1 1 0 0 1 .8.4l1.4 1.8H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" />
@@ -238,7 +227,7 @@ export default function RegistrarRondaPage() {
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border p-4">
               <p className="text-xs text-gray-500">Código</p>
-              <p className="mt-1 font-semibold">{rondaCreada.codigo}</p>
+              <p className="mt-1 font-semibold">{rondaCreada.nombre}</p>
             </div>
             <div className="rounded-lg border p-4">
               <p className="text-xs text-gray-500">Total a aportar por socio</p>
@@ -315,7 +304,6 @@ export default function RegistrarRondaPage() {
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-700">
                       {idx + 1}
                     </span>
-                    {/* grip */}
                     <button
                       className="cursor-grab text-gray-400 hover:text-gray-600"
                       title="Arrastrar para reordenar"
@@ -332,18 +320,10 @@ export default function RegistrarRondaPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => moveUp(idx)}
-                      className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
-                      aria-label="Subir"
-                    >
+                    <button onClick={() => moveUp(idx)} className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50" aria-label="Subir">
                       ↑
                     </button>
-                    <button
-                      onClick={() => moveDown(idx)}
-                      className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50"
-                      aria-label="Bajar"
-                    >
+                    <button onClick={() => moveDown(idx)} className="rounded-md border px-2 py-1 text-xs hover:bg-gray-50" aria-label="Bajar">
                       ↓
                     </button>
                     <button
@@ -357,7 +337,7 @@ export default function RegistrarRondaPage() {
                       Intercambiar
                     </button>
                     <span className="text-sm text-gray-600">
-                      Recibe: {fmtMoney((form.montoAporte || 0) * (orden.length || 0))}
+                      Recibe: {fmtMoney((Number(form.montoAporte) || 0) * (orden.length || 0))}
                     </span>
                   </div>
                 </li>
@@ -373,9 +353,7 @@ export default function RegistrarRondaPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Registrar nueva ronda</h1>
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
-      )}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Información de la ronda */}
@@ -388,102 +366,94 @@ export default function RegistrarRondaPage() {
             </span>
             <div>
               <h2 className="text-lg font-semibold">Información de la ronda</h2>
-              <p className="text-sm text-gray-600">Completa los datos generales.</p>
+              <p className="text-sm text-gray-600">El código se generará automáticamente al guardar.</p>
             </div>
           </header>
 
-          <div className="grid gap-3">
-            {/* Campo de código removido: el secuencial se genera al guardar */}
-            <div className="rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
-              El código de la ronda se generará automáticamente al guardar.
+          {/* 3 campos: monto, ahorro, fecha */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="sm:col-span-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Monto por aporte</label>
+              <input
+                type="number"
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="0.00"
+                min={0}
+                value={form.montoAporte || ""}
+                onChange={(e) => setForm((f) => ({ ...f, montoAporte: Number(e.target.value) }))}
+              />
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Monto por aporte</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="0.00"
-                  min={0}
-                  value={form.montoAporte || ""}
-                  onChange={(e) => setForm((f) => ({ ...f, montoAporte: Number(e.target.value) }))}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Ahorro objetivo por socio</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="0.00"
-                  min={0}
-                  value={form.ahorroObjetivo || ""}
-                  onChange={(e) => setForm((f) => ({ ...f, ahorroObjetivo: Number(e.target.value) }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de inicio</label>
-                <input
-                  type="date"
-                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  value={form.fechaInicio}
-                  onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Nombre de la ronda</label>
-                <input
-                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="Ej: Ronda familiar julio"
-                  value={form.nombre}
-                  onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                />
-              </div>
+            <div className="sm:col-span-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Ahorro objetivo por socio</label>
+              <input
+                type="number"
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="0.00"
+                min={0}
+                value={form.ahorroObjetivo || ""}
+                onChange={(e) => setForm((f) => ({ ...f, ahorroObjetivo: Number(e.target.value) }))}
+              />
             </div>
 
-            <div className="rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
-              {seleccion.length ? (
-                <>
-                  {seleccion.length} socios • Total por socio al final: <strong>{fmtMoney(totalAportarPorSocio)}</strong>
-                </>
-              ) : (
-                <span>Selecciona socios para ver totales</span>
-              )}
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de inicio</label>
+              <input
+                type="date"
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                value={form.fechaInicio}
+                onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
+              />
             </div>
-
-            <button
-              onClick={crearRondaYParticipantes}
-              disabled={loading || !form.fechaInicio || !form.montoAporte || !seleccion.length || !form.nombre}
-              className={classNames(
-                "mt-2 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-white",
-                loading || !form.fechaInicio || !form.montoAporte || !seleccion.length || !form.nombre
-                  ? "bg-blue-400 opacity-70"
-                  : "bg-blue-600 hover:bg-blue-700"
-              )}
-            >
-              {loading ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="4"/></svg>
-                  Creando…
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4"><path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm1 14.59 5.3-5.3a1 1 0 0 0-1.42-1.42L13 13.76l-2.3-2.29a1 1 0 0 0-1.42 1.42l3 3a1 1 0 0 0 1.42 0Z"/></svg>
-                  Crear ronda y sortear orden
-                </>
-              )}
-            </button>
           </div>
+
+          <div className="mt-3 rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            {seleccion.length ? (
+              <>
+                {seleccion.length} socios • Total por socio al final: <strong>{fmtMoney(totalAportarPorSocio)}</strong>
+              </>
+            ) : (
+              <span>Selecciona socios para ver totales</span>
+            )}
+          </div>
+
+          <button
+            onClick={crearRondaYParticipantes}
+            disabled={loading || !form.fechaInicio || !form.montoAporte || !seleccion.length}
+            className={classNames(
+              "mt-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-white",
+              loading || !form.fechaInicio || !form.montoAporte || !seleccion.length
+                ? "bg-blue-400 opacity-70"
+                : "bg-blue-600 hover:bg-blue-700"
+            )}
+          >
+            {loading ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25" />
+                  <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="4" />
+                </svg>
+                Creando…
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                  <path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm1 14.59 5.3-5.3a1 1 0 0 0-1.42-1.42L13 13.76l-2.3-2.29a1 1 0 0 0-1.42 1.42l3 3a1 1 0 0 0 1.42 0Z"/>
+                </svg>
+                Crear ronda y sortear orden
+              </>
+            )}
+          </button>
         </section>
 
-        {/* Listado de socios (vertical) */}
+        {/* Listado de socios */}
         <section className="lg:col-span-2 rounded-xl border bg-white p-6 shadow-sm">
           <header className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm-7 8a7 7 0 0 1 14 0"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm-7 8a7 7 0 0 1 14 0"/>
+                </svg>
               </span>
               <div>
                 <h2 className="text-lg font-semibold">Listado de socios</h2>
@@ -514,12 +484,7 @@ export default function RegistrarRondaPage() {
                 return (
                   <li key={s.id} className={classNames("flex items-center justify-between gap-3 p-3", checked && "bg-gray-50")}>
                     <label className="flex flex-1 cursor-pointer items-center gap-3">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={checked}
-                        onChange={() => toggleSocio(s.id)}
-                      />
+                      <input type="checkbox" className="h-4 w-4" checked={checked} onChange={() => toggleSocio(s.id)} />
                       <div className="min-w-0">
                         <p className="truncate font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
                         <p className="truncate text-xs text-gray-500">Cuenta {s.numeroCuenta}</p>
@@ -532,7 +497,6 @@ export default function RegistrarRondaPage() {
             </ul>
           )}
 
-          {/* Pie con totales */}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-700">
             <div>
               <span className="font-medium">{seleccion.length}</span> seleccionados
@@ -545,12 +509,10 @@ export default function RegistrarRondaPage() {
                 </>
               )}
             </div>
-            <div className="text-xs text-gray-500">Consejo: puedes filtrar y luego "Seleccionar todo" para elegir por segmentos.</div>
+            <div className="text-xs text-gray-500">Consejo: puedes filtrar y luego “Seleccionar todo”.</div>
           </div>
         </section>
       </div>
     </div>
   );
 }
-
-
