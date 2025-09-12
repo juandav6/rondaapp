@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <BoxCubeIcon />,
+    icon: <Receipt />,
     name: "Ahorros",
     subItems: [
       { name: "Registro de ahorros", path: "/ahorros/registro" },
@@ -78,7 +78,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <PlugInIcon />,
+    icon: <AlertTriangle />,
     name: "Multas",
     subItems: [
       { name: "Multas por socio", path: "/configuracion/reglas" },
