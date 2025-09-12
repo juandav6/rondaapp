@@ -4,11 +4,10 @@ import prisma from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const resolvedParams = await params;
-    const rawId = resolvedParams.id;
+    const rawId = params.id;
     const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
     const rondaId = Number(idStr);
 
