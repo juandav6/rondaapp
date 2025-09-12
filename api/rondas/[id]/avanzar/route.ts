@@ -1,13 +1,12 @@
 // app/api/rondas/[id]/avanzar/route.ts
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Esperar a que los params se resuelvan
     const resolvedParams = await params;
     const rawId = resolvedParams.id;
     const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
