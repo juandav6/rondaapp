@@ -105,7 +105,7 @@ export default function RegistrarRondaPage() {
       const ronda: Ronda = dataR;
 
       // 2) Participantes + sorteo (el backend podría devolver el orden). Si no, hacemos shuffle local.
-      const resP = await fetch(`/api/rondas/${ronda.id}/participantes`, {
+      const resP = await fetch("/api/rondas/${ronda.id}/participantes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sociosIds: seleccion }),
@@ -191,7 +191,7 @@ export default function RegistrarRondaPage() {
     try {
       setSavingOrden(true);
       setSavedMsg(null);
-      const res = await fetch(`/api/rondas/${rondaCreada.id}/orden`, {
+      const res = await fetch("/api/rondas/${rondaCreada.id}/orden", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ordenIds: orden }),
@@ -551,3 +551,4 @@ export default function RegistrarRondaPage() {
     </div>
   );
 }
+
