@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-type Context = {
-  params: Promise<{ id: string }>; // 👈 Promise
-};
-
 const MULTA_BASE = 100;
 
-export async function POST(_req: Request, context: Context) {
-  const { params } = await context; // 👈 await
-  const rondaId = Number((await params).id);
+export async function POST(
+  _req: Request,
+  context: { params: { id: string } }
+) {
+  const rondaId = Number(context.params.id);
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
@@ -17,8 +15,13 @@ export async function POST(_req: Request, context: Context) {
       participaciones: { select: { socioId: true } },
     },
   });
-  if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
-  if (!ronda.activa) return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
+
+  if (!ronda) {
+    return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
+  }
+  if (!ronda.activa) {
+    return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
+  }
 
   const semana = ronda.semanaActual;
   const participantes = ronda.participaciones.map((p) => p.socioId);
