@@ -1,20 +1,20 @@
+// app/rondas/registro_ronda/page.tsx
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: string };
 
-// En la API tu “código” se guarda en `nombre`
+// En la API tu “código” viene en `nombre` (RD0001, etc.)
 type Ronda = {
   id: number;
-  nombre: string; // ← aquí viene el código generado (RD0001, etc.)
+  nombre: string; // código generado
   montoAporte: number | string;
   fechaInicio: string;
   ahorroObjetivo: number | string;
   fechaFin?: string | null;
 };
 
-// Payload sin “nombre”
 type CrearRondaPayload = {
   montoAporte: number;
   fechaInicio: string;
@@ -370,9 +370,9 @@ export default function RegistrarRondaPage() {
             </div>
           </header>
 
-          {/* 3 campos: monto, ahorro, fecha */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="sm:col-span-1">
+          {/* UNA sola columna */}
+          <div className="grid gap-3">
+            <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Monto por aporte</label>
               <input
                 type="number"
@@ -384,7 +384,7 @@ export default function RegistrarRondaPage() {
               />
             </div>
 
-            <div className="sm:col-span-1">
+            <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Ahorro objetivo por socio</label>
               <input
                 type="number"
@@ -396,7 +396,7 @@ export default function RegistrarRondaPage() {
               />
             </div>
 
-            <div className="sm:col-span-2 lg:col-span-1">
+            <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de inicio</label>
               <input
                 type="date"
