@@ -53,6 +53,25 @@ export default function RondaActualPage() {
     cargar();
   }, []);
 
+  async function fetchJsonStrict(input: RequestInfo | URL, init?: RequestInit, opts?: { allow204?: boolean; label?: string }) {
+    const r = await fetch(input, init);
+    const label = opts?.label ?? (typeof input === "string" ? input : "request");
+    if (opts?.allow204 && r.status === 204) return { __noContent: true };
+  
+    const ct = r.headers.get("content-type") || "";
+    const text = await r.text(); // leemos una vez
+  
+    if (!r.ok) {
+      // intenta tomar mensaje JSON; si no, snippet del HTML/texto
+      try { const j = JSON.parse(text); throw new Error(j?.error || `HTTP ${r.status} en ${label}`); }
+      catch { throw new Error(`HTTP ${r.status} en ${label}: ${text.slice(0, 200)}`); }
+    }
+  
+    if (!text) return null; // 200 sin cuerpo (raro, pero toleramos)
+    if (!ct.includes("application/json")) throw new Error(`No-JSON en ${label}: ${text.slice(0, 200)}`);
+    try { return JSON.parse(text); } catch { throw new Error(`JSON inválido en ${label}`); }
+  }
+
   async function registrarAhorroParcial(socioId: number, monto: number) {
     if (!estado) return;
     try {
@@ -190,22 +209,28 @@ export default function RondaActualPage() {
   async function cargar() {
     try {
       setError(null);
-      const r = await fetch("/api/rondas", { cache: "no-store" });
-      if (r.status === 204) {
+  
+      const rondaRes = await fetchJsonStrict("/api/rondas", { cache: "no-store" }, { allow204: true, label: "GET /api/rondas" });
+      if ((rondaRes as any)?.__noContent) {
         setEstado(null);
         return;
       }
-      const ronda = (await r.json()) as RondaDTO;
-
-      const e = await fetch(`/api/rondas/${ronda.id}/semana/${ronda.semanaActual}/aportes`, { cache: "no-store" });
-      const data = (await e.json()) as EstadoSemana;
-      setEstado(data);
+      const ronda = rondaRes as RondaDTO;
+  
+      const estadoRes = await fetchJsonStrict(
+        `/api/rondas/${ronda.id}/semana/${ronda.semanaActual}/aportes`,
+        { cache: "no-store" },
+        { label: `GET /api/rondas/${ronda.id}/semana/${ronda.semanaActual}/aportes` }
+      );
+  
+      setEstado(estadoRes as EstadoSemana);
       setPendientes([]);
     } catch (e: any) {
       setError(e.message || "Error al cargar");
       setEstado(null);
     }
   }
+
 
   async function guardarAporte(socioId: number, pagado: boolean, multa: string) {
     if (!estado) return;
@@ -516,3 +541,4 @@ export default function RondaActualPage() {
     </div>
   );
 }
+
