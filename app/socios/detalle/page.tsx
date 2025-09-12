@@ -27,27 +27,46 @@ async function getSocios() {
 
 async function getDetalleSocio(socioId: number) {
   const rondas = await prisma.ronda.findMany({
-    where: { participaciones: { some: { socioId } } },
+    where: {
+      OR: [
+        { participaciones: { some: { socioId } } }, // rondas “normales”
+        { ahorros: { some: { socioId } } },         // incluye Saldo inicial (semana 0)
+        { aportes: { some: { socioId } } },         // por si acaso hubo aportes sin participación
+      ],
+    },
     orderBy: { fechaInicio: "desc" },
     select: {
       id: true,
       nombre: true,
       fechaInicio: true,
       fechaFin: true,
+      // solo los movimientos del socio
       aportes: { where: { socioId }, select: { monto: true, multa: true } },
-      ahorros: { where: { socioId }, select: { monto: true } },
+      ahorros: { where: { socioId }, select: { monto: true, semana: true } },
     },
   });
 
   const detallePorRonda = rondas.map((r) => {
     const totalAportes = r.aportes.reduce((acc, a) => acc + Number(a.monto), 0);
-    const totalMultas = r.aportes.reduce((acc, a) => acc + Number(a.multa), 0);
+    const totalMultas  = r.aportes.reduce((acc, a) => acc + Number(a.multa), 0);
     const totalAhorros = r.ahorros.reduce((acc, a) => acc + Number(a.monto), 0);
-    return { id: r.id, nombre: r.nombre, fechaInicio: r.fechaInicio, fechaFin: r.fechaFin, totalAportes, totalAhorros, totalMultas };
+    return {
+      id: r.id,
+      nombre: r.nombre,
+      fechaInicio: r.fechaInicio,
+      fechaFin: r.fechaFin,
+      totalAportes,
+      totalAhorros,     // ← aquí ya entra el “Saldo inicial” (semana 0)
+      totalMultas,
+    };
   });
 
   const totalGeneral = detallePorRonda.reduce(
-    (acc, d) => ({ aportes: acc.aportes + d.totalAportes, ahorros: acc.ahorros + d.totalAhorros, multas: acc.multas + d.totalMultas }),
+    (acc, d) => ({
+      aportes: acc.aportes + d.totalAportes,
+      ahorros: acc.ahorros + d.totalAhorros,
+      multas:  acc.multas  + d.totalMultas,
+    }),
     { aportes: 0, ahorros: 0, multas: 0 }
   );
 
@@ -67,6 +86,7 @@ async function getDetalleSocio(socioId: number) {
     },
   };
 }
+
 
 // ✅ searchParams ahora es Promise y lo desenvuelves
 export default async function Page({
@@ -213,3 +233,4 @@ export default async function Page({
     </div>
   );
 }
+
