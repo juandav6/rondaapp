@@ -181,8 +181,12 @@ export default async function Page({
                     <p className="mt-1 text-xl font-semibold">{fmtMoney(detalle.totalGeneral.ahorros)}</p>
                   </div>
                   <div className="rounded-lg border p-4">
-                    <p className="text-xs text-gray-500">Multas (aportes)</p>
+                    <p className="text-xs text-gray-500">Multas</p>
                     <p className="mt-1 text-xl font-semibold">{fmtMoney(detalle.totalGeneral.multasAporte)}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <p className="text-xs text-gray-500">Intereses Ganados</p>
+                    <p className="mt-1 text-xl font-semibold"></p>
                   </div>
                 </div>
               </section>
@@ -233,4 +237,5 @@ export default async function Page({
     </div>
   );
 }
+
 
