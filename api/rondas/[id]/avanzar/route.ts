@@ -4,14 +4,11 @@ import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const { id } = params;
+export async function GET(req: NextRequest, { params }: any) {
   const rawId = params?.id;
   const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
   const rondaId = Number(idStr);
+
   if (!Number.isFinite(rondaId)) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   }
@@ -20,6 +17,7 @@ export async function GET(
     where: { id: rondaId },
     include: { participaciones: true },
   });
+
   if (!ronda?.activa) {
     return NextResponse.json({ error: "Ronda no activa" }, { status: 400 });
   }
