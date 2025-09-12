@@ -124,6 +124,7 @@ export default function RegistrarRondaPage() {
     }
   }
 
+  // Drag & drop
   function onDragStart(index: number) {
     setDragIndex(index);
   }
@@ -205,32 +206,27 @@ export default function RegistrarRondaPage() {
 
     return (
       <div className="space-y-6">
+        {/* Encabezado + resumen */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="rounded-xl border bg-white p-6 shadow-sm">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-                          <path d="M4 6a2 2 0 0 1 2-2h2.5a1 1 0 0 1 .8.4l1.4 1.8H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" />
-                        </svg>
-                      </span>
-                      ¡Ronda creada!
-                    </h1>
-                    <p className="mt-1 text-gray-600">Puedes comenzar a registrar aportes.</p>
-                  </div>
-              
-                  <Link
-                    href="/rondas/actual"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    Ir a Ronda Actual
-                  </Link>
-                </div>
-              </div>
-
+              <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                    <path d="M4 6a2 2 0 0 1 2-2h2.5a1 1 0 0 1 .8.4l1.4 1.8H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" />
+                  </svg>
+                </span>
+                ¡Ronda creada!
+              </h1>
+              <p className="mt-1 text-gray-600">Puedes comenzar a registrar aportes.</p>
+            </div>
+            <Link
+              href="/rondas/actual"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Ir a Ronda Actual
+            </Link>
+          </div>
 
           {/* Resumen de la ronda */}
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -358,9 +354,23 @@ export default function RegistrarRondaPage() {
     );
   }
 
+  // Vista inicial (sin ronda creada)
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Registrar nueva ronda</h1>
+      {/* Cajón de título */}
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+              <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+            </svg>
+          </span>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Registrar nueva ronda</h1>
+            <p className="text-sm text-gray-600">El código se generará automáticamente al guardar.</p>
+          </div>
+        </div>
+      </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
@@ -375,7 +385,7 @@ export default function RegistrarRondaPage() {
             </span>
             <div>
               <h2 className="text-lg font-semibold">Información de la ronda</h2>
-              <p className="text-sm text-gray-600">El código se generará automáticamente al guardar.</p>
+              <p className="text-sm text-gray-600">Completa los datos generales.</p>
             </div>
           </header>
 
@@ -525,5 +535,3 @@ export default function RegistrarRondaPage() {
     </div>
   );
 }
-
-
