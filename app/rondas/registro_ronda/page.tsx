@@ -105,13 +105,14 @@ export default function RegistrarRondaPage() {
       const ronda: Ronda = dataR;
 
       // 2) Participantes + sorteo (el backend podría devolver el orden). Si no, hacemos shuffle local.
-      const resP = await fetch("/api/rondas/${ronda.id}/participantes", {
+      const resP = await fetch(`/api/rondas/${ronda.id}/participantes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sociosIds: seleccion }),
       });
       const dataP = await resP.json();
       if (!resP.ok) throw new Error(dataP?.error || "No se pudieron agregar participantes");
+
 
       // Orden desde backend o local
       let ordenIds: number[] | undefined = dataP?.ordenIds;
@@ -191,7 +192,7 @@ export default function RegistrarRondaPage() {
     try {
       setSavingOrden(true);
       setSavedMsg(null);
-      const res = await fetch("/api/rondas/${rondaCreada.id}/orden", {
+      const res = await fetch(`/api/rondas/${rondaCreada.id}/orden`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ordenIds: orden }),
@@ -551,4 +552,5 @@ export default function RegistrarRondaPage() {
     </div>
   );
 }
+
 
