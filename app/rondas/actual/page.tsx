@@ -2,6 +2,9 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 
+const fmtMoney = (n: number, currency = "USD", locale = "es-EC") =>
+  new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(n) || 0);
+
 type Item = {
   socioId: number;
   socio: { nombres: string; apellidos: string; numeroCuenta: string };
@@ -9,8 +12,12 @@ type Item = {
   pagado: boolean;
   monto: string | null;
   multa: string; // string para inputs controlados
-  ahorroAcumulado: string; // 👈 nuevo
+  ahorroAcumulado: string;
   ahorroRestante: string;
+  // 👇 opcionalmente el backend puede enviar esto para totalizar la semana
+  ahorroSemana?: string;
+  // bandera que ya usabas a veces:
+  // ahorroRegistradoSemana?: boolean;
 };
 
 type RondaDTO = {
@@ -18,8 +25,9 @@ type RondaDTO = {
   nombre: string;
   semanaActual: number;
   montoAporte: string;
-  // 👇 lo usamos en el render; haz que tu API lo devuelva
   ahorroObjetivoPorSocio?: string;
+  // 👇 NUEVO: responsable seleccionado (si tu API lo devuelve)
+  responsableId?: number | null;
 };
 
 type EstadoSemana = {
@@ -27,6 +35,9 @@ type EstadoSemana = {
   semana: number;
   totalParticipantes: number;
   items: Item[];
+  // 👇 si tu backend quiere enviar los totales ya calculados
+  totalAportesSemana?: string;
+  totalAhorrosSemana?: string;
 };
 
 export default function RondaActualPage() {
@@ -35,12 +46,16 @@ export default function RondaActualPage() {
   const [saving, setSaving] = useState<number | null>(null); // socioId en guardado
   const [cerrando, setCerrando] = useState(false);
   const [pendientes, setPendientes] = useState<
-    { socioId: number; socio: Item["socio"]; montoAporte: string; multa: string; totalAdeudado: string }[]
+    { socioId: number; socio: Item["socio"]; montoAporte: string; multa: string; totalAdeudado: string; observaciones?: string }[]
   >([]);
 
   // estados controlados para inputs
   const [ahorroInputs, setAhorroInputs] = useState<Record<number, number>>({});
   const [multasInputs, setMultasInputs] = useState<Record<number, number>>({});
+  const [obsInputs, setObsInputs] = useState<Record<number, string>>({}); // 👈 NUEVO: observaciones por pendiente
+
+  // Responsable de cobro
+  const [responsableId, setResponsableId] = useState<number | "">("");
 
   function setAhorroInput(socioId: number, v: number) {
     setAhorroInputs((prev) => ({ ...prev, [socioId]: v }));
@@ -48,34 +63,23 @@ export default function RondaActualPage() {
   function setMultaInput(socioId: number, v: number) {
     setMultasInputs((prev) => ({ ...prev, [socioId]: v }));
   }
+  function setObsInput(socioId: number, v: string) {
+    setObsInputs((prev) => ({ ...prev, [socioId]: v }));
+  }
 
   useEffect(() => {
     cargar();
   }, []);
 
-  async function fetchJsonStrict(input: RequestInfo | URL, init?: RequestInit, opts?: { allow204?: boolean; label?: string }) {
-    const r = await fetch(input, init);
-    const label = opts?.label ?? (typeof input === "string" ? input : "request");
-    if (opts?.allow204 && r.status === 204) return { __noContent: true };
-  
-    const ct = r.headers.get("content-type") || "";
-    const text = await r.text(); // leemos una vez
-  
-    if (!r.ok) {
-      // intenta tomar mensaje JSON; si no, snippet del HTML/texto
-      try { const j = JSON.parse(text); throw new Error(j?.error || `HTTP ${r.status} en ${label}`); }
-      catch { throw new Error(`HTTP ${r.status} en ${label}: ${text.slice(0, 200)}`); }
+  useEffect(() => {
+    if (estado?.ronda) {
+      setResponsableId(estado.ronda.responsableId ?? "");
     }
-  
-    if (!text) return null; // 200 sin cuerpo (raro, pero toleramos)
-    if (!ct.includes("application/json")) throw new Error(`No-JSON en ${label}: ${text.slice(0, 200)}`);
-    try { return JSON.parse(text); } catch { throw new Error(`JSON inválido en ${label}`); }
-  }
+  }, [estado?.ronda?.responsableId]);
 
   async function registrarAhorroParcial(socioId: number, monto: number) {
     if (!estado) return;
     try {
-      // valida monto > 0 y no mayor a restante
       const it = estado.items.find((x) => x.socioId === socioId);
       const objetivo = Number(estado.ronda.ahorroObjetivoPorSocio ?? 0);
       const acum = Number(it?.ahorroAcumulado ?? 0);
@@ -91,7 +95,7 @@ export default function RondaActualPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "No se pudo registrar el ahorro");
-      await cargar(); // refresca acumulado/restante y bandera de bloqueo
+      await cargar();
     } catch (e: any) {
       setError(e.message || "Error al registrar ahorro");
     } finally {
@@ -111,6 +115,7 @@ export default function RondaActualPage() {
           semana: estado.semana,
           monto: Number(estado.ronda.montoAporte),
           multa: 0,
+          // observaciones opcional
         }),
       });
       const data = await res.json();
@@ -127,16 +132,17 @@ export default function RondaActualPage() {
     if (!estado) return;
     try {
       setCerrando(true);
+      const bodyBase = (socioId: number) => ({
+        socioId,
+        semana: estado.semana,
+        monto: Number(estado.ronda.montoAporte),
+        multa: 0,
+      });
       const promesas = estado.items.map((it) =>
         fetch(`/api/rondas/${estado.ronda.id}/aportes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            socioId: it.socioId,
-            semana: estado.semana,
-            monto: Number(estado.ronda.montoAporte),
-            multa: 0,
-          }),
+          body: JSON.stringify(bodyBase(it.socioId)),
         })
       );
 
@@ -160,6 +166,7 @@ export default function RondaActualPage() {
     try {
       setSaving(socioId);
       const multa = Number(multasInputs[socioId] ?? 0);
+      const observaciones = obsInputs[socioId] ?? ""; // 👈 NUEVO
       const res = await fetch(`/api/rondas/${estado.ronda.id}/aportes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -168,6 +175,7 @@ export default function RondaActualPage() {
           semana: estado.semana,
           monto: Number(estado.ronda.montoAporte),
           multa, // editable
+          observaciones, // 👈 NUEVO
         }),
       });
       const data = await res.json();
@@ -206,31 +214,45 @@ export default function RondaActualPage() {
     }
   }
 
+  async function guardarResponsable() {
+    if (!estado) return;
+    if (responsableId === "") {
+      setError("Selecciona un responsable antes de guardar.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/rondas/${estado.ronda.id}/responsable`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responsableId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "No se pudo guardar el responsable");
+      await cargar();
+    } catch (e: any) {
+      setError(e.message || "Error al guardar responsable");
+    }
+  }
+
   async function cargar() {
     try {
       setError(null);
-  
-      const rondaRes = await fetchJsonStrict("/api/rondas", { cache: "no-store" }, { allow204: true, label: "GET /api/rondas" });
-      if ((rondaRes as any)?.__noContent) {
+      const r = await fetch("/api/rondas", { cache: "no-store" });
+      if (r.status === 204) {
         setEstado(null);
         return;
       }
-      const ronda = rondaRes as RondaDTO;
-  
-      const estadoRes = await fetchJsonStrict(
-        `/api/rondas/${ronda.id}/semana/${ronda.semanaActual}/aportes`,
-        { cache: "no-store" },
-        { label: `GET /api/rondas/${ronda.id}/semana/${ronda.semanaActual}/aportes` }
-      );
-  
-      setEstado(estadoRes as EstadoSemana);
+      const ronda = (await r.json()) as RondaDTO;
+
+      const e = await fetch(`/api/rondas/${ronda.id}/semana/${ronda.semanaActual}/aportes`, { cache: "no-store" });
+      const data = (await e.json()) as EstadoSemana;
+      setEstado(data);
       setPendientes([]);
     } catch (e: any) {
       setError(e.message || "Error al cargar");
       setEstado(null);
     }
   }
-
 
   async function guardarAporte(socioId: number, pagado: boolean, multa: string) {
     if (!estado) return;
@@ -291,7 +313,7 @@ export default function RondaActualPage() {
     return <div className="p-6">{error ?? "Cargando ronda..."}</div>;
   }
 
-  // 👇 A partir de aquí, `estado` NO es null: ya podemos calcular cobrador actual y siguiente
+  // Ordenados y actual/siguiente
   const itemsOrdenados = [...estado.items].sort((a, b) => a.orden - b.orden);
   const idx =
     itemsOrdenados.length > 0
@@ -299,6 +321,24 @@ export default function RondaActualPage() {
       : 0;
   const actual = itemsOrdenados[idx];
   const siguiente = itemsOrdenados.length ? itemsOrdenados[(idx + 1) % itemsOrdenados.length] : undefined;
+
+  // === Totales semana ===
+  const montoAporteNum = Number(estado.ronda.montoAporte || 0);
+  const totalAportesSemana =
+    estado.totalAportesSemana != null
+      ? Number(estado.totalAportesSemana)
+      : estado.items.reduce((sum, it) => sum + (it.pagado ? montoAporteNum : 0), 0);
+
+  const totalAhorrosSemana =
+    estado.totalAhorrosSemana != null
+      ? Number(estado.totalAhorrosSemana)
+      : estado.items.reduce((sum, it) => sum + Number(it.ahorroSemana ?? 0), 0);
+
+  // Opciones para el select de responsable (los mismos socios de la ronda)
+  const opcionesResponsable = itemsOrdenados.map((it) => ({
+    value: it.socioId,
+    label: `${it.socio.nombres} ${it.socio.apellidos} (${it.socio.numeroCuenta})`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -314,15 +354,13 @@ export default function RondaActualPage() {
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
               <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2 py-0.5 ring-1 ring-gray-200">
-                {/* $ icono */}
                 <svg className="h-4 w-4 opacity-70" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M11 3a1 1 0 1 1 2 0v1.06c1.9.3 3.5 1.34 3.5 3.19 0 1.97-1.72 2.88-3.86 3.43l-.64.16c-1.68.42-2.5.84-2.5 1.69 0 .86.83 1.42 2.2 1.42 1.16 0 2.24-.34 3.02-.98a1 1 0 0 1 1.34 1.48A5.62 5.62 0 0 1 13 16.95V18a1 1 0 1 1-2 0v-1.03c-2.03-.27-3.5-1.38-3.5-3.13 0-2.07 1.86-2.9 3.77-3.38l.63-.16c1.72-.43 2.6-.87 2.6-1.81 0-.84-.77-1.36-2.01-1.44-1.1-.07-2.15.28-2.9.87A1 1 0 1 1 7.7 6.5a5.47 5.47 0 0 1 3.3-1.4V3Z"/>
                 </svg>
-                Monto por socio: <strong className="tabular-nums">${new Intl.NumberFormat("es-EC", {maximumFractionDigits:2}).format(estado.ronda.montoAporte)}</strong>
+                Monto por socio: <strong className="tabular-nums">{fmtMoney(Number(estado.ronda.montoAporte))}</strong>
               </span>
 
               <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2 py-0.5 ring-1 ring-gray-200">
-                {/* personas */}
                 <svg className="h-4 w-4 opacity-70" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4ZM8 12a3 3 0 1 0-3-3 3 3 0 0 0 3 3Zm8 2c-2.67 0-8 1.34-8 4v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-2.66-5.33-4-8-4ZM8 14c-.82 0-1.61.1-2.36.28C3.69 14.78 2 16.02 2 18v1a1 1 0 0 0 1 1h6v-1c0-1.38.73-2.6 1.9-3.57A12.5 12.5 0 0 0 8 14Z"/>
                 </svg>
@@ -376,6 +414,38 @@ export default function RondaActualPage() {
         )}
       </header>
 
+      {/* === Totales + Responsable === */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-lg border bg-white p-4">
+          <p className="text-xs text-gray-500">Total aportes (semana)</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{fmtMoney(totalAportesSemana)}</p>
+        </div>
+        <div className="rounded-lg border bg-white p-4">
+          <p className="text-xs text-gray-500">Total ahorros (semana)</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{fmtMoney(totalAhorrosSemana)}</p>
+        </div>
+        <div className="rounded-lg border bg-white p-4">
+          <p className="text-xs text-gray-500 mb-1">Responsable de cobro de la ronda</p>
+          <div className="flex items-center gap-2">
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              value={responsableId}
+              onChange={(e) => setResponsableId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">— Selecciona socio —</option>
+              {opcionesResponsable.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={guardarResponsable}
+              className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+      </div>
 
       {error && <div className="rounded-md bg-red-50 p-3 text-red-700">{error}</div>}
 
@@ -494,6 +564,7 @@ export default function RondaActualPage() {
                 <th className="px-4 py-2 text-left">Socio</th>
                 <th className="px-4 py-2">Aporte</th>
                 <th className="px-4 py-2">Multa</th>
+                <th className="px-4 py-2 text-left">Observaciones</th>{/* 👈 NUEVO */}
                 <th className="px-4 py-2">Total</th>
                 <th className="px-4 py-2">Acción</th>
               </tr>
@@ -501,6 +572,7 @@ export default function RondaActualPage() {
             <tbody>
               {pendientes.map((p) => {
                 const multa = multasInputs[p.socioId] ?? Number(p.multa ?? 0);
+                const obs = obsInputs[p.socioId] ?? (p.observaciones ?? "");
                 const total = (Number(p.montoAporte) + Number(multa)).toFixed(2);
                 return (
                   <tr key={p.socioId} className="border-t">
@@ -516,6 +588,15 @@ export default function RondaActualPage() {
                         className="w-24 rounded border px-2 py-1 text-right"
                         value={multa}
                         onChange={(e) => setMultaInput(p.socioId, Number(e.target.value || 0))}
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="text"
+                        className="w-full rounded border px-2 py-1"
+                        placeholder="Observaciones (opcional)"
+                        value={obs}
+                        onChange={(e) => setObsInput(p.socioId, e.target.value)}
                       />
                     </td>
                     <td className="px-4 py-2 text-center font-semibold">${total}</td>
@@ -541,4 +622,3 @@ export default function RondaActualPage() {
     </div>
   );
 }
-
