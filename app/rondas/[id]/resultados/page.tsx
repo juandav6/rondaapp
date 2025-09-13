@@ -204,16 +204,24 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
     <div className="p-6 space-y-6">
       {/* Encabezado */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Resultados de la Ronda: <span className="text-blue-700">{resumen.nombre}</span>
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Inicio: <strong>{fmtDate(resumen.fechaInicio)}</strong>
-            <span className="mx-2 text-gray-400">•</span>
-            Fin: <strong>{fmtDate(resumen.fechaFin)}</strong>
-          </p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4 mb-6">
+        <div className="flex items-center gap-3">
+          {/* Icono de gráfico de barras */}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-blue-600">
+            <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
+          </svg>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+              Resultados de la Ronda: <span className="text-blue-700 dark:text-blue-400">{resumen.nombre}</span>
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Inicio: <strong>{fmtDate(resumen.fechaInicio)}</strong>
+              <span className="mx-2 text-gray-400">•</span>
+              Fin: <strong>{fmtDate(resumen.fechaFin)}</strong>
+            </p>
+          </div>
         </div>
+      </div>
         <div className="flex items-center gap-2">
           <Link
             href="/rondas/historial"
@@ -371,3 +379,4 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
     </div>
   );
 }
+
