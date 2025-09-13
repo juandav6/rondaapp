@@ -586,44 +586,37 @@ export default function RegistrarRondaPage() {
 
         {/* Listado de socios */}
         <section className="lg:col-span-2 rounded-xl border bg-white p-6 shadow-sm">
-          <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            {/* Izquierda: icono + textos (alineado a la izquierda) */}
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-                  <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm-7 8a7 7 0 0 1 14 0"/>
-                </svg>
-              </span>
-              <div className="text-left">
-                <h2 className="text-lg font-semibold">Listado de socios</h2>
-                <p className="text-sm text-gray-600">Selecciona quiénes participarán en la ronda.</p>
-              </div>
+          {/* Todo pegado a la izquierda y con wrap para evitar que “se salga” */}
+          <header className="mb-4 flex flex-wrap items-center gap-3">
+            {/* Icono + textos */}
+            <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm-7 8a7 7 0 0 1 14 0"/>
+              </svg>
+            </span>
+            <div className="text-left">
+              <h2 className="text-lg font-semibold">Listado de socios</h2>
+              <p className="text-sm text-gray-600">Selecciona quiénes participarán en la ronda.</p>
             </div>
 
-            {/* Derecha: buscador + botones (envuelven en pantallas angostas) */}
-            <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
-              <div className="relative grow basis-full sm:grow-0 sm:basis-auto">
-                <input
-                  className="w-full sm:w-56 rounded-md border px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
-                  placeholder="Buscar por nombre o cuenta…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 text-gray-400 sm:block">⌘K</span>
-              </div>
-              <button
-                onClick={seleccionarTodos}
-                className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
-              >
-                Seleccionar todo
-              </button>
-              <button
-                onClick={limpiarSeleccion}
-                className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
-              >
-                Limpiar
-              </button>
+            {/* Buscador */}
+            <div className="relative w-full sm:w-64">
+              <input
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+                placeholder="Buscar por nombre o cuenta…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 text-gray-400 sm:block">⌘K</span>
             </div>
+
+            {/* Botones */}
+            <button onClick={seleccionarTodos} className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50">
+              Seleccionar todo
+            </button>
+            <button onClick={limpiarSeleccion} className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50">
+              Limpiar
+            </button>
           </header>
 
           {sociosFiltrados.length === 0 ? (
@@ -663,7 +656,7 @@ export default function RegistrarRondaPage() {
             <div className="text-xs text-gray-500">Consejo: puedes filtrar y luego “Seleccionar todo”.</div>
           </div>
 
-          {/* Preview opcional de fechas previstas antes de crear (con el orden actual de selección) */}
+          {/* Preview de fechas previstas */}
           {form.fechaInicio && form.intervaloDiasCobro && seleccion.length > 0 && (
             <div className="mt-4 rounded-lg border bg-white p-4 shadow-sm text-left">
               <h3 className="mb-2 text-sm font-semibold">Fechas previstas (estimación)</h3>
