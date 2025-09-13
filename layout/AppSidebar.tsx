@@ -45,14 +45,6 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <ListIcon />,
-    name: "Aportes / Pagos",
-    subItems: [
-      { name: "Registrar aporte", path: "/aportes/registrar" },
-      { name: "Aportes pendientes", path: "/aportes/pendientes" },
-    ],
-  },
-  {
     icon: <TableIcon />,
     name: "Préstamos",
     subItems: [
