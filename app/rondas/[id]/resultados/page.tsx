@@ -85,20 +85,14 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
       })
       .catch((err: any) => setError(err?.message ?? "Error desconocido"))
       .finally(() => setLoading(false));
-  }, [id]); // 👈 deps actualizadas
+  }, [id]);
+
   // Derivados: filtro y orden
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const base = q
       ? socios.filter((s) =>
-          [
-            s.nombres,
-            s.apellidos,
-            s.numeroCuenta,
-            String(s.aportes),
-            String(s.ahorros),
-            String(s.multas),
-          ]
+          [s.nombres, s.apellidos, s.numeroCuenta, String(s.aportes), String(s.ahorros), String(s.multas)]
             .filter(Boolean)
             .some((val) => String(val).toLowerCase().includes(q))
         )
@@ -143,7 +137,7 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `resultados_ronda_${resumen?.id ?? (await params).id}.csv`;
+    a.download = `resultados_ronda_${resumen?.id ?? id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -152,7 +146,7 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
   async function retry() {
     setError(null);
     setLoading(true);
-    fetch(`/api/rondas/${(await params).id}/resultados`)
+    fetch(`/api/rondas/${id}/resultados`)
       .then((r) => r.json())
       .then((data: any) => {
         setResumen(data?.resumen ?? null);
@@ -168,7 +162,12 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
           <div className="mb-2 font-semibold">Error al cargar</div>
           <p className="mb-4 text-sm">{error}</p>
-          <button onClick={retry} className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">Reintentar</button>
+          <button
+            onClick={retry}
+            className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+          >
+            Reintentar
+          </button>
         </div>
       </div>
     );
@@ -195,46 +194,47 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
       </div>
     );
 
-  if (!resumen)
-    return (
-      <div className="p-6 text-gray-600">No se encontraron resultados para esta ronda.</div>
-    );
+  if (!resumen) return <div className="p-6 text-gray-600">No se encontraron resultados para esta ronda.</div>;
 
   return (
     <div className="p-6 space-y-6">
-      {/* Encabezado */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4 mb-6">
-        <div className="flex items-center gap-3">
-          {/* Icono de gráfico de barras */}
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-blue-600">
-            <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
-          </svg>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-              Resultados de la Ronda: <span className="text-blue-700 dark:text-blue-400">{resumen.nombre}</span>
-            </h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Inicio: <strong>{fmtDate(resumen.fechaInicio)}</strong>
-              <span className="mx-2 text-gray-400">•</span>
-              Fin: <strong>{fmtDate(resumen.fechaFin)}</strong>
-            </p>
+      {/* Header en cajoncito */}
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+              {/* Icono de gráfico de barras */}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z" />
+              </svg>
+            </span>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Resultados de la ronda:{" "}
+                <span className="text-blue-700">{resumen.nombre}</span>
+              </h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Inicio: <strong>{fmtDate(resumen.fechaInicio)}</strong>
+                <span className="mx-2 text-gray-400">•</span>
+                Fin: <strong>{fmtDate(resumen.fechaFin)}</strong>
+              </p>
+            </div>
           </div>
-        </div>
-      </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/rondas/historial"
-            className="hidden rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:inline-flex"
-          >
-            Volver al historial
-          </Link>
-          <button
-            onClick={exportCSV}
-            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            Exportar CSV
-          </button>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href="/rondas/historial"
+              className="hidden rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:inline-flex"
+            >
+              Volver al historial
+            </Link>
+            <button
+              onClick={exportCSV}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+            >
+              Exportar CSV
+            </button>
+          </div>
         </div>
       </div>
 
@@ -274,8 +274,17 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
                 placeholder="Buscar por nombre, cuenta o monto…"
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400">
-                <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.2 12.05l3.725 3.725a.75.75 0 1 0 1.06-1.06l-3.724-3.725A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clipRule="evenodd" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10.5 3.75a6.75 6.75 0 1 0 4.2 12.05l3.725 3.725a.75.75 0 1 0 1.06-1.06l-3.724-3.725A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
           </div>
@@ -313,7 +322,12 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
                     <div className="flex items-center gap-1">
                       <span>{c.label}</span>
                       {sortKey === c.key && (
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-gray-500">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="h-4 w-4 text-gray-500"
+                        >
                           {sortDir === "asc" ? (
                             <path d="M12 8l-4 4h8l-4-4z" />
                           ) : (
@@ -364,7 +378,9 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
               >
                 Anterior
               </button>
-              <span className="tabular-nums">{pageSafe} / {totalPages}</span>
+              <span className="tabular-nums">
+                {pageSafe} / {totalPages}
+              </span>
               <button
                 className="rounded-md border px-2.5 py-1 disabled:opacity-50"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -379,4 +395,3 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
     </div>
   );
 }
-
