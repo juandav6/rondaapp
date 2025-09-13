@@ -1,6 +1,6 @@
 // app/rondas/registro_ronda/page.tsx
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: string };
@@ -77,6 +77,15 @@ export default function RegistrarRondaPage() {
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [savingOrden, setSavingOrden] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  // ref para abrir el datepicker de forma consistente
+  const fechaRef = useRef<HTMLInputElement>(null);
+  const openDatePicker = () => {
+    try {
+      (fechaRef.current as any)?.showPicker?.(); // Chromium
+    } catch {}
+    fechaRef.current?.focus();
+  };
 
   useEffect(() => {
     fetch("/api/socios")
@@ -290,7 +299,7 @@ export default function RegistrarRondaPage() {
         {/* Encabezado + resumen */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
-            <div>
+            <div className="text-left">
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
@@ -311,19 +320,19 @@ export default function RegistrarRondaPage() {
 
           {/* Resumen de la ronda */}
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 text-left">
               <p className="text-xs text-gray-500">Código</p>
               <p className="mt-1 font-semibold">{rondaCreada.nombre}</p>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 text-left">
               <p className="text-xs text-gray-500">Total a aportar por socio</p>
               <p className="mt-1 text-xl font-semibold">{fmtMoney(totalAportarPorSocio)}</p>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 text-left">
               <p className="text-xs text-gray-500">Ahorro objetivo por socio</p>
               <p className="mt-1 text-xl font-semibold">{fmtMoney(ahorroFinalPorSocio)}</p>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 text-left">
               <p className="text-xs text-gray-500">Periodo</p>
               <p className="mt-1 font-semibold">
                 {fechaInicioTexto}
@@ -336,7 +345,7 @@ export default function RegistrarRondaPage() {
 
         {/* Orden de socios */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
@@ -345,7 +354,7 @@ export default function RegistrarRondaPage() {
               </span>
               <h2 className="text-lg font-semibold">Orden de recepción del dinero</h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {swapIndex !== null && (
                 <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
                   Selecciona otra persona para intercambiar
@@ -371,7 +380,7 @@ export default function RegistrarRondaPage() {
           )}
 
           {participantesOrdenados.length === 0 ? (
-            <p className="text-gray-600">No hay participantes.</p>
+            <p className="text-gray-600 text-left">No hay participantes.</p>
           ) : (
             <ol className="space-y-2">
               {participantesOrdenados.map((s, idx) => (
@@ -399,7 +408,7 @@ export default function RegistrarRondaPage() {
                         <path d="M9 6h2v2H9V6Zm4 0h2v2h-2V6ZM9 10h2v2H9v-2Zm4 0h2v2h-2v-2ZM9 14h2v2H9v-2Zm4 0h2v2h-2v-2Z"/>
                       </svg>
                     </button>
-                    <div>
+                    <div className="text-left">
                       <p className="font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
                       <p className="text-xs text-gray-500">Cuenta {s.numeroCuenta}</p>
                     </div>
@@ -422,7 +431,7 @@ export default function RegistrarRondaPage() {
                     >
                       Intercambiar
                     </button>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-gray-600 whitespace-nowrap">
                       Recibe: {fmtMoney((Number(form.montoAporte) || 0) * (orden.length || 0))}
                       <span className="mx-2 text-gray-300">•</span>
                       Fecha prevista: {fechaPrevistaPorIdx(idx)}
@@ -442,13 +451,13 @@ export default function RegistrarRondaPage() {
     <div className="space-y-6">
       {/* Cajón de título */}
       <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
               <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
             </svg>
           </span>
-          <div>
+          <div className="text-left">
             <h1 className="text-2xl font-semibold tracking-tight">Registrar nueva ronda</h1>
             <p className="text-sm text-gray-600">El código se generará automáticamente al guardar.</p>
           </div>
@@ -460,13 +469,13 @@ export default function RegistrarRondaPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Información de la ronda */}
         <section className="lg:col-span-1 rounded-xl border bg-white p-6 shadow-sm">
-          <header className="mb-4 flex items-center gap-3">
+          <header className="mb-4 flex items-start gap-3">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
                 <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
               </svg>
             </span>
-            <div>
+            <div className="text-left">
               <h2 className="text-lg font-semibold">Información de la ronda</h2>
               <p className="text-sm text-gray-600">Completa los datos generales.</p>
             </div>
@@ -474,7 +483,7 @@ export default function RegistrarRondaPage() {
 
           {/* UNA sola columna */}
           <div className="grid gap-3">
-            <div>
+            <div className="text-left">
               <label className="mb-1 block text-sm font-medium text-gray-700">Monto por aporte</label>
               <input
                 type="number"
@@ -486,7 +495,7 @@ export default function RegistrarRondaPage() {
               />
             </div>
 
-            <div>
+            <div className="text-left">
               <label className="mb-1 block text-sm font-medium text-gray-700">Ahorro objetivo por socio</label>
               <input
                 type="number"
@@ -498,17 +507,31 @@ export default function RegistrarRondaPage() {
               />
             </div>
 
-            <div>
+            <div className="text-left">
               <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de inicio</label>
-              <input
-                type="date"
-                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                value={form.fechaInicio}
-                onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
-              />
+              <div className="relative">
+                <input
+                  ref={fechaRef}
+                  type="date"
+                  className="w-full rounded-md border px-3 pr-10 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={form.fechaInicio}
+                  onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
+                />
+                <button
+                  type="button"
+                  onClick={openDatePicker}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+                  aria-label="Abrir calendario"
+                  tabIndex={-1}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H4V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1Zm13 9v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8h16Z" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div>
+            <div className="text-left">
               <label className="mb-1 block text-sm font-medium text-gray-700">Cada cuántos días hay cobro</label>
               <input
                 type="number"
@@ -522,7 +545,7 @@ export default function RegistrarRondaPage() {
             </div>
           </div>
 
-          <div className="mt-3 rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700">
+          <div className="mt-3 rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700 text-left">
             {seleccion.length ? (
               <>
                 {seleccion.length} socios • Total por socio al final: <strong>{fmtMoney(totalAportarPorSocio)}</strong>
@@ -563,35 +586,48 @@ export default function RegistrarRondaPage() {
 
         {/* Listado de socios */}
         <section className="lg:col-span-2 rounded-xl border bg-white p-6 shadow-sm">
-          <header className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+          <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            {/* Izquierda: icono + textos (alineado a la izquierda) */}
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
                   <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm-7 8a7 7 0 0 1 14 0"/>
                 </svg>
               </span>
-              <div>
+              <div className="text-left">
                 <h2 className="text-lg font-semibold">Listado de socios</h2>
                 <p className="text-sm text-gray-600">Selecciona quiénes participarán en la ronda.</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
+
+            {/* Derecha: buscador + botones (envuelven en pantallas angostas) */}
+            <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+              <div className="relative grow basis-full sm:grow-0 sm:basis-auto">
                 <input
-                  className="w-56 rounded-md border px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+                  className="w-full sm:w-56 rounded-md border px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
                   placeholder="Buscar por nombre o cuenta…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">⌘K</span>
+                <span className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 text-gray-400 sm:block">⌘K</span>
               </div>
-              <button onClick={seleccionarTodos} className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50">Seleccionar todo</button>
-              <button onClick={limpiarSeleccion} className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50">Limpiar</button>
+              <button
+                onClick={seleccionarTodos}
+                className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
+              >
+                Seleccionar todo
+              </button>
+              <button
+                onClick={limpiarSeleccion}
+                className="rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
+              >
+                Limpiar
+              </button>
             </div>
           </header>
 
           {sociosFiltrados.length === 0 ? (
-            <p className="text-gray-600">No hay socios.</p>
+            <p className="text-gray-600 text-left">No hay socios.</p>
           ) : (
             <ul className="divide-y rounded-lg border">
               {sociosFiltrados.map((s) => {
@@ -600,7 +636,7 @@ export default function RegistrarRondaPage() {
                   <li key={s.id} className={classNames("flex items-center justify-between gap-3 p-3", checked && "bg-gray-50")}>
                     <label className="flex flex-1 cursor-pointer items-center gap-3">
                       <input type="checkbox" className="h-4 w-4" checked={checked} onChange={() => toggleSocio(s.id)} />
-                      <div className="min-w-0">
+                      <div className="min-w-0 text-left">
                         <p className="truncate font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
                         <p className="truncate text-xs text-gray-500">Cuenta {s.numeroCuenta}</p>
                       </div>
@@ -613,7 +649,7 @@ export default function RegistrarRondaPage() {
           )}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-700">
-            <div>
+            <div className="text-left">
               <span className="font-medium">{seleccion.length}</span> seleccionados
               {seleccion.length > 0 && (
                 <>
@@ -629,7 +665,7 @@ export default function RegistrarRondaPage() {
 
           {/* Preview opcional de fechas previstas antes de crear (con el orden actual de selección) */}
           {form.fechaInicio && form.intervaloDiasCobro && seleccion.length > 0 && (
-            <div className="mt-4 rounded-lg border bg-white p-4 shadow-sm">
+            <div className="mt-4 rounded-lg border bg-white p-4 shadow-sm text-left">
               <h3 className="mb-2 text-sm font-semibold">Fechas previstas (estimación)</h3>
               <ol className="space-y-1 text-sm text-gray-700">
                 {seleccion.map((_, idx) => (
