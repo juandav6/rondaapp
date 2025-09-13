@@ -535,53 +535,57 @@ export default function RondaActualPage() {
                     />
                   </td>
 
-                  <td className="px-4 py-2 text-right space-x-2">
-                    {it.pagado ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-                        Pagado
-                      </span>
-                    ) : (
-                      <>
-                        <button
-                          disabled={saving === it.socioId}
-                          onClick={() => registrarAporteIndividual(it.socioId)}
-                          className="rounded bg-brand-500 px-3 py-1.5 text-white hover:bg-brand-600 disabled:opacity-50"
-                        >
-                          {saving === it.socioId ? "..." : "Registrar aporte"}
-                        </button>
-
-                        {/* Ofrecer préstamo express directo desde la tabla */}
-                        <button
-                          onClick={() =>
-                            openLoanModal({
-                              socioId: it.socioId,
-                              socio: it.socio,
-                              montoAporte: estado.ronda.montoAporte,
-                            } as any)
-                          }
-                          className="rounded bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700"
-                          title="Ofrecer préstamo express"
-                        >
-                          Préstamo express
-                        </button>
-                      </>
-                    )}
-
-                    <button
-                      disabled={disabledAhorro || !(Number(valorInput) > 0) || Number(valorInput) > restanteCalc}
-                      onClick={() => registrarAhorroParcial(it.socioId, Number(valorInput))}
-                      className="rounded bg-blue-600 px-3 py-1.5 text-white hover:bg-blue-700 disabled:opacity-50"
-                      title={
-                        ahorroYaRegistrado
-                          ? "Ya registraste un ahorro esta semana"
-                          : restanteCalc <= 0
-                          ? "Objetivo de ahorro cumplido"
-                          : undefined
-                      }
-                    >
-                      Guardar ahorro
-                    </button>
+                  <td className="px-4 py-2 w-[360px]">
+                    <div className="flex justify-end items-center gap-2 whitespace-nowrap">
+                      {/* Pagado o botones */}
+                      {it.pagado ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                          Pagado
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            disabled={saving === it.socioId}
+                            onClick={() => registrarAporteIndividual(it.socioId)}
+                            className="inline-flex rounded bg-brand-500 px-3 py-1.5 text-white hover:bg-brand-600 disabled:opacity-50"
+                          >
+                            {saving === it.socioId ? "..." : "Registrar aporte"}
+                          </button>
+                  
+                          <button
+                            onClick={() =>
+                              openLoanModal({
+                                socioId: it.socioId,
+                                socio: it.socio,
+                                montoAporte: estado.ronda.montoAporte,
+                              } as any)
+                            }
+                            className="inline-flex rounded bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700"
+                            title="Ofrecer préstamo express"
+                          >
+                            Préstamo express
+                          </button>
+                        </>
+                      )}
+                  
+                      <button
+                        disabled={
+                          (it as any).ahorroRegistradoSemana === true ||
+                          Number(estado.ronda.ahorroObjetivoPorSocio ?? 0) - Number(it.ahorroAcumulado ?? 0) <= 0 ||
+                          saving === it.socioId ||
+                          !(Number(ahorroInputs[it.socioId] ?? 0) > 0) ||
+                          Number(ahorroInputs[it.socioId] ?? 0) >
+                            Math.max(Number(estado.ronda.ahorroObjetivoPorSocio ?? 0) - Number(it.ahorroAcumulado ?? 0), 0)
+                        }
+                        onClick={() => registrarAhorroParcial(it.socioId, Number(ahorroInputs[it.socioId] ?? 0))}
+                        className="inline-flex rounded bg-blue-600 px-3 py-1.5 text-white hover:bg-blue-700 disabled:opacity-50"
+                        title="Guardar ahorro"
+                      >
+                        Guardar ahorro
+                      </button>
+                    </div>
                   </td>
+
                 </tr>
               );
             })}
@@ -701,3 +705,4 @@ export default function RondaActualPage() {
     </div>
   );
 }
+
