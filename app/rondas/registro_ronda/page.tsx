@@ -13,12 +13,14 @@ type Ronda = {
   fechaInicio: string;
   ahorroObjetivo: number | string;
   fechaFin?: string | null;
+  intervaloDiasCobro: number; // <── NUEVO
 };
 
 type CrearRondaPayload = {
   montoAporte: number;
   fechaInicio: string;
   ahorroObjetivo: number;
+  intervaloDiasCobro: number; // <── NUEVO
 };
 
 const fmtMoney = (n: number, currency = "USD", locale = "es-EC") =>
@@ -31,6 +33,23 @@ const fmtDate = (iso: string | null | undefined, locale = "es-EC") => {
   return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(d);
 };
 
+const fmtDateFull = (d: Date | null, locale = "es-EC") =>
+  d ? new Intl.DateTimeFormat(locale, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(d) : "-";
+
+// Reemplaza tu addDays anterior por este:
+const addDays = (iso: string | Date, days: number) => {
+  if (!iso) return null;
+  const base =
+    typeof iso === "string"
+      ? (iso.includes("T") ? new Date(iso) : new Date(`${iso}T00:00:00`))
+      : new Date(iso);
+  if (Number.isNaN(base.getTime())) return null;
+  const nd = new Date(base);
+  nd.setDate(nd.getDate() + days);
+  return nd;
+};
+
+
 const classNames = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
 export default function RegistrarRondaPage() {
@@ -42,6 +61,7 @@ export default function RegistrarRondaPage() {
     montoAporte: 0,
     fechaInicio: "",
     ahorroObjetivo: 0,
+    intervaloDiasCobro: 7, // <── por defecto semanal
   });
 
   const [rondaCreada, setRondaCreada] = useState<Ronda | null>(null);
@@ -93,6 +113,7 @@ export default function RegistrarRondaPage() {
           montoAporte: form.montoAporte,
           fechaInicio: form.fechaInicio,
           ahorroObjetivo: form.ahorroObjetivo,
+          intervaloDiasCobro: form.intervaloDiasCobro, // <── NUEVO
         }),
       });
       const dataR = await resR.json();
@@ -116,7 +137,11 @@ export default function RegistrarRondaPage() {
       }
 
       setOrden(ordenIds);
-      setRondaCreada({ ...ronda, fechaFin: (dataP?.fechaFin ?? (ronda as any).fechaFin ?? null) as any });
+      setRondaCreada({
+        ...ronda,
+        fechaFin: (dataP?.fechaFin ?? (ronda as any).fechaFin ?? null) as any,
+        intervaloDiasCobro: (ronda as any).intervaloDiasCobro ?? form.intervaloDiasCobro, // asegurar que venga
+      });
     } catch (e: any) {
       setError(e?.message ?? "Error desconocido");
     } finally {
@@ -204,6 +229,12 @@ export default function RegistrarRondaPage() {
       .map((id) => socios.find((s) => s.id === id))
       .filter(Boolean) as Socio[];
 
+    const fechaInicio = rondaCreada.fechaInicio;
+    const intervalo = Number(rondaCreada.intervaloDiasCobro ?? form.intervaloDiasCobro ?? 7);
+    const fechaPrevistaPorIdx = (idx: number) => fmtDateFull(addDays(fechaInicio, idx * intervalo));
+    const fechaFinEstimadaDate = addDays(fechaInicio, Math.max(0, (orden.length - 1) * intervalo));
+    const fechaFinTexto = (rondaCreada.fechaFin && fmtDate(rondaCreada.fechaFin)) || (fechaFinEstimadaDate ? fmtDate(fechaFinEstimadaDate.toISOString()) : "-");
+
     return (
       <div className="space-y-6">
         {/* Encabezado + resumen */}
@@ -247,7 +278,7 @@ export default function RegistrarRondaPage() {
               <p className="mt-1 font-semibold">
                 {fmtDate(rondaCreada.fechaInicio)}
                 <span className="mx-2 text-gray-400">→</span>
-                {fmtDate(rondaCreada.fechaFin ?? null)}
+                {fechaFinTexto}
               </p>
             </div>
           </div>
@@ -343,6 +374,8 @@ export default function RegistrarRondaPage() {
                     </button>
                     <span className="text-sm text-gray-600">
                       Recibe: {fmtMoney((Number(form.montoAporte) || 0) * (orden.length || 0))}
+                      <span className="mx-2 text-gray-300">•</span>
+                      Fecha prevista: {fechaPrevistaPorIdx(idx)}
                     </span>
                   </div>
                 </li>
@@ -423,6 +456,19 @@ export default function RegistrarRondaPage() {
                 value={form.fechaInicio}
                 onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
               />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Cada cuántos días hay cobro</label>
+              <input
+                type="number"
+                className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="7"
+                min={1}
+                value={form.intervaloDiasCobro || ""}
+                onChange={(e) => setForm((f) => ({ ...f, intervaloDiasCobro: Number(e.target.value) }))}
+              />
+              <p className="mt-1 text-xs text-gray-500">Ej.: 7 = semanal, 15 = quincenal, 30 = mensual aproximado.</p>
             </div>
           </div>
 
@@ -530,6 +576,18 @@ export default function RegistrarRondaPage() {
             </div>
             <div className="text-xs text-gray-500">Consejo: puedes filtrar y luego “Seleccionar todo”.</div>
           </div>
+
+          {/* Preview opcional de fechas previstas antes de crear (con el orden actual de selección) */}
+          {form.fechaInicio && form.intervaloDiasCobro && seleccion.length > 0 && (
+            <div className="mt-4 rounded-lg border bg-white p-4 shadow-sm">
+              <h3 className="mb-2 text-sm font-semibold">Fechas previstas (estimación)</h3>
+              <ol className="space-y-1 text-sm text-gray-700">
+                {seleccion.map((_, idx) => (
+                  <li key={idx}>Turno {idx + 1}: {fmtDateFull(addDays(form.fechaInicio, idx * form.intervaloDiasCobro))}</li>
+                ))}
+              </ol>
+            </div>
+          )}
         </section>
       </div>
     </div>
