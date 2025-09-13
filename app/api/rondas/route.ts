@@ -4,14 +4,20 @@ import prisma from "@/lib/prisma";
 export const runtime = "nodejs";
 import { Prisma } from "@prisma/client";
 
-// GET → ronda activa + participaciones (ordenadas) + código
+// helper: convierte "YYYY-MM-DD" a un Date anclado a 12:00 UTC (evita saltos de día por TZ)
+function dateOnlyToUTCNoon(s: string) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0));
+}
+
+// GET → ronda activa + participaciones + código
 export async function GET() {
   const ronda = await prisma.ronda.findFirst({
     where: { activa: true },
     include: {
       participaciones: {
         include: { socio: true },
-        orderBy: { orden: "asc" }, // 👈 respeta el orden guardado
+        orderBy: { orden: "asc" },
       },
     },
   });
@@ -23,9 +29,13 @@ export async function GET() {
     semanaActual: ronda.semanaActual,
     montoAporte: ronda.montoAporte.toString(),
     ahorroObjetivoPorSocio: ronda.ahorroObjetivoPorSocio.toString(),
-    fechaInicio: ronda.fechaInicio.toISOString(),
-    fechaFin: ronda.fechaFin ? ronda.fechaFin.toISOString() : null,
-    intervaloDiasCobro: ronda.intervaloDiasCobro, // 👈 NUEVO
+    // 👇 si quieres usarlo en UI tipo <input type="date">
+    fechaInicioDate: ronda.fechaInicio.toISOString().slice(0, 10),
+    fechaFinDate: ronda.fechaFin ? ronda.fechaFin.toISOString().slice(0, 10) : null,
+    // (si aún necesitas los ISO completos, puedes dejarlos también)
+    fechaInicioISO: ronda.fechaInicio.toISOString(),
+    fechaFinISO: ronda.fechaFin ? ronda.fechaFin.toISOString() : null,
+    intervaloDiasCobro: ronda.intervaloDiasCobro,
     participaciones: ronda.participaciones.map((p) => ({
       id: p.id,
       orden: p.orden,
@@ -44,7 +54,7 @@ export async function POST(req: Request) {
   const { nombre, montoAporte, fechaInicio, ahorroObjetivo, intervaloDiasCobro } = body as {
     nombre?: string;
     montoAporte: number;
-    fechaInicio: string;
+    fechaInicio: string;             // viene como "YYYY-MM-DD"
     ahorroObjetivo: number;
     intervaloDiasCobro?: number;
   };
@@ -65,21 +75,22 @@ export async function POST(req: Request) {
   const n = Number(row[0].nextval);
   const codigo = `RD${String(n).padStart(4, "0")}`;
 
-  // saneo de valores
   const intervalo = Number.isFinite(intervaloDiasCobro) && Number(intervaloDiasCobro) > 0
     ? Math.floor(Number(intervaloDiasCobro))
-    : 7; // por defecto semanal
+    : 7;
 
-  // crea la ronda
+  // ⚠️ CLAVE: usar dateOnlyToUTCNoon(fechaInicio)
+  const fechaInicioUTC = dateOnlyToUTCNoon(fechaInicio);
+
   const ronda = await prisma.ronda.create({
     data: {
       nombre: codigo,
-      montoAporte: new Prisma.Decimal(Number(montoAporte ?? 0)), // 👈 Decimal
-      fechaInicio: new Date(fechaInicio),
+      montoAporte: new Prisma.Decimal(Number(montoAporte ?? 0)),
+      fechaInicio: fechaInicioUTC, // 👈 evita desfase por TZ
       activa: true,
       semanaActual: 1,
-      ahorroObjetivoPorSocio: new Prisma.Decimal(Number(ahorroObjetivo ?? 0)), // 👈 Decimal
-      intervaloDiasCobro: intervalo, // 👈 NUEVO
+      ahorroObjetivoPorSocio: new Prisma.Decimal(Number(ahorroObjetivo ?? 0)),
+      intervaloDiasCobro: intervalo,
     },
     select: {
       id: true,
@@ -90,7 +101,7 @@ export async function POST(req: Request) {
       ahorroObjetivoPorSocio: true,
       activa: true,
       semanaActual: true,
-      intervaloDiasCobro: true, // 👈 NUEVO
+      intervaloDiasCobro: true,
     },
   });
 
@@ -98,11 +109,13 @@ export async function POST(req: Request) {
     id: ronda.id,
     nombre: ronda.nombre,
     montoAporte: ronda.montoAporte.toString(),
-    fechaInicio: ronda.fechaInicio.toISOString(),
-    fechaFin: ronda.fechaFin ? ronda.fechaFin.toISOString() : null,
+    fechaInicioDate: ronda.fechaInicio.toISOString().slice(0, 10),
+    fechaFinDate: ronda.fechaFin ? ronda.fechaFin.toISOString().slice(0, 10) : null,
+    fechaInicioISO: ronda.fechaInicio.toISOString(),
+    fechaFinISO: ronda.fechaFin ? ronda.fechaFin.toISOString() : null,
     ahorroObjetivoPorSocio: ronda.ahorroObjetivoPorSocio.toString(),
     activa: ronda.activa,
     semanaActual: ronda.semanaActual,
-    intervaloDiasCobro: ronda.intervaloDiasCobro, // 👈 NUEVO
+    intervaloDiasCobro: ronda.intervaloDiasCobro,
   });
 }
