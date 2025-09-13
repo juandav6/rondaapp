@@ -157,8 +157,16 @@ export default function HistorialRondasPage() {
 
   return (
     <div className="p-6">
+      {/* Título con estilo de menú */}
+      <div className="mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white text-center">
+            Historial de rondas
+          </h1>
+        </div>
+      </div>
+
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Historial de rondas</h1>
         <div className="flex w-full gap-2 sm:w-auto">
           <div className="relative w-full sm:w-72">
             <input
