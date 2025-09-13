@@ -113,7 +113,7 @@ export default function SociosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header en recuadro */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -371,3 +371,4 @@ export default function SociosPage() {
     </div>
   );
 }
+
