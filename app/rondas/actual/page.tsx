@@ -5,6 +5,19 @@ import { useEffect, useState } from "react";
 const fmtMoney = (n: number, currency = "USD", locale = "es-EC") =>
   new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
+const fmtDateFull = (d: Date | null, locale = "es-EC") =>
+  d ? new Intl.DateTimeFormat(locale, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(d) : "-";
+
+// Anclado a 12:00 UTC para evitar desfaces por zona horaria.
+const addDaysUTC = (baseISO: string, days: number) => {
+  if (!baseISO) return null;
+  const base = baseISO.includes("T") ? new Date(baseISO) : new Date(`${baseISO}T12:00:00Z`);
+  if (Number.isNaN(base.getTime())) return null;
+  const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+};
+
 type Item = {
   socioId: number;
   socio: { nombres: string; apellidos: string; numeroCuenta: string };
@@ -24,6 +37,12 @@ type RondaDTO = {
   montoAporte: string;
   ahorroObjetivoPorSocio?: string;
   responsableId?: number | null;
+
+  // ⤵️ añadimos estos campos (si tu API no los manda, simplemente no se mostrará la fecha)
+  fechaInicio?: string;        // ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ssZ)
+  fechaInicioISO?: string;     // compatibilidad
+  fechaInicioDate?: string;    // YYYY-MM-DD
+  intervaloDiasCobro?: number; // ej. 7
 };
 
 type EstadoSemana = {
@@ -66,8 +85,8 @@ export default function RondaActualPage() {
   const [loanOpen, setLoanOpen] = useState(false);
   const [loanSaving, setLoanSaving] = useState(false);
   const [loanSocio, setLoanSocio] = useState<{ id: number; nombres: string; apellidos: string } | null>(null);
-  const [loanPrincipal, setLoanPrincipal] = useState<number>(0); // normalmente = monto aporte
-  const [loanInteres, setLoanInteres] = useState<number>(0);     // monto de interés a cobrar
+  const [loanPrincipal, setLoanPrincipal] = useState<number>(0);
+  const [loanInteres, setLoanInteres] = useState<number>(0);
   const [loanObs, setLoanObs] = useState<string>("");
 
   function openLoanModal(p: { socioId: number; socio: Item["socio"]; montoAporte: string }) {
@@ -107,7 +126,7 @@ export default function RondaActualPage() {
           semana: estado.semana,
           monto: Number(estado.ronda.montoAporte),
           multa: 0,
-          prestamoExpressId: data.id, // opcional en backend (si no existe, lo ignora)
+          prestamoExpressId: data.id,
           fuente: "prestamoExpress",
           observaciones: loanObs || undefined,
         }),
@@ -137,6 +156,13 @@ export default function RondaActualPage() {
 
   useEffect(() => { cargar(); }, []);
 
+  // Cuando cambie de semana/ronda, limpia inputs locales
+  useEffect(() => {
+    setAhorroInputs({});
+    setMultasInputs({});
+    setObsInputs({});
+  }, [estado?.semana, estado?.ronda?.id]);
+
   useEffect(() => {
     if (estado) setResponsableId(estado.responsableId ?? estado.ronda?.responsableId ?? "");
   }, [estado?.responsableId, estado?.ronda?.responsableId]);
@@ -152,6 +178,8 @@ export default function RondaActualPage() {
       if (monto > restante) throw new Error(`No puedes ahorrar más de ${restante.toFixed(2)} esta ronda`);
 
       setSaving(socioId);
+
+      // Llamada al backend
       const res = await fetch(`/api/rondas/${estado.ronda.id}/ahorros`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,7 +187,33 @@ export default function RondaActualPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "No se pudo registrar el ahorro");
+
+      // ✅ Actualización optimista de totales e item
+      setEstado((prev) => {
+        if (!prev) return prev;
+        const items = prev.items.map((row) => {
+          if (row.socioId !== socioId) return row;
+          const nuevoAhoSem = Number(row.ahorroSemana ?? 0) + monto;
+          const nuevoAcum = Number(row.ahorroAcumulado ?? 0) + monto;
+          const objetivoNum = Number(prev.ronda.ahorroObjetivoPorSocio ?? 0);
+          const nuevoRestante = Math.max(objetivoNum - nuevoAcum, 0);
+          return {
+            ...row,
+            ahorroSemana: nuevoAhoSem.toFixed(2),
+            ahorroAcumulado: nuevoAcum.toFixed(2),
+            ahorroRestante: nuevoRestante.toFixed(2),
+          };
+        });
+        const totalSem = items.reduce((s, r) => s + Number(r.ahorroSemana ?? 0), 0);
+        return { ...prev, items, totalAhorrosSemana: totalSem.toFixed(2) };
+      });
+
+      // Limpia el input del socio
+      setAhorroInputs((prev) => ({ ...prev, [socioId]: 0 }));
+
+      // Sincroniza con servidor
       await cargar();
+
       showToast("Ahorro registrado");
     } catch (e: any) {
       setError(e.message || "Error al registrar ahorro");
@@ -298,29 +352,6 @@ export default function RondaActualPage() {
     }
   }
 
-  async function guardarAporte(socioId: number, pagado: boolean, multa: string) {
-    if (!estado) return;
-    try {
-      setSaving(socioId);
-      const monto = pagado ? estado.ronda.montoAporte : "0";
-      const multaNum = Number(multa || "0");
-      const res = await fetch(`/api/rondas/${estado.ronda.id}/aportes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ socioId, semana: estado.semana, monto: Number(monto), multa: multaNum }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "No se pudo guardar");
-      await cargar();
-      showToast("Aporte actualizado");
-    } catch (e: any) {
-      setError(e.message || "Error al guardar");
-      showToast(e.message || "Error al guardar", "error", 4000);
-    } finally {
-      setSaving(null);
-    }
-  }
-
   async function cerrarSemana() {
     if (!estado) return;
     try {
@@ -330,6 +361,10 @@ export default function RondaActualPage() {
       if (!res.ok) throw new Error(data?.error || "No se pudo cerrar la semana");
 
       if (data.avanzada) {
+        // limpia inputs al avanzar de semana
+        setAhorroInputs({});
+        setMultasInputs({});
+        setObsInputs({});
         if (data.finalizada) {
           window.location.href = `/rondas/${estado.ronda.id}/resultados`;
         } else {
@@ -374,6 +409,15 @@ export default function RondaActualPage() {
     label: `${it.socio.nombres} ${it.socio.apellidos} (${it.socio.numeroCuenta})`,
   }));
 
+  // ⤵️ Fecha de la semana actual (si la API nos da fechaInicio + intervalo)
+  const baseInicio =
+    estado.ronda.fechaInicio ||
+    estado.ronda.fechaInicioISO ||
+    (estado.ronda.fechaInicioDate ? `${estado.ronda.fechaInicioDate}T12:00:00Z` : undefined);
+
+  const intervalo = Number(estado.ronda.intervaloDiasCobro ?? 7);
+  const fechaSemanaActual = baseInicio ? addDaysUTC(baseInicio, (estado.semana - 1) * intervalo) : null;
+
   return (
     <div className="space-y-6">
       {/* TOAST */}
@@ -392,9 +436,6 @@ export default function RondaActualPage() {
       )}
 
       <header className="rounded-xl border bg-white/60 p-5 shadow-sm backdrop-blur">
-        {/* ... (encabezado como lo tienes) */}
-        {/* (código intacto omitido por brevedad; no lo modifiqué) */}
-        {/* --- pega aquí exactamente tu header existente --- */}
         {/* INICIO header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -403,6 +444,14 @@ export default function RondaActualPage() {
               <span className="ml-1 inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200">
                 Semana {estado.semana}/{estado.totalParticipantes}
               </span>
+              {fechaSemanaActual && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+                  <svg className="h-4 w-4 opacity-70" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H4V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1Zm13 9v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8h16Z" />
+                  </svg>
+                  {fmtDateFull(fechaSemanaActual)}
+                </span>
+              )}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
               <span className="inline-flex items-center gap-1 rounded-md bg-gray-50 px-2 py-0.5 ring-1 ring-gray-200">
@@ -450,7 +499,6 @@ export default function RondaActualPage() {
       </header>
 
       {/* === Totales + Responsable === */}
-      {/* ... (sección de totales y responsable sin cambios) */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border bg-white p-4">
           <p className="text-xs text-gray-500">Total aportes (semana)</p>
@@ -486,6 +534,7 @@ export default function RondaActualPage() {
         </button>
       </div>
 
+      {/* Tabla principal */}
       <div className="rounded-xl bg-white shadow overflow-hidden">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
@@ -506,7 +555,6 @@ export default function RondaActualPage() {
               const acum = Number(it.ahorroAcumulado ?? 0);
               const restanteCalc = Math.max(objetivo - acum, 0);
 
-              // input controlado
               const valorInput = ahorroInputs[it.socioId] ?? "";
               const ahorroYaRegistrado = (it as any).ahorroRegistradoSemana === true;
               const disabledAhorro = ahorroYaRegistrado || restanteCalc <= 0 || saving === it.socioId;
@@ -514,9 +562,7 @@ export default function RondaActualPage() {
               return (
                 <tr key={it.socioId} className="border-t">
                   <td className="px-4 py-2">{it.orden}</td>
-                  <td className="px-4 py-2">
-                    {it.socio.nombres} {it.socio.apellidos}
-                  </td>
+                  <td className="px-4 py-2">{it.socio.nombres} {it.socio.apellidos}</td>
                   <td className="px-4 py-2">{it.socio.numeroCuenta}</td>
 
                   <td className="px-4 py-2">${it.ahorroAcumulado}</td>
@@ -537,7 +583,6 @@ export default function RondaActualPage() {
 
                   <td className="px-4 py-2 w-[360px]">
                     <div className="flex justify-end items-center gap-2 whitespace-nowrap">
-                      {/* Pagado o botones */}
                       {it.pagado ? (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                           Pagado
@@ -551,7 +596,7 @@ export default function RondaActualPage() {
                           >
                             {saving === it.socioId ? "..." : "Registrar aporte"}
                           </button>
-                  
+
                           <button
                             onClick={() =>
                               openLoanModal({
@@ -567,7 +612,7 @@ export default function RondaActualPage() {
                           </button>
                         </>
                       )}
-                  
+
                       <button
                         disabled={
                           (it as any).ahorroRegistradoSemana === true ||
@@ -592,7 +637,6 @@ export default function RondaActualPage() {
           </tbody>
         </table>
       </div>
-
 
       <div className="flex justify-end">
         <button onClick={cerrarSemana} disabled={cerrando} className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-50">
@@ -705,4 +749,3 @@ export default function RondaActualPage() {
     </div>
   );
 }
-
