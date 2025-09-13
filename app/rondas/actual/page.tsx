@@ -1,6 +1,6 @@
 // app/rondas/actual/page.tsx
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 
 const fmtMoney = (n: number, currency = "USD", locale = "es-EC") =>
   new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(n) || 0);
@@ -14,10 +14,8 @@ type Item = {
   multa: string; // string para inputs controlados
   ahorroAcumulado: string;
   ahorroRestante: string;
-  // 👇 opcionalmente el backend puede enviar esto para totalizar la semana
-  ahorroSemana?: string;
-  // bandera que ya usabas a veces:
-  // ahorroRegistradoSemana?: boolean;
+  ahorroSemana?: string; // (opcional) si tu backend lo manda
+  // ahorroRegistradoSemana?: boolean; // si lo usas
 };
 
 type RondaDTO = {
@@ -26,7 +24,7 @@ type RondaDTO = {
   semanaActual: number;
   montoAporte: string;
   ahorroObjetivoPorSocio?: string;
-  // 👇 NUEVO: responsable seleccionado (si tu API lo devuelve)
+  // opcional (si tu /api/rondas lo expone), pero el responsable real de esta UI es por SEMANA:
   responsableId?: number | null;
 };
 
@@ -35,9 +33,10 @@ type EstadoSemana = {
   semana: number;
   totalParticipantes: number;
   items: Item[];
-  // 👇 si tu backend quiere enviar los totales ya calculados
   totalAportesSemana?: string;
   totalAhorrosSemana?: string;
+  // 👇 responsable por semana (propuesto en /semana/:semana/aportes)
+  responsableId?: number | null;
 };
 
 export default function RondaActualPage() {
@@ -52,9 +51,9 @@ export default function RondaActualPage() {
   // estados controlados para inputs
   const [ahorroInputs, setAhorroInputs] = useState<Record<number, number>>({});
   const [multasInputs, setMultasInputs] = useState<Record<number, number>>({});
-  const [obsInputs, setObsInputs] = useState<Record<number, string>>({}); // 👈 NUEVO: observaciones por pendiente
+  const [obsInputs, setObsInputs] = useState<Record<number, string>>({}); // observaciones por pendiente
 
-  // Responsable de cobro
+  // Responsable de cobro (por semana)
   const [responsableId, setResponsableId] = useState<number | "">("");
 
   function setAhorroInput(socioId: number, v: number) {
@@ -71,11 +70,12 @@ export default function RondaActualPage() {
     cargar();
   }, []);
 
+  // reflejar responsable de la semana cuando se carga/actualiza estado
   useEffect(() => {
-    if (estado?.ronda) {
-      setResponsableId(estado.ronda.responsableId ?? "");
+    if (estado) {
+      setResponsableId(estado.responsableId ?? estado.ronda?.responsableId ?? "");
     }
-  }, [estado?.ronda?.responsableId]);
+  }, [estado?.responsableId, estado?.ronda?.responsableId]);
 
   async function registrarAhorroParcial(socioId: number, monto: number) {
     if (!estado) return;
@@ -166,7 +166,7 @@ export default function RondaActualPage() {
     try {
       setSaving(socioId);
       const multa = Number(multasInputs[socioId] ?? 0);
-      const observaciones = obsInputs[socioId] ?? ""; // 👈 NUEVO
+      const observaciones = obsInputs[socioId] ?? "";
       const res = await fetch(`/api/rondas/${estado.ronda.id}/aportes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -175,7 +175,7 @@ export default function RondaActualPage() {
           semana: estado.semana,
           monto: Number(estado.ronda.montoAporte),
           multa, // editable
-          observaciones, // 👈 NUEVO
+          observaciones, // guarda observaciones
         }),
       });
       const data = await res.json();
@@ -224,7 +224,7 @@ export default function RondaActualPage() {
       const res = await fetch(`/api/rondas/${estado.ronda.id}/responsable`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responsableId }),
+        body: JSON.stringify({ socioId: Number(responsableId), semana: estado.semana }), // responsable POR SEMANA
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "No se pudo guardar el responsable");
@@ -414,7 +414,7 @@ export default function RondaActualPage() {
         )}
       </header>
 
-      {/* === Totales + Responsable === */}
+      {/* === Totales + Responsable (por semana) === */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border bg-white p-4">
           <p className="text-xs text-gray-500">Total aportes (semana)</p>
@@ -425,7 +425,7 @@ export default function RondaActualPage() {
           <p className="mt-1 text-2xl font-semibold tabular-nums">{fmtMoney(totalAhorrosSemana)}</p>
         </div>
         <div className="rounded-lg border bg-white p-4">
-          <p className="text-xs text-gray-500 mb-1">Responsable de cobro de la ronda</p>
+          <p className="text-xs text-gray-500 mb-1">Responsable de cobro (semana {estado.semana})</p>
           <div className="flex items-center gap-2">
             <select
               className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -439,7 +439,8 @@ export default function RondaActualPage() {
             </select>
             <button
               onClick={guardarResponsable}
-              className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
+              disabled={responsableId === ""}
+              className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
               Guardar
             </button>
@@ -564,7 +565,7 @@ export default function RondaActualPage() {
                 <th className="px-4 py-2 text-left">Socio</th>
                 <th className="px-4 py-2">Aporte</th>
                 <th className="px-4 py-2">Multa</th>
-                <th className="px-4 py-2 text-left">Observaciones</th>{/* 👈 NUEVO */}
+                <th className="px-4 py-2 text-left">Observaciones</th>
                 <th className="px-4 py-2">Total</th>
                 <th className="px-4 py-2">Acción</th>
               </tr>
