@@ -32,6 +32,7 @@ model Ronda {
   fechaInicio     DateTime        @map("fecha_inicio")
   fechaFin        DateTime?       @map("fecha_fin")
   semanaActual    Int             @default(1) @map("semana_actual")
+  intervaloDiasCobro       Int       @default(7) @map("intervalo_dias_cobro")
   aportes         Aporte[]
   participaciones Participacion[]
   ahorroObjetivoPorSocio Decimal @db.Decimal(12,2) @default(0)
