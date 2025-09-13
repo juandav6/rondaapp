@@ -10,17 +10,23 @@ type Ronda = {
   id: number;
   nombre: string; // código generado
   montoAporte: number | string;
-  fechaInicio: string;
+  fechaInicio: string;               // ← usaremos SIEMPRE este campo en la UI (ISO)
   ahorroObjetivo: number | string;
-  fechaFin?: string | null;
-  intervaloDiasCobro: number; // <── NUEVO
+  fechaFin?: string | null;          // ISO o null
+  intervaloDiasCobro: number;
+
+  // opcionales que pueden venir de la API (por compatibilidad)
+  fechaInicioISO?: string;
+  fechaInicioDate?: string;
+  fechaFinISO?: string | null;
+  fechaFinDate?: string | null;
 };
 
 type CrearRondaPayload = {
   montoAporte: number;
-  fechaInicio: string;
+  fechaInicio: string;               // "YYYY-MM-DD"
   ahorroObjetivo: number;
-  intervaloDiasCobro: number; // <── NUEVO
+  intervaloDiasCobro: number;
 };
 
 const fmtMoney = (n: number, currency = "USD", locale = "es-EC") =>
@@ -36,19 +42,18 @@ const fmtDate = (iso: string | null | undefined, locale = "es-EC") => {
 const fmtDateFull = (d: Date | null, locale = "es-EC") =>
   d ? new Intl.DateTimeFormat(locale, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(d) : "-";
 
-// Reemplaza tu addDays anterior por este:
+// Anclado a 12:00 UTC para evitar desfaces de día por zona horaria.
 const addDays = (iso: string | Date, days: number) => {
   if (!iso) return null;
   const base =
     typeof iso === "string"
-      ? (iso.includes("T") ? new Date(iso) : new Date(`${iso}T00:00:00`))
+      ? (iso.includes("T") ? new Date(iso) : new Date(`${iso}T12:00:00Z`))
       : new Date(iso);
   if (Number.isNaN(base.getTime())) return null;
-  const nd = new Date(base);
-  nd.setDate(nd.getDate() + days);
-  return nd;
+  const noon = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0));
+  noon.setUTCDate(noon.getUTCDate() + days);
+  return noon;
 };
-
 
 const classNames = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -61,7 +66,7 @@ export default function RegistrarRondaPage() {
     montoAporte: 0,
     fechaInicio: "",
     ahorroObjetivo: 0,
-    intervaloDiasCobro: 7, // <── por defecto semanal
+    intervaloDiasCobro: 7, // por defecto semanal
   });
 
   const [rondaCreada, setRondaCreada] = useState<Ronda | null>(null);
@@ -113,13 +118,13 @@ export default function RegistrarRondaPage() {
           montoAporte: form.montoAporte,
           fechaInicio: form.fechaInicio,
           ahorroObjetivo: form.ahorroObjetivo,
-          intervaloDiasCobro: form.intervaloDiasCobro, // <── NUEVO
+          intervaloDiasCobro: form.intervaloDiasCobro,
         }),
       });
       const dataR = await resR.json();
       if (!resR.ok) throw new Error(dataR?.error || "No se pudo crear la ronda");
 
-      const ronda: Ronda = dataR;
+      const ronda = dataR as Ronda;
 
       // 2) Participantes + sorteo
       const resP = await fetch(`/api/rondas/${ronda.id}/participantes`, {
@@ -131,16 +136,32 @@ export default function RegistrarRondaPage() {
       if (!resP.ok) throw new Error(dataP?.error || "No se pudieron agregar participantes");
 
       // Orden desde backend o local
-      let ordenIds: number[] | undefined = dataP?.ordenIds;
+      let ordenIds: number[] | undefined = (dataP as any)?.ordenIds;
       if (!Array.isArray(ordenIds) || !ordenIds.length) {
         ordenIds = [...seleccion].sort(() => Math.random() - 0.5);
       }
-
       setOrden(ordenIds);
+
+      // ==== Normalizar fechas para el estado ====
+      const fechaInicioNorm =
+        (ronda as any).fechaInicioISO ||
+        (ronda as any).fechaInicio ||
+        (ronda as any).fechaInicioDate ||
+        form.fechaInicio; // "YYYY-MM-DD" fallback
+
+      const fechaFinNorm: string | null =
+        (dataP as any)?.fechaFin ||
+        (ronda as any).fechaFinISO ||
+        ((ronda as any).fechaFinDate ? `${(ronda as any).fechaFinDate}T12:00:00Z` : null);
+
       setRondaCreada({
         ...ronda,
-        fechaFin: (dataP?.fechaFin ?? (ronda as any).fechaFin ?? null) as any,
-        intervaloDiasCobro: (ronda as any).intervaloDiasCobro ?? form.intervaloDiasCobro, // asegurar que venga
+        fechaInicio:
+          typeof fechaInicioNorm === "string" && !fechaInicioNorm.includes("T")
+            ? `${fechaInicioNorm}T12:00:00Z`
+            : (fechaInicioNorm as string),
+        fechaFin: fechaFinNorm,
+        intervaloDiasCobro: (ronda as any).intervaloDiasCobro ?? form.intervaloDiasCobro,
       });
     } catch (e: any) {
       setError(e?.message ?? "Error desconocido");
@@ -215,6 +236,19 @@ export default function RegistrarRondaPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "No se pudo guardar el nuevo orden");
+
+      // ← Actualiza la fechaFin en el estado con lo que recalcula la API
+      setRondaCreada((rc) =>
+        rc
+          ? {
+              ...rc,
+              fechaFin:
+                data?.fechaFinISO ||
+                (data?.fechaFinDate ? `${data.fechaFinDate}T12:00:00Z` : rc.fechaFin ?? null),
+            }
+          : rc
+      );
+
       setSavedMsg("¡Nuevo orden guardado!");
     } catch (e: any) {
       setError(e.message);
@@ -229,11 +263,27 @@ export default function RegistrarRondaPage() {
       .map((id) => socios.find((s) => s.id === id))
       .filter(Boolean) as Socio[];
 
-    const fechaInicio = rondaCreada.fechaInicio;
+    // Usa la fuente normalizada para todos los cálculos
+    const fechaInicioSrc =
+      rondaCreada.fechaInicio ||
+      rondaCreada.fechaInicioISO ||
+      rondaCreada.fechaInicioDate ||
+      form.fechaInicio;
+
     const intervalo = Number(rondaCreada.intervaloDiasCobro ?? form.intervaloDiasCobro ?? 7);
-    const fechaPrevistaPorIdx = (idx: number) => fmtDateFull(addDays(fechaInicio, idx * intervalo));
-    const fechaFinEstimadaDate = addDays(fechaInicio, Math.max(0, (orden.length - 1) * intervalo));
-    const fechaFinTexto = (rondaCreada.fechaFin && fmtDate(rondaCreada.fechaFin)) || (fechaFinEstimadaDate ? fmtDate(fechaFinEstimadaDate.toISOString()) : "-");
+
+    const fechaPrevistaPorIdx = (idx: number) => fmtDateFull(addDays(fechaInicioSrc, idx * intervalo));
+    const fechaFinEstimadaDate = addDays(fechaInicioSrc, Math.max(0, (orden.length - 1) * intervalo));
+
+    const fechaInicioTexto = fmtDate(
+      typeof fechaInicioSrc === "string" && !fechaInicioSrc.includes("T")
+        ? `${fechaInicioSrc}T12:00:00Z`
+        : (fechaInicioSrc as string)
+    );
+
+    const fechaFinTexto =
+      (rondaCreada.fechaFin && fmtDate(rondaCreada.fechaFin)) ||
+      (fechaFinEstimadaDate ? fmtDate(fechaFinEstimadaDate.toISOString()) : "-");
 
     return (
       <div className="space-y-6">
@@ -276,7 +326,7 @@ export default function RegistrarRondaPage() {
             <div className="rounded-lg border p-4">
               <p className="text-xs text-gray-500">Periodo</p>
               <p className="mt-1 font-semibold">
-                {fmtDate(rondaCreada.fechaInicio)}
+                {fechaInicioTexto}
                 <span className="mx-2 text-gray-400">→</span>
                 {fechaFinTexto}
               </p>
