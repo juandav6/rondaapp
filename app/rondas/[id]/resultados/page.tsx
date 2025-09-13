@@ -1,5 +1,6 @@
+// app/rondas/[id]/resultados/page.tsx
 "use client";
-import { use, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 // ===== Tipos de datos =====
@@ -22,6 +23,14 @@ export type SocioDetalle = {
   aportes: number;
   ahorros: number;
   multas: number;
+};
+
+type SemanaResumen = {
+  semana: number;
+  totalAportes: number;
+  totalAhorros: number;
+  // nombre ya resuelto para mostrar; si tu API envía el objeto responsable, lo convertimos a string
+  responsableNombre: string | null;
 };
 
 // ===== Utils =====
@@ -55,13 +64,17 @@ const fmtDate = (iso: string | null, locale = "es-EC") => {
 };
 
 // ===== Componente principal =====
-export default function ResultadosPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params); // 👈 desenrolla el Promise de Next 15
+export default function ResultadosPage({ params }: { params: { id: string } }) {
+  // ✅ En client components, params es un objeto normal
+  const { id } = params;
 
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [socios, setSocios] = useState<SocioDetalle[]>([]);
+  const [semanas, setSemanas] = useState<SemanaResumen[]>([]); // 👈 NUEVO
   const [loading, setLoading] = useState(true);
+  const [loadingSemanas, setLoadingSemanas] = useState(true);   // 👈 NUEVO
   const [error, setError] = useState<string | null>(null);
+  const [errorSemanas, setErrorSemanas] = useState<string | null>(null); // 👈 NUEVO
 
   // UI state
   const [query, setQuery] = useState("");
@@ -70,7 +83,7 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
 
-  // Fetch
+  // Fetch resultados y detalle por socio
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -87,7 +100,59 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Derivados: filtro y orden
+  // Fetch resumen por semana (endpoint sugerido: /api/rondas/[id]/semanas/resumen)
+  useEffect(() => {
+    setLoadingSemanas(true);
+    setErrorSemanas(null);
+    fetch(`/api/rondas/${id}/semanas/resumen`)
+      .then(async (r) => {
+        if (!r.ok) {
+          // si no existe endpoint, no bloqueamos la página
+          const text = await r.text().catch(() => "");
+          throw new Error(text || "No se pudo obtener el resumen por semana");
+        }
+        return r.json();
+      })
+      .then((data: any) => {
+        const raw = Array.isArray(data?.semanas) ? data.semanas : [];
+        const normalizado: SemanaResumen[] = raw.map((w: any) => {
+          const totalAportes =
+            w.totalAportes ?? w.total_aportes ?? w._sum?.aportes ?? 0;
+          const totalAhorros =
+            w.totalAhorros ?? w.total_ahorros ?? w._sum?.ahorros ?? 0;
+
+          // Convertimos responsable → nombre plano
+          let responsableNombre: string | null = null;
+          if (typeof w.responsableNombre === "string") {
+            responsableNombre = w.responsableNombre || null;
+          } else if (w.responsable) {
+            const rn = [w.responsable.nombres, w.responsable.apellidos].filter(Boolean).join(" ").trim();
+            responsableNombre = rn || null;
+          } else if (w.responsable_nombres || w.responsable_apellidos) {
+            const rn = [w.responsable_nombres, w.responsable_apellidos].filter(Boolean).join(" ").trim();
+            responsableNombre = rn || null;
+          }
+
+          return {
+            semana: Number(w.semana ?? w.week ?? 0),
+            totalAportes: Number(totalAportes ?? 0),
+            totalAhorros: Number(totalAhorros ?? 0),
+            responsableNombre,
+          };
+        }).filter((w: SemanaResumen) => Number.isFinite(w.semana) && w.semana > 0);
+        // Ordenamos por semana ascendente
+        normalizado.sort((a, b) => a.semana - b.semana);
+        setSemanas(normalizado);
+      })
+      .catch((err) => {
+        // No rompemos la UI principal si este endpoint no existe
+        setErrorSemanas(err?.message ?? "No se pudo cargar el resumen por semana");
+        setSemanas([]);
+      })
+      .finally(() => setLoadingSemanas(false));
+  }, [id]);
+
+  // Derivados: filtro y orden de la tabla por socio
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const base = q
@@ -121,7 +186,7 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
   const visible = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
 
   // Export CSV
-  async function exportCSV() {
+  function exportCSV() {
     const headers = ["Socio", "Cuenta", "Aportes", "Ahorros", "Multas"];
     const rows = filtered.map((s) => [
       `${s.nombres} ${s.apellidos}`.trim(),
@@ -143,7 +208,7 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
   }
 
   // Retry handler
-  async function retry() {
+  function retry() {
     setError(null);
     setLoading(true);
     fetch(`/api/rondas/${id}/resultados`)
@@ -258,7 +323,46 @@ export default function ResultadosPage({ params }: { params: Promise<{ id: strin
         </div>
       </section>
 
-      {/* Filtros y tabla */}
+      {/* === Resumen por semana (Aportes, Ahorros y Responsable) === */}
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b bg-gray-50 p-3">
+          <div className="text-sm font-medium text-gray-800">Resumen por semana</div>
+          {loadingSemanas && <div className="text-xs text-gray-500">Cargando…</div>}
+        </div>
+
+        {errorSemanas ? (
+          <div className="p-4 text-sm text-gray-600">
+            {errorSemanas} — Si aún no tienes este endpoint, créalo en <code className="rounded bg-gray-100 px-1 py-0.5">/api/rondas/[id]/semanas/resumen</code>.
+          </div>
+        ) : semanas.length === 0 ? (
+          <div className="p-4 text-sm text-gray-600">No hay datos de semanas para esta ronda.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
+                <tr>
+                  <th className="px-4 py-3">Semana</th>
+                  <th className="px-4 py-3 text-right">Aportes</th>
+                  <th className="px-4 py-3 text-right">Ahorros</th>
+                  <th className="px-4 py-3">Responsable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {semanas.map((w) => (
+                  <tr key={w.semana} className="border-t hover:bg-gray-50/70">
+                    <td className="px-4 py-3 font-medium text-gray-900">#{w.semana}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{fmtCurrency(w.totalAportes)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{fmtCurrency(w.totalAhorros)}</td>
+                    <td className="px-4 py-3">{w.responsableNombre || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Filtros y tabla por socio */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-medium text-gray-800">Detalle por socio</div>
