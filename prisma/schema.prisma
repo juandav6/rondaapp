@@ -22,9 +22,12 @@ model Socio {
   participaciones Participacion[]
   rondasResponsable Ronda[] @relation("RondaResponsable")
   responsabilidadesSemana  ResponsableCobroSemana[]
+
+  // 👇 NUEVO: relación inversa con PrestamoExpress
+  prestamosExpress PrestamoExpress[]
+
   @@map("socios")
 }
-
 model Ronda {
   id              Int             @id @default(autoincrement())
   nombre          String
@@ -33,17 +36,20 @@ model Ronda {
   fechaInicio     DateTime        @map("fecha_inicio")
   fechaFin        DateTime?       @map("fecha_fin")
   semanaActual    Int             @default(1) @map("semana_actual")
-  intervaloDiasCobro       Int       @default(7) @map("intervalo_dias_cobro")
+  intervaloDiasCobro Int          @default(7) @map("intervalo_dias_cobro")
   aportes         Aporte[]
   participaciones Participacion[]
-  ahorroObjetivoPorSocio Decimal @db.Decimal(12,2) @default(0)
-  responsableId            Int?     @map("responsable_id")
-  responsable              Socio?   @relation("RondaResponsable", fields: [responsableId], references: [id])
+  ahorroObjetivoPorSocio Decimal  @db.Decimal(12,2) @default(0)
+  responsableId   Int?            @map("responsable_id")
+  responsable     Socio?          @relation("RondaResponsable", fields: [responsableId], references: [id])
   responsablesSemana       ResponsableCobroSemana[]
   ahorros         Ahorro[]  
+
+  // 👇 NUEVO: relación inversa con PrestamoExpress
+  prestamosExpress PrestamoExpress[]
+
   @@map("rondas")
 }
-
 model Participacion {
   id      Int     @id @default(autoincrement())
   rondaId Int     @map("ronda_id")
@@ -58,21 +64,24 @@ model Participacion {
 }
 
 model Aporte {
-  id      Int      @id @default(autoincrement())
-  rondaId Int      @map("ronda_id")
-  socioId Int      @map("socio_id")
-  semana  Int
-  observaciones       String  @default("")
-  monto   Decimal  @db.Decimal(12, 2)
-  multa   Decimal  @default(0) @db.Decimal(12, 2)
-  fecha   DateTime @default(now())
-  ronda   Ronda    @relation(fields: [rondaId], references: [id])
-  socio   Socio    @relation(fields: [socioId], references: [id])
+  id                Int      @id @default(autoincrement())
+  rondaId           Int      @map("ronda_id")
+  socioId           Int      @map("socio_id")
+  semana            Int
+  observaciones     String   @default("")
+  monto             Decimal  @db.Decimal(12, 2)
+  multa             Decimal  @default(0) @db.Decimal(12, 2)
+  fecha             DateTime @default(now())
+  ronda             Ronda    @relation(fields: [rondaId], references: [id])
+  socio             Socio    @relation(fields: [socioId], references: [id])
+
+  // 👇 FK opcional al préstamo express que cubrió este aporte
+  prestamoExpressId Int?     @unique
+  prestamoExpress   PrestamoExpress? @relation(fields: [prestamoExpressId], references: [id])
 
   @@unique([rondaId, socioId, semana])
   @@map("aportes")
 }
-
 model Ahorro { 
   id Int @id @default(autoincrement())
   rondaId Int @map("ronda_id")
@@ -102,4 +111,27 @@ model ResponsableCobroSemana {
 
   @@unique([rondaId, semana])
   @@map("responsables_semana")
+}
+
+model PrestamoExpress {
+  id            Int       @id @default(autoincrement())
+  rondaId       Int
+  socioId       Int
+  semana        Int
+  principal     Decimal   @db.Decimal(12,2)
+  interes       Decimal   @db.Decimal(12,2)
+  total         Decimal   @db.Decimal(12,2)
+  estado        String    @default("PENDIENTE") // PENDIENTE | PAGADO | CANCELADO
+  observaciones String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relaciones hacia Ronda y Socio
+  ronda Ronda @relation(fields: [rondaId], references: [id])
+  socio Socio @relation(fields: [socioId], references: [id])
+
+  // 👇 lado opuesto (1:1) del vínculo con Aporte
+  aporte Aporte?
+
+  // @@map("prestamos_express") // opcional si quieres nombre de tabla custom
 }
