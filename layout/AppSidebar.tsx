@@ -81,7 +81,7 @@ const navItems: NavItem[] = [
   },
 ];
 
-const HEADER_H = 64; // altura del header en px (top-16)
+const HEADER_H = 64;
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
@@ -97,15 +97,13 @@ const AppSidebar: React.FC = () => {
     if (openSubmenu !== null) {
       const key = `${openSubmenu.type}-${openSubmenu.index}`;
       const el = subMenuRefs.current[key];
-      if (el) {
-        setSubMenuHeight((prev) => ({ ...prev, [key]: el.scrollHeight || 0 }));
-      }
+      if (el) setSubMenuHeight((prev) => ({ ...prev, [key]: el.scrollHeight || 0 }));
     }
   }, [openSubmenu]);
 
   const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
     setOpenSubmenu((prev) =>
-      prev && prev.type === menuType && prev.index === index ? null : { type: menuType, index }
+      prev && prev.type === menuType && prev.index === index ? null : { type: menuType, index },
     );
   };
 
@@ -183,9 +181,7 @@ const AppSidebar: React.FC = () => {
                         {sub.new && (
                           <span
                             className={`menu-dropdown-badge ${
-                              isActive(sub.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
+                              isActive(sub.path) ? "menu-dropdown-badge-active" : "menu-dropdown-badge-inactive"
                             }`}
                           >
                             new
@@ -194,9 +190,7 @@ const AppSidebar: React.FC = () => {
                         {sub.pro && (
                           <span
                             className={`menu-dropdown-badge ${
-                              isActive(sub.path)
-                                ? "menu-dropdown-badge-active"
-                                : "menu-dropdown-badge-inactive"
+                              isActive(sub.path) ? "menu-dropdown-badge-active" : "menu-dropdown-badge-inactive"
                             }`}
                           >
                             pro
@@ -215,56 +209,57 @@ const AppSidebar: React.FC = () => {
   );
 
   return (
-    <aside
-      className={`fixed left-0 z-50 border-r border-gray-200 bg-white text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-white
+    <>
+      {/* hace que el contenedor scrollable funcione */}
+      <aside
+        className={`fixed left-0 z-50 border-r border-gray-200 bg-white text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-white
         transition-all duration-300 ease-in-out
         top-16 h-[calc(100vh-${HEADER_H}px)] lg:top-0 lg:h-screen
         ${isExpanded || isMobileOpen ? "w-[290px]" : isHovered ? "w-[290px]" : "w-[90px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
         px-5
-        flex flex-col`}   {/* ← hace que el contenedor scrollable funcione */}
-      onMouseEnter={() => !isExpanded && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{ ["--sidebar-w" as any]: `${sidebarWidth}px` }}
-    >
-      {/* Header/logo sin encoger */}
-      <div className={`py-6 ${!isExpanded && !isHovered ? "lg:flex lg:justify-center" : ""} shrink-0`}>
-        <Link href="/">
-          {isExpanded || isHovered || isMobileOpen ? (
-            <>
-              <Image className="dark:hidden" src="/images/logo/logoappweb.jpeg" alt="Logo" width={150} height={40} />
-              <Image
-                className="hidden dark:block"
-                src="/images/logo/logoappweb.jpeg"
-                alt="Logo"
-                width={150}
-                height={40}
-              />
-            </>
-          ) : (
-            <Image src="/images/logo/logoappweb.jpeg" alt="Logo" width={32} height={32} />
-          )}
-        </Link>
-      </div>
+        flex flex-col`}
+        onMouseEnter={() => !isExpanded && setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{ ["--sidebar-w" as any]: `${sidebarWidth}px` }}
+      >
+        <div className={`py-6 ${!isExpanded && !isHovered ? "lg:flex lg:justify-center" : ""} shrink-0`}>
+          <Link href="/">
+            {isExpanded || isHovered || isMobileOpen ? (
+              <>
+                <Image className="dark:hidden" src="/images/logo/logoappweb.jpeg" alt="Logo" width={150} height={40} />
+                <Image
+                  className="hidden dark:block"
+                  src="/images/logo/logoappweb.jpeg"
+                  alt="Logo"
+                  width={150}
+                  height={40}
+                />
+              </>
+            ) : (
+              <Image src="/images/logo/logoappweb.jpeg" alt="Logo" width={32} height={32} />
+            )}
+          </Link>
+        </div>
 
-      {/* Contenedor scrollable: ocupa el resto, con min-h-0 para que funcione el overflow */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain duration-300 ease-linear">
-        <nav className="mb-6">
-          <div className="flex flex-col gap-4">
-            <div>
-              <h2
-                className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}
-              </h2>
-              {renderMenuItems(navItems, "main")}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain duration-300 ease-linear">
+          <nav className="mb-6">
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2
+                  className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${
+                    !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+                  }`}
+                >
+                  {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}
+                </h2>
+                {renderMenuItems(navItems, "main")}
+              </div>
             </div>
-          </div>
-        </nav>
-      </div>
-    </aside>
+          </nav>
+        </div>
+      </aside>
+    </>
   );
 };
 
