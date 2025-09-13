@@ -21,6 +21,7 @@ model Socio {
   aportes         Aporte[]
   participaciones Participacion[]
   rondasResponsable Ronda[] @relation("RondaResponsable")
+  responsabilidadesSemana  ResponsableCobroSemana[]
   @@map("socios")
 }
 
@@ -38,6 +39,7 @@ model Ronda {
   ahorroObjetivoPorSocio Decimal @db.Decimal(12,2) @default(0)
   responsableId            Int?     @map("responsable_id")
   responsable              Socio?   @relation("RondaResponsable", fields: [responsableId], references: [id])
+  responsablesSemana       ResponsableCobroSemana[]
   ahorros         Ahorro[]  
   @@map("rondas")
 }
@@ -83,4 +85,21 @@ model Ahorro {
   socio Socio @relation(fields: [socioId], references: [id])
   @@unique([rondaId, socioId, semana]) 
   @@map("ahorros") 
+}
+
+
+
+model ResponsableCobroSemana {
+  id        Int      @id @default(autoincrement())
+  rondaId   Int      @map("ronda_id")
+  semana    Int
+  socioId   Int      @map("socio_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  ronda     Ronda    @relation(fields: [rondaId], references: [id])
+  socio     Socio    @relation(fields: [socioId], references: [id])
+
+  @@unique([rondaId, semana])
+  @@map("responsables_semana")
 }
