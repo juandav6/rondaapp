@@ -91,8 +91,8 @@ export default function HistorialRondasPage() {
       : rondas;
 
     const sorted = [...base].sort((a, b) => {
-      let va: number | string | boolean | null = a[sortKey as keyof Ronda] as any;
-      let vb: number | string | boolean | null = b[sortKey as keyof Ronda] as any;
+      let va: any = a[sortKey as keyof Ronda] as any;
+      let vb: any = b[sortKey as keyof Ronda] as any;
 
       if (sortKey === "fechaInicio" || sortKey === "fechaFin") {
         const da = va ? new Date(String(va)).getTime() : 0;
@@ -101,17 +101,15 @@ export default function HistorialRondasPage() {
       }
 
       if (sortKey === "activa") {
-        // Activas primero en desc
         const da = a.activa ? 1 : 0;
         const db = b.activa ? 1 : 0;
         return sortDir === "asc" ? da - db : db - da;
       }
 
-      // nombre
-      const da = String(va ?? "").localeCompare(String(vb ?? ""), "es", {
+      const cmp = String(va ?? "").localeCompare(String(vb ?? ""), "es", {
         sensitivity: "base",
       });
-      return sortDir === "asc" ? da : -da;
+      return sortDir === "asc" ? cmp : -cmp;
     });
 
     return sorted;
@@ -156,16 +154,24 @@ export default function HistorialRondasPage() {
     );
 
   return (
-    <div className="p-6">
-      {/* Título con estilo de menú */}
-      <div className="mb-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4">
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white text-center">
-            Historial de rondas
-          </h1>
+    <div className="p-6 space-y-6">
+      {/* Header en cajoncito */}
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+            {/* icono documento */}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 4a2 2 0 0 1 2-2h5.17a2 2 0 0 1 1.414.586l3.83 3.828A2 2 0 0 1 19 7.828V20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4zM8 6v14h9V8h-3a2 2 0 0 1-2-2V3H8z"/>
+            </svg>
+          </span>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Historial de rondas</h1>
+            <p className="text-sm text-gray-600">Consulta todas las rondas creadas y su estado.</p>
+          </div>
         </div>
       </div>
 
+      {/* Buscador */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex w-full gap-2 sm:w-auto">
           <div className="relative w-full sm:w-72">
@@ -177,7 +183,7 @@ export default function HistorialRondasPage() {
                 setQuery(e.target.value);
               }}
               placeholder="Buscar por nombre, fecha o estado…"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 transition focus:border-blue-500 focus:shadow focus:shadow-blue-100"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:shadow focus:shadow-blue-100"
             />
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -195,6 +201,7 @@ export default function HistorialRondasPage() {
         </div>
       </div>
 
+      {/* Tabla */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -236,8 +243,7 @@ export default function HistorialRondasPage() {
             </thead>
 
             <tbody>
-              {loading && (
-                // Skeleton rows
+              {loading &&
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`skeleton-${i}`} className="border-t">
                     {Array.from({ length: 5 }).map((__, j) => (
@@ -246,8 +252,7 @@ export default function HistorialRondasPage() {
                       </td>
                     ))}
                   </tr>
-                ))
-              )}
+                ))}
 
               {!loading && visible.length === 0 && (
                 <tr>
