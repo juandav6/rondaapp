@@ -16,8 +16,6 @@ import {
   PlugInIcon,
   TableIcon,
   UserCircleIcon,
-  Receipt,
-  AlertTriangle  
 } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
 
@@ -71,7 +69,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <Receipt />,
+    icon: <BoxCubeIcon />,
     name: "Ahorros",
     subItems: [
       { name: "Registro de ahorros", path: "/ahorros/registro" },
@@ -80,7 +78,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <AlertTriangle />,
+    icon: <PlugInIcon />,
     name: "Multas",
     subItems: [
       { name: "Multas por socio", path: "/configuracion/reglas" },
