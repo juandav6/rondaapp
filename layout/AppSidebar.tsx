@@ -218,15 +218,17 @@ const AppSidebar: React.FC = () => {
     <aside
       className={`fixed left-0 z-50 border-r border-gray-200 bg-white text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-white
         transition-all duration-300 ease-in-out
-        top-16 h-[calc(100vh-64px)] lg:top-0 lg:h-screen
+        top-16 h-[calc(100vh-${HEADER_H}px)] lg:top-0 lg:h-screen
         ${isExpanded || isMobileOpen ? "w-[290px]" : isHovered ? "w-[290px]" : "w-[90px]"}
         ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
-        px-5`}
+        px-5
+        flex flex-col`}   {/* ← hace que el contenedor scrollable funcione */}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ ["--sidebar-w" as any]: `${sidebarWidth}px` }}
     >
-      <div className={`py-6 ${!isExpanded && !isHovered ? "lg:flex lg:justify-center" : ""}`}>
+      {/* Header/logo sin encoger */}
+      <div className={`py-6 ${!isExpanded && !isHovered ? "lg:flex lg:justify-center" : ""} shrink-0`}>
         <Link href="/">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
@@ -245,7 +247,8 @@ const AppSidebar: React.FC = () => {
         </Link>
       </div>
 
-      <div className="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+      {/* Contenedor scrollable: ocupa el resto, con min-h-0 para que funcione el overflow */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain duration-300 ease-linear">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
