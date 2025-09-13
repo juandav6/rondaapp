@@ -16,6 +16,8 @@ import {
   PlugInIcon,
   TableIcon,
   UserCircleIcon,
+  Receipt,
+  AlertTriangle  
 } from "../icons/index";
 import SidebarWidget from "./SidebarWidget";
 
