@@ -13,6 +13,7 @@ export type Resumen = {
   totalAportes: number;
   totalAhorros: number;
   totalMultas: number;
+  activa?: boolean; // opcional si tu API lo envía
 };
 
 export type SocioDetalle = {
@@ -29,8 +30,7 @@ type SemanaResumen = {
   semana: number;
   totalAportes: number;
   totalAhorros: number;
-  // nombre ya resuelto para mostrar; si tu API envía el objeto responsable, lo convertimos a string
-  responsableNombre: string | null;
+  responsableNombre: string | null; // nombre ya resuelto para mostrar
 };
 
 // ===== Utils =====
@@ -40,11 +40,7 @@ function cn(...classes: (string | false | null | undefined)[]) {
 
 const fmtCurrency = (n: number | null | undefined, currency = "USD", locale = "es-EC") => {
   if (n == null || Number.isNaN(Number(n))) return "-";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(Number(n));
+  return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(n));
 };
 
 const fmtNumber = (n: number | null | undefined, locale = "es-EC") => {
@@ -56,19 +52,12 @@ const fmtDate = (iso: string | null, locale = "es-EC") => {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return new Intl.DateTimeFormat(locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(d);
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(d);
 };
 
 // ===== Componente principal =====
 export default function ResultadosPage({ params }: { params: { id: string } }) {
-  // ✅ En client components, params es un objeto normal
   const { id } = params;
-  const isActual = id === "actual" || id === "Activa";
-  const base = isActual ? "/api/rondas/actual" : `/api/rondas/${id}`;
 
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [socios, setSocios] = useState<SocioDetalle[]>([]);
@@ -85,11 +74,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
 
-  // Fetch resultados y detalle por socio (soporta /actual/resultados)
+  // Fetch resultados y detalle por socio (siempre por id)
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`${base}/resultados`)
+    fetch(`/api/rondas/${id}/resultados`)
       .then((r) => {
         if (!r.ok) throw new Error("No se pudo obtener los resultados");
         return r.json();
@@ -100,17 +89,15 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       })
       .catch((err: any) => setError(err?.message ?? "Error desconocido"))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]); // re-ejecuta si cambia el parámetro dinámico
+  }, [id]);
 
-  // Fetch resumen por semana (soporta /actual/semanas/resumen)
+  // Fetch resumen por semana (siempre por id)
   useEffect(() => {
     setLoadingSemanas(true);
     setErrorSemanas(null);
-    fetch(`${base}/semanas/resumen`)
+    fetch(`/api/rondas/${id}/semanas/resumen`)
       .then(async (r) => {
         if (!r.ok) {
-          // si no existe endpoint, no bloqueamos la página
           const text = await r.text().catch(() => "");
           throw new Error(text || "No se pudo obtener el resumen por semana");
         }
@@ -123,7 +110,6 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
             const totalAportes = w.totalAportes ?? w.total_aportes ?? w._sum?.aportes ?? 0;
             const totalAhorros = w.totalAhorros ?? w.total_ahorros ?? w._sum?.ahorros ?? 0;
 
-            // Convertimos responsable → nombre plano
             let responsableNombre: string | null = null;
             if (typeof w.responsableNombre === "string") {
               responsableNombre = w.responsableNombre || null;
@@ -142,21 +128,19 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
               responsableNombre,
             };
           })
-          .filter((w: SemanaResumen) => Number.isFinite(w.semana) && w.semana > 0);
-        // Ordenamos por semana ascendente
-        normalizado.sort((a, b) => a.semana - b.semana);
+          .filter((w: SemanaResumen) => Number.isFinite(w.semana) && w.semana > 0)
+          .sort((a, b) => a.semana - b.semana);
+
         setSemanas(normalizado);
       })
       .catch((err) => {
-        // No rompemos la UI principal si este endpoint no existe
         setErrorSemanas(err?.message ?? "No se pudo cargar el resumen por semana");
         setSemanas([]);
       })
       .finally(() => setLoadingSemanas(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Derivados: filtro y orden de la tabla por socio
+  // Derivados: filtro y orden
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const baseArr = q
@@ -206,16 +190,16 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `resultados_ronda_${isActual ? "actual" : resumen?.id ?? id}.csv`;
+    a.download = `resultados_ronda_${resumen?.id ?? id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  // Retry handler
+  // Retry
   function retry() {
     setError(null);
     setLoading(true);
-    fetch(`${base}/resultados`)
+    fetch(`/api/rondas/${id}/resultados`)
       .then((r) => r.json())
       .then((data: any) => {
         setResumen(data?.resumen ?? null);
@@ -265,11 +249,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
 
   if (!resumen) return <div className="p-6 text-gray-600">No se encontraron resultados para esta ronda.</div>;
 
-  const esRondaEnCurso = !resumen.fechaFin; // si no tiene fecha fin, asumimos que sigue activa
+  const esRondaEnCurso = !!(resumen.activa || resumen.fechaFin === null);
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header en cajoncito */}
+      {/* Header */}
       <div className="rounded-xl border bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -281,16 +265,15 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
             </span>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                {isActual ? "Resultados de la ronda ACTUAL" : "Resultados de la ronda"}:{" "}
-                <span className="text-blue-700">{resumen.nombre}</span>
+                Resultados de la ronda: <span className="text-blue-700">{resumen.nombre}</span>
               </h1>
               <p className="mt-1 text-sm text-gray-600">
                 Inicio: <strong>{fmtDate(resumen.fechaInicio)}</strong>
                 <span className="mx-2 text-gray-400">•</span>
                 Fin: <strong>{fmtDate(resumen.fechaFin)}</strong>
                 {esRondaEnCurso && (
-                  <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                    En curso
+                  <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                    Activa
                   </span>
                 )}
               </p>
@@ -298,14 +281,6 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
           </div>
 
           <div className="flex items-center gap-2">
-            {!isActual && (
-              <Link
-                href="/rondas/actual/resultados"
-                className="hidden rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:inline-flex"
-              >
-                Ver ronda activa
-              </Link>
-            )}
             <Link
               href="/rondas/historial"
               className="hidden rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:inline-flex"
@@ -329,20 +304,20 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
           <p className="mt-1 text-2xl font-semibold">{fmtNumber(resumen.totalSocios)}</p>
         </div>
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs text-gray-500">{isActual ? "Aportes hasta el momento" : "Total aportes"}</p>
+          <p className="text-xs text-gray-500">{esRondaEnCurso ? "Aportes hasta el momento" : "Total aportes"}</p>
           <p className="mt-1 text-2xl font-semibold">{fmtCurrency(resumen.totalAportes)}</p>
         </div>
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs text-gray-500">{isActual ? "Ahorros hasta el momento" : "Total ahorros"}</p>
+          <p className="text-xs text-gray-500">{esRondaEnCurso ? "Ahorros hasta el momento" : "Total ahorros"}</p>
           <p className="mt-1 text-2xl font-semibold">{fmtCurrency(resumen.totalAhorros)}</p>
         </div>
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs text-gray-500">{isActual ? "Multas hasta el momento" : "Total multas"}</p>
+          <p className="text-xs text-gray-500">{esRondaEnCurso ? "Multas hasta el momento" : "Total multas"}</p>
           <p className="mt-1 text-2xl font-semibold">{fmtCurrency(resumen.totalMultas)}</p>
         </div>
       </section>
 
-      {/* === Resumen por semana (Aportes, Ahorros y Responsable) === */}
+      {/* Resumen por semana */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b bg-gray-50 p-3">
           <div className="text-sm font-medium text-gray-800">Resumen por semana</div>
@@ -351,10 +326,8 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
 
         {errorSemanas ? (
           <div className="p-4 text-sm text-gray-600">
-            {errorSemanas} — Si aún no tienes este endpoint, créalo en{" "}
-            <code className="rounded bg-gray-100 px-1 py-0.5">
-              {isActual ? "/api/rondas/actual/semanas/resumen" : "/api/rondas/[id]/semanas/resumen"}
-            </code>.
+            {errorSemanas} — Verifica tu endpoint{" "}
+            <code className="rounded bg-gray-100 px-1 py-0.5">/api/rondas/{`[id]`}/semanas/resumen</code>.
           </div>
         ) : semanas.length === 0 ? (
           <div className="p-4 text-sm text-gray-600">No hay datos de semanas para esta ronda.</div>
@@ -384,7 +357,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         )}
       </section>
 
-      {/* Filtros y tabla por socio */}
+      {/* Tabla por socio */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-medium text-gray-800">Detalle por socio</div>
@@ -400,17 +373,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                 placeholder="Buscar por nombre, cuenta o monto…"
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200"
               />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10.5 3.75a6.75 6.75 0 1 0 4.2 12.05l3.725 3.725a.75.75 0 1 0 1.06-1.06l-3.724-3.725A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z"
-                  clipRule="evenodd"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
+                   className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400">
+                <path fillRule="evenodd"
+                      d="M10.5 3.75a6.75 6.75 0 1 0 4.2 12.05l3.725 3.725a.75.75 0 1 0 1.06-1.06l-3.724-3.725A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z"
+                      clipRule="evenodd"/>
               </svg>
             </div>
           </div>
@@ -448,12 +415,8 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                     <div className="flex items-center gap-1">
                       <span>{c.label}</span>
                       {sortKey === c.key && (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          className="h-4 w-4 text-gray-500"
-                        >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                             fill="currentColor" className="h-4 w-4 text-gray-500">
                           {sortDir === "asc" ? (
                             <path d="M12 8l-4 4h8l-4-4z" />
                           ) : (
@@ -521,4 +484,3 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
-
