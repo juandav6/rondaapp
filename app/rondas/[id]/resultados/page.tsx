@@ -67,14 +67,16 @@ const fmtDate = (iso: string | null, locale = "es-EC") => {
 export default function ResultadosPage({ params }: { params: { id: string } }) {
   // ✅ En client components, params es un objeto normal
   const { id } = params;
+  const isActual = id === "actual" || id === "activo";
+  const base = isActual ? "/api/rondas/actual" : `/api/rondas/${id}`;
 
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [socios, setSocios] = useState<SocioDetalle[]>([]);
-  const [semanas, setSemanas] = useState<SemanaResumen[]>([]); // 👈 NUEVO
+  const [semanas, setSemanas] = useState<SemanaResumen[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingSemanas, setLoadingSemanas] = useState(true);   // 👈 NUEVO
+  const [loadingSemanas, setLoadingSemanas] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [errorSemanas, setErrorSemanas] = useState<string | null>(null); // 👈 NUEVO
+  const [errorSemanas, setErrorSemanas] = useState<string | null>(null);
 
   // UI state
   const [query, setQuery] = useState("");
@@ -83,11 +85,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
 
-  // Fetch resultados y detalle por socio
+  // Fetch resultados y detalle por socio (soporta /actual/resultados)
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/rondas/${id}/resultados`)
+    fetch(`${base}/resultados`)
       .then((r) => {
         if (!r.ok) throw new Error("No se pudo obtener los resultados");
         return r.json();
@@ -98,13 +100,14 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       })
       .catch((err: any) => setError(err?.message ?? "Error desconocido"))
       .finally(() => setLoading(false));
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // re-ejecuta si cambia el parámetro dinámico
 
-  // Fetch resumen por semana (endpoint sugerido: /api/rondas/[id]/semanas/resumen)
+  // Fetch resumen por semana (soporta /actual/semanas/resumen)
   useEffect(() => {
     setLoadingSemanas(true);
     setErrorSemanas(null);
-    fetch(`/api/rondas/${id}/semanas/resumen`)
+    fetch(`${base}/semanas/resumen`)
       .then(async (r) => {
         if (!r.ok) {
           // si no existe endpoint, no bloqueamos la página
@@ -115,31 +118,31 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       })
       .then((data: any) => {
         const raw = Array.isArray(data?.semanas) ? data.semanas : [];
-        const normalizado: SemanaResumen[] = raw.map((w: any) => {
-          const totalAportes =
-            w.totalAportes ?? w.total_aportes ?? w._sum?.aportes ?? 0;
-          const totalAhorros =
-            w.totalAhorros ?? w.total_ahorros ?? w._sum?.ahorros ?? 0;
+        const normalizado: SemanaResumen[] = raw
+          .map((w: any) => {
+            const totalAportes = w.totalAportes ?? w.total_aportes ?? w._sum?.aportes ?? 0;
+            const totalAhorros = w.totalAhorros ?? w.total_ahorros ?? w._sum?.ahorros ?? 0;
 
-          // Convertimos responsable → nombre plano
-          let responsableNombre: string | null = null;
-          if (typeof w.responsableNombre === "string") {
-            responsableNombre = w.responsableNombre || null;
-          } else if (w.responsable) {
-            const rn = [w.responsable.nombres, w.responsable.apellidos].filter(Boolean).join(" ").trim();
-            responsableNombre = rn || null;
-          } else if (w.responsable_nombres || w.responsable_apellidos) {
-            const rn = [w.responsable_nombres, w.responsable_apellidos].filter(Boolean).join(" ").trim();
-            responsableNombre = rn || null;
-          }
+            // Convertimos responsable → nombre plano
+            let responsableNombre: string | null = null;
+            if (typeof w.responsableNombre === "string") {
+              responsableNombre = w.responsableNombre || null;
+            } else if (w.responsable) {
+              const rn = [w.responsable.nombres, w.responsable.apellidos].filter(Boolean).join(" ").trim();
+              responsableNombre = rn || null;
+            } else if (w.responsable_nombres || w.responsable_apellidos) {
+              const rn = [w.responsable_nombres, w.responsable_apellidos].filter(Boolean).join(" ").trim();
+              responsableNombre = rn || null;
+            }
 
-          return {
-            semana: Number(w.semana ?? w.week ?? 0),
-            totalAportes: Number(totalAportes ?? 0),
-            totalAhorros: Number(totalAhorros ?? 0),
-            responsableNombre,
-          };
-        }).filter((w: SemanaResumen) => Number.isFinite(w.semana) && w.semana > 0);
+            return {
+              semana: Number(w.semana ?? w.week ?? 0),
+              totalAportes: Number(totalAportes ?? 0),
+              totalAhorros: Number(totalAhorros ?? 0),
+              responsableNombre,
+            };
+          })
+          .filter((w: SemanaResumen) => Number.isFinite(w.semana) && w.semana > 0);
         // Ordenamos por semana ascendente
         normalizado.sort((a, b) => a.semana - b.semana);
         setSemanas(normalizado);
@@ -150,12 +153,13 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         setSemanas([]);
       })
       .finally(() => setLoadingSemanas(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Derivados: filtro y orden de la tabla por socio
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = q
+    const baseArr = q
       ? socios.filter((s) =>
           [s.nombres, s.apellidos, s.numeroCuenta, String(s.aportes), String(s.ahorros), String(s.multas)]
             .filter(Boolean)
@@ -163,7 +167,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         )
       : socios;
 
-    const sorted = [...base].sort((a, b) => {
+    const sorted = [...baseArr].sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortKey === "nombres" || sortKey === "apellidos" || sortKey === "numeroCuenta") {
         return (
@@ -202,7 +206,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `resultados_ronda_${resumen?.id ?? id}.csv`;
+    a.download = `resultados_ronda_${isActual ? "actual" : resumen?.id ?? id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -211,7 +215,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   function retry() {
     setError(null);
     setLoading(true);
-    fetch(`/api/rondas/${id}/resultados`)
+    fetch(`${base}/resultados`)
       .then((r) => r.json())
       .then((data: any) => {
         setResumen(data?.resumen ?? null);
@@ -261,6 +265,8 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
 
   if (!resumen) return <div className="p-6 text-gray-600">No se encontraron resultados para esta ronda.</div>;
 
+  const esRondaEnCurso = !resumen.fechaFin; // si no tiene fecha fin, asumimos que sigue activa
+
   return (
     <div className="p-6 space-y-6">
       {/* Header en cajoncito */}
@@ -275,18 +281,31 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
             </span>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Resultados de la ronda:{" "}
+                {isActual ? "Resultados de la ronda ACTUAL" : "Resultados de la ronda"}:{" "}
                 <span className="text-blue-700">{resumen.nombre}</span>
               </h1>
               <p className="mt-1 text-sm text-gray-600">
                 Inicio: <strong>{fmtDate(resumen.fechaInicio)}</strong>
                 <span className="mx-2 text-gray-400">•</span>
                 Fin: <strong>{fmtDate(resumen.fechaFin)}</strong>
+                {esRondaEnCurso && (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                    En curso
+                  </span>
+                )}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {!isActual && (
+              <Link
+                href="/rondas/actual/resultados"
+                className="hidden rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:inline-flex"
+              >
+                Ver ronda activa
+              </Link>
+            )}
             <Link
               href="/rondas/historial"
               className="hidden rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:inline-flex"
@@ -310,15 +329,15 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
           <p className="mt-1 text-2xl font-semibold">{fmtNumber(resumen.totalSocios)}</p>
         </div>
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs text-gray-500">Total aportes</p>
+          <p className="text-xs text-gray-500">{isActual ? "Aportes hasta el momento" : "Total aportes"}</p>
           <p className="mt-1 text-2xl font-semibold">{fmtCurrency(resumen.totalAportes)}</p>
         </div>
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs text-gray-500">Total ahorros</p>
+          <p className="text-xs text-gray-500">{isActual ? "Ahorros hasta el momento" : "Total ahorros"}</p>
           <p className="mt-1 text-2xl font-semibold">{fmtCurrency(resumen.totalAhorros)}</p>
         </div>
         <div className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="text-xs text-gray-500">Total multas</p>
+          <p className="text-xs text-gray-500">{isActual ? "Multas hasta el momento" : "Total multas"}</p>
           <p className="mt-1 text-2xl font-semibold">{fmtCurrency(resumen.totalMultas)}</p>
         </div>
       </section>
@@ -332,7 +351,10 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
 
         {errorSemanas ? (
           <div className="p-4 text-sm text-gray-600">
-            {errorSemanas} — Si aún no tienes este endpoint, créalo en <code className="rounded bg-gray-100 px-1 py-0.5">/api/rondas/[id]/semanas/resumen</code>.
+            {errorSemanas} — Si aún no tienes este endpoint, créalo en{" "}
+            <code className="rounded bg-gray-100 px-1 py-0.5">
+              {isActual ? "/api/rondas/actual/semanas/resumen" : "/api/rondas/[id]/semanas/resumen"}
+            </code>.
           </div>
         ) : semanas.length === 0 ? (
           <div className="p-4 text-sm text-gray-600">No hay datos de semanas para esta ronda.</div>
