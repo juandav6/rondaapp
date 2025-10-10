@@ -291,16 +291,12 @@ export default function HistorialRondasPage() {
                     <td className="px-4 py-3 text-gray-700">{formatDate(r.fechaFin)}</td>
                     <td className="px-4 py-3"><StatusBadge activa={r.activa} /></td>
                     <td className="px-4 py-3 text-right">
-                      {!r.activa ? (
-                        <Link
-                          href={`/rondas/${r.id}/resultados`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow"
-                        >
-                          Ver resultados
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
+                      <Link
+                        href={`/rondas/${r.id}/resultados`}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow"
+                      >
+                        Ver resultados
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -343,3 +339,4 @@ export default function HistorialRondasPage() {
     </div>
   );
 }
+
