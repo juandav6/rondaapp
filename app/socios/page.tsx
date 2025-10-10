@@ -1,3 +1,4 @@
+// app/socios/page.tsx
 "use client";
 import { useEffect, useState } from "react";
 
@@ -21,6 +22,14 @@ interface CreateSocioPayload {
   ahorroInicial?: number;
 }
 
+interface EditSocioPayload {
+  cedula?: string;
+  nombres?: string;
+  apellidos?: string;
+  edad?: number;
+  multas?: number;
+}
+
 export default function SociosPage() {
   const [socios, setSocios] = useState<SocioRow[]>([]);
   const [form, setForm] = useState<Partial<CreateSocioPayload>>({});
@@ -28,6 +37,11 @@ export default function SociosPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"lista" | "formulario">("lista");
+
+  // === edición ===
+  const [editing, setEditing] = useState<SocioRow | null>(null);
+  const [editForm, setEditForm] = useState<Partial<EditSocioPayload>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     fetchSocios();
@@ -48,6 +62,7 @@ export default function SociosPage() {
     }
   };
 
+  // ========= CREAR =========
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -83,12 +98,13 @@ export default function SociosPage() {
     }
   };
 
+  // ========= ELIMINAR =========
   const handleDelete = async (id: number) => {
     if (!confirm("¿Está seguro de que desea eliminar este socio?")) return;
     try {
       const response = await fetch(`/api/socios/${id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("Error al eliminar socio");
-      setSocios(socios.filter((s) => s.id !== id));
+      setSocios((prev) => prev.filter((s) => s.id !== id));
       setSuccess("Socio eliminado correctamente");
       setError(null);
       setTimeout(() => setSuccess(null), 3000);
@@ -98,9 +114,60 @@ export default function SociosPage() {
     }
   };
 
+  // ========= EDITAR =========
+  const openEdit = (s: SocioRow) => {
+    setEditing(s);
+    setEditForm({
+      cedula: s.cedula,
+      nombres: s.nombres,
+      apellidos: s.apellidos,
+      edad: s.edad,
+      multas: s.multas,
+    });
+  };
+
+  const closeEdit = () => {
+    setEditing(null);
+    setEditForm({});
+    setSavingEdit(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    try {
+      setSavingEdit(true);
+      const payload: EditSocioPayload = {
+        cedula: editForm.cedula?.trim(),
+        nombres: editForm.nombres?.trim(),
+        apellidos: editForm.apellidos?.trim(),
+        ...(editForm.edad != null ? { edad: Number(editForm.edad) } : {}),
+        ...(editForm.multas != null ? { multas: Number(editForm.multas) } : {}),
+      };
+
+      const res = await fetch(`/api/socios/${editing.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "No se pudo actualizar el socio");
+
+      setSuccess("Cambios guardados");
+      setError(null);
+      setTimeout(() => setSuccess(null), 2500);
+      closeEdit();
+      await fetchSocios();
+    } catch (e: any) {
+      setError(e?.message ?? "Error al actualizar socio");
+      setSuccess(null);
+      setSavingEdit(false);
+    }
+  };
+
   const totalAhorros = socios.reduce((sum, socio) => sum + socio.ahorros, 0);
   const totalMultas = socios.reduce((sum, socio) => sum + socio.multas, 0);
 
+  // ========= LOADING =========
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -112,6 +179,7 @@ export default function SociosPage() {
     );
   }
 
+  // ========= UI =========
   return (
     <div>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -185,7 +253,7 @@ export default function SociosPage() {
             </nav>
           </div>
 
-          {/* Contenido de las tabs */}
+          {/* FORM CREAR */}
           {activeTab === "formulario" && (
             <div className="p-6 border-t">
               <h2 className="text-lg font-semibold text-gray-800 mb-6">Agregar Nuevo Socio</h2>
@@ -241,11 +309,11 @@ export default function SociosPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ahorros ($)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ahorro inicial ($)</label>
                   <input
                     type="number"
                     placeholder="0.00"
-                    value={form.ahorroInicial || ""}
+                    value={form.ahorroInicial ?? ""}
                     onChange={(e) => setForm({ ...form, ahorroInicial: Number(e.target.value) })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     step="0.01"
@@ -258,7 +326,7 @@ export default function SociosPage() {
                   <input
                     type="number"
                     placeholder="0.00"
-                    value={form.multas || ""}
+                    value={form.multas ?? ""}
                     onChange={(e) => setForm({ ...form, multas: Number(e.target.value) })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     step="0.01"
@@ -285,6 +353,7 @@ export default function SociosPage() {
             </div>
           )}
 
+          {/* LISTA */}
           {activeTab === "lista" && (
             <div className="border-t">
               <div className="px-6 py-4 flex justify-between items-center">
@@ -347,16 +416,28 @@ export default function SociosPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-emerald-600">${socio.ahorros}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-rose-600">${socio.multas}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => handleDelete(socio.id)}
-                              className="text-red-600 hover:text-red-900 flex items-center"
-                              title="Eliminar socio"
-                            >
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                              Eliminar
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => openEdit(socio)}
+                                className="text-blue-600 hover:text-blue-800 flex items-center"
+                                title="Editar socio"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5h2M4 15h4l10-10a2.121 2.121 0 113 3L11 18H7v-4z" />
+                                </svg>
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => handleDelete(socio.id)}
+                                className="text-red-600 hover:text-red-900 flex items-center"
+                                title="Eliminar socio"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Eliminar
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -368,7 +449,93 @@ export default function SociosPage() {
           )}
         </div>
       </div>
+
+      {/* ===== Modal Edición ===== */}
+      {editing && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center">
+          {/* backdrop */}
+          <div className="fixed inset-0 bg-black/30" onClick={closeEdit} />
+          {/* panel */}
+          <div className="relative z-50 w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Editar socio</h3>
+                <p className="text-sm text-gray-500">Cuenta <span className="font-mono">{editing.numeroCuenta}</span></p>
+              </div>
+              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6.4 5l12.6 12.6-1.4 1.4L5 6.4 6.4 5z"/><path d="M18.6 5L5.9 17.6l1.4 1.4L20 6.4 18.6 5z"/></svg>
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cédula</label>
+                <input
+                  type="text"
+                  value={editForm.cedula ?? ""}
+                  onChange={(e) => setEditForm((f) => ({ ...f, cedula: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Edad</label>
+                <input
+                  type="number"
+                  value={editForm.edad ?? ""}
+                  onChange={(e) => setEditForm((f) => ({ ...f, edad: Number(e.target.value) }))}
+                  min={1}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombres</label>
+                <input
+                  type="text"
+                  value={editForm.nombres ?? ""}
+                  onChange={(e) => setEditForm((f) => ({ ...f, nombres: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Apellidos</label>
+                <input
+                  type="text"
+                  value={editForm.apellidos ?? ""}
+                  onChange={(e) => setEditForm((f) => ({ ...f, apellidos: e.target.value }))}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Multas ($)</label>
+                <input
+                  type="number"
+                  value={editForm.multas ?? 0}
+                  onChange={(e) => setEditForm((f) => ({ ...f, multas: Number(e.target.value) }))}
+                  step="0.01"
+                  min={0}
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={closeEdit}
+                className="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={savingEdit}
+                className={`px-4 py-2 rounded-md text-white ${savingEdit ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}
+              >
+                {savingEdit ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
