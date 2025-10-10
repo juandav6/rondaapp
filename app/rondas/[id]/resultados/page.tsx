@@ -67,7 +67,7 @@ const fmtDate = (iso: string | null, locale = "es-EC") => {
 export default function ResultadosPage({ params }: { params: { id: string } }) {
   // ✅ En client components, params es un objeto normal
   const { id } = params;
-  const isActual = id === "actual" || id === "activo";
+  const isActual = id === "actual" || id === "Activa";
   const base = isActual ? "/api/rondas/actual" : `/api/rondas/${id}`;
 
   const [resumen, setResumen] = useState<Resumen | null>(null);
@@ -521,3 +521,4 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
+
