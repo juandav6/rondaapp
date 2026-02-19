@@ -1,4 +1,4 @@
-// app/prestamos/express/page.tsx
+
 "use client";
 import { useEffect, useState } from "react";
 
@@ -124,3 +124,4 @@ export default function PrestamosExpressPage() {
     </div>
   );
 }
+
