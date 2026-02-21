@@ -23,9 +23,6 @@ model Socio {
   rondasResponsable Ronda[] @relation("RondaResponsable")
   responsabilidadesSemana  ResponsableCobroSemana[]
   prestamos Prestamo[]
-  cuotasPrestamo PrestamoCuota[] @relation("CuotaPagador")
-
-  // 👇 NUEVO: relación inversa con PrestamoExpress
   prestamosExpress PrestamoExpress[]
 
   @@map("socios")
