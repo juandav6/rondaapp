@@ -135,3 +135,51 @@ model PrestamoExpress {
 
   // @@map("prestamos_express") // opcional si quieres nombre de tabla custom
 }
+
+model Prestamo {
+  id            Int       @id @default(autoincrement())
+  rondaId       Int       @map("ronda_id")
+  socioId       Int       @map("socio_id")
+
+  monto         Decimal   @db.Decimal(12, 2) // principal
+  tasaAnual     Decimal   @db.Decimal(5, 2)  // ejemplo: 24.00
+  plazoMeses    Int       @map("plazo_meses")
+  fechaInicio   DateTime  @map("fecha_inicio")
+
+  estado        String    @default("ACTIVO") // ACTIVO | CANCELADO | MORA
+  saldoActual   Decimal   @db.Decimal(12, 2) @map("saldo_actual")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt      @map("updated_at")
+
+  // relaciones
+  ronda         Ronda     @relation(fields: [rondaId], references: [id])
+  socio         Socio     @relation(fields: [socioId], references: [id])
+  cuotas        PrestamoCuota[]
+
+  @@map("prestamos")
+}
+
+model PrestamoCuota {
+  id             Int       @id @default(autoincrement())
+  prestamoId     Int       @map("prestamo_id")
+  numero         Int       // 1..n
+
+  fechaVenc      DateTime  @map("fecha_vencimiento")
+  cuota          Decimal   @db.Decimal(12, 2)
+  interes        Decimal   @db.Decimal(12, 2)
+  capital        Decimal   @db.Decimal(12, 2)
+  saldo          Decimal   @db.Decimal(12, 2)
+
+  pagada         Boolean   @default(false)
+  fechaPago      DateTime? @map("fecha_pago")
+
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt      @map("updated_at")
+
+  prestamo       Prestamo  @relation(fields: [prestamoId], references: [id])
+
+  @@unique([prestamoId, numero])
+  @@index([prestamoId, pagada, fechaVenc])
+  @@map("prestamo_cuotas")
+}
