@@ -75,7 +75,9 @@ const MENUS: Array<{
     subItems: [
       { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
       { name: "Aprobación y pagos", path: "/prestamos/gestion" },
+      { name: "Prestamos pendientes", path: "/prestamos/pendientes" },
       { name: "Historial por socio", path: "/prestamos/historial" },
+      { name: "Reportes prestamos", path: "/prestamos/resumen" },
     ],
   },
   {
@@ -287,4 +289,5 @@ export default function HomeDashboard() {
       </footer>
     </>
   );
+
 }
