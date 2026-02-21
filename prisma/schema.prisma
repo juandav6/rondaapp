@@ -22,6 +22,8 @@ model Socio {
   participaciones Participacion[]
   rondasResponsable Ronda[] @relation("RondaResponsable")
   responsabilidadesSemana  ResponsableCobroSemana[]
+  prestamos Prestamo[]
+  cuotasPrestamo PrestamoCuota[] @relation("CuotaPagador")
 
   // 👇 NUEVO: relación inversa con PrestamoExpress
   prestamosExpress PrestamoExpress[]
@@ -44,6 +46,7 @@ model Ronda {
   responsable     Socio?          @relation("RondaResponsable", fields: [responsableId], references: [id])
   responsablesSemana       ResponsableCobroSemana[]
   ahorros         Ahorro[]  
+  prestamos Prestamo[]
 
   // 👇 NUEVO: relación inversa con PrestamoExpress
   prestamosExpress PrestamoExpress[]
