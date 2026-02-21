@@ -48,9 +48,11 @@ const navItems: NavItem[] = [
     icon: <TableIcon />,
     name: "Préstamos",
     subItems: [
-      { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
-      { name: "Prestamos Express", path: "/prestamos/express" },
+       { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
+      { name: "Aprobación y pagos", path: "/prestamos/gestion" },
+      { name: "Prestamos pendientes", path: "/prestamos/pendientes" },
       { name: "Historial por socio", path: "/prestamos/historial" },
+      { name: "Reportes prestamos", path: "/prestamos/resumen" },
     ],
   },
   {
