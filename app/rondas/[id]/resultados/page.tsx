@@ -210,7 +210,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     setSemanaRows([]);
 
     try {
-      const r = await fetch(`/api/rondas/${id}/semanas/${sem}/detalles`);
+      const r = await fetch(`/api/rondas/${id}/semana/${sem}/detalles`);
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "No se pudo cargar el detalle de la semana");
       setSemanaRows(Array.isArray(data?.rows) ? data.rows : []);
@@ -675,3 +675,4 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
+
