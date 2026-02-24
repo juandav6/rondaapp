@@ -579,70 +579,72 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                   {errorSemanaDetalle}
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
-                      <tr>
-                        <th className="px-4 py-3">#</th>
-                        <th className="px-4 py-3">Socio</th>
-                        <th className="px-4 py-3">Cuenta</th>
-                        <th className="px-4 py-3 text-right">Aporte</th>
-                        <th className="px-4 py-3 text-right">Ahorro</th>
-                        <th className="px-4 py-3 text-right">Multa</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {semanaRows.map((r, idx) => (
-                        <tr key={r.socioId} className="border-t">
-                          <td className="px-4 py-3 text-gray-600">{r.orden ?? idx + 1}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900">
-                            {r.nombres} {r.apellidos}
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">{r.numeroCuenta}</td>
-
-                          <td className="px-4 py-3 text-right">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={r.aporteSemana}
-                              onChange={(e) => {
-                                const v = moneyInputToNumber(e.target.value);
-                                setSemanaRows((prev) =>
-                                  prev.map((x) => (x.socioId === r.socioId ? { ...x, aporteSemana: v } : x))
-                                );
-                              }}
-                              className="w-28 rounded-md border px-2 py-1 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                          </td>
-
-                          <td className="px-4 py-3 text-right">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={r.ahorroSemana}
-                              onChange={(e) => {
-                                const v = moneyInputToNumber(e.target.value);
-                                setSemanaRows((prev) =>
-                                  prev.map((x) => (x.socioId === r.socioId ? { ...x, ahorroSemana: v } : x))
-                                );
-                              }}
-                              className="w-28 rounded-md border px-2 py-1 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                          </td>
-
-                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmtCurrency(r.multaSemana)}</td>
-                        </tr>
-                      ))}
-
-                      {semanaRows.length === 0 && (
+                <div className="max-h-[70vh] overflow-y-auto overscroll-contain">
+                  <div className="overflow-x-auto rounded-xl border">
+                    <table className="min-w-full text-sm">
+                      <thead className="sticky top-0 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
                         <tr>
-                          <td colSpan={6} className="px-4 py-10 text-center text-gray-600">
-                            No hay detalle para esta semana.
-                          </td>
+                          <th className="px-4 py-3">#</th>
+                          <th className="px-4 py-3">Socio</th>
+                          <th className="px-4 py-3">Cuenta</th>
+                          <th className="px-4 py-3 text-right">Aporte</th>
+                          <th className="px-4 py-3 text-right">Ahorro</th>
+                          <th className="px-4 py-3 text-right">Multa</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {semanaRows.map((r, idx) => (
+                          <tr key={r.socioId} className="border-t">
+                            <td className="px-4 py-3 text-gray-600">{r.orden ?? idx + 1}</td>
+                            <td className="px-4 py-3 font-medium text-gray-900">
+                              {r.nombres} {r.apellidos}
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">{r.numeroCuenta}</td>
+            
+                            <td className="px-4 py-3 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={r.aporteSemana}
+                                onChange={(e) => {
+                                  const v = moneyInputToNumber(e.target.value);
+                                  setSemanaRows((prev) =>
+                                    prev.map((x) => (x.socioId === r.socioId ? { ...x, aporteSemana: v } : x))
+                                  );
+                                }}
+                                className="w-28 rounded-md border px-2 py-1 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              />
+                            </td>
+            
+                            <td className="px-4 py-3 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={r.ahorroSemana}
+                                onChange={(e) => {
+                                  const v = moneyInputToNumber(e.target.value);
+                                  setSemanaRows((prev) =>
+                                    prev.map((x) => (x.socioId === r.socioId ? { ...x, ahorroSemana: v } : x))
+                                  );
+                                }}
+                                className="w-28 rounded-md border px-2 py-1 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              />
+                            </td>
+            
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmtCurrency(r.multaSemana)}</td>
+                          </tr>
+                        ))}
+            
+                        {semanaRows.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-10 text-center text-gray-600">
+                              No hay detalle para esta semana.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -669,3 +671,4 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
+
