@@ -59,11 +59,9 @@ const navItems: NavItem[] = [
     icon: <BoxCubeIcon />,
     name: "Ahorros",
    subItems: [
-      { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
-      { name: "Aprobación y pagos", path: "/prestamos/gestion" },
-      { name: "Prestamos pendientes", path: "/prestamos/pendientes" },
-      { name: "Historial por socio", path: "/prestamos/historial" },
-      { name: "Reportes prestamos", path: "/prestamos/resumen" },
+      { name: "Registro de ahorros", path: "/ahorros/registro" },
+      { name: "Resumen por socio", path: "/ahorros/resumen" },
+      { name: "Reportes de beneficios", path: "/ahorros/reportes" },
     ],
   },
   {
