@@ -1,7 +1,7 @@
 // app/api/rondas/[id]/semanas/[semana]/detalle/route.ts
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import prisma from "@/app/lib/prisma"; // <-- ajusta si tu prisma client está en otra ruta
+import prisma from "@/lib/prisma";
 
 type Params = { params: { id: string; semana: string } };
 
@@ -127,3 +127,4 @@ export async function PUT(req: Request, { params }: Params) {
     return NextResponse.json({ error: e?.message ?? "Error" }, { status: 500 });
   }
 }
+
