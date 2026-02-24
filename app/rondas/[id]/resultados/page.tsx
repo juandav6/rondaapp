@@ -104,6 +104,9 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const [errorSemanaDetalle, setErrorSemanaDetalle] = useState<string | null>(null);
   const [savingSemanaDetalle, setSavingSemanaDetalle] = useState(false);
 
+  // ✅ IMPORTANTE: tus rutas reales son .../semana/[semana]/detalle
+  const weekDetailUrl = (sem: number) => `/api/rondas/${id}/semana/${sem}/detalle`;
+
   // Fetch resultados y detalle por socio (totales)
   useEffect(() => {
     setLoading(true);
@@ -170,7 +173,6 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   }, [id]);
 
   async function refetchAll() {
-    // Recalcular “totales” = volver a pedir APIs
     await Promise.allSettled([
       fetch(`/api/rondas/${id}/resultados`)
         .then((r) => (r.ok ? r.json() : null))
@@ -210,7 +212,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     setSemanaRows([]);
 
     try {
-      const r = await fetch(`/api/rondas/${id}/semana/${sem}/detalles`);
+      const r = await fetch(weekDetailUrl(sem)); // ✅ RUTA CORRECTA
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "No se pudo cargar el detalle de la semana");
       setSemanaRows(Array.isArray(data?.rows) ? data.rows : []);
@@ -229,9 +231,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   }
 
   async function saveSemanaDetalle() {
-    if (!openSemana) return;
+    if (openSemana == null) return;
+
     try {
       setSavingSemanaDetalle(true);
+
       const payload = {
         updates: semanaRows.map((r) => ({
           socioId: r.socioId,
@@ -240,7 +244,8 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         })),
       };
 
-      const res = await fetch(`/api/rondas/${id}/semanas/${openSemana}/detalles`, {
+      const res = await fetch(weekDetailUrl(openSemana), {
+        // ✅ RUTA CORRECTA (PUT en el mismo endpoint)
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -249,7 +254,6 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "No se pudo guardar los cambios");
 
-      // refrescamos totales y resumen por semana
       await refetchAll();
       closeSemanaDetalle();
     } catch (e: any) {
@@ -270,21 +274,17 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       : socios;
 
     const sorted = [...base].sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-
       if (sortKey === "nombres" || sortKey === "apellidos" || sortKey === "numeroCuenta") {
-        return (
-          String((a as any)[sortKey] ?? "").localeCompare(String((b as any)[sortKey] ?? ""), "es", {
-            sensitivity: "base",
-            numeric: true,
-          }) * dir
-        );
+        const dir = sortDir === "asc" ? 1 : -1;
+        return String((a as any)[sortKey] ?? "").localeCompare(String((b as any)[sortKey] ?? ""), "es", {
+          sensitivity: "base",
+          numeric: true,
+        }) * dir;
       }
 
       const av = Number((a as any)[sortKey] ?? 0);
       const bv = Number((b as any)[sortKey] ?? 0);
-      // si desc, queremos bv-av
-      return (bv - av) * (sortDir === "asc" ? -1 : 1);
+      return sortDir === "asc" ? av - bv : bv - av;
     });
 
     return sorted;
@@ -453,7 +453,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         )}
       </section>
 
-      {/* Detalle por socio */}
+      {/* Totales por socio */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b bg-gray-50 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-medium text-gray-800">Totales por socio (toda la ronda)</div>
@@ -500,9 +500,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                   >
                     <div className="flex items-center gap-1">
                       <span>{c.label}</span>
-                      {sortKey === c.key && (
-                        <span className="text-gray-500">{sortDir === "asc" ? "▲" : "▼"}</span>
-                      )}
+                      {sortKey === c.key && <span className="text-gray-500">{sortDir === "asc" ? "▲" : "▼"}</span>}
                     </div>
                   </th>
                 ))}
@@ -558,7 +556,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         )}
       </section>
 
-      {/* ===== Modal Ver y editar semana ===== */}
+      {/* Modal Ver y editar semana */}
       {openSemana != null && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="fixed inset-0 bg-black/30" onClick={closeSemanaDetalle} />
@@ -632,11 +630,10 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                             />
                           </td>
 
-                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">
-                            {fmtCurrency(r.multaSemana)}
-                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-600">{fmtCurrency(r.multaSemana)}</td>
                         </tr>
                       ))}
+
                       {semanaRows.length === 0 && (
                         <tr>
                           <td colSpan={6} className="px-4 py-10 text-center text-gray-600">
@@ -661,10 +658,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
               <button
                 onClick={saveSemanaDetalle}
                 disabled={savingSemanaDetalle || loadingSemanaDetalle}
-                className={cn(
-                  "px-4 py-2 rounded-md text-white",
-                  savingSemanaDetalle ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-                )}
+                className={cn("px-4 py-2 rounded-md text-white", savingSemanaDetalle ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700")}
               >
                 {savingSemanaDetalle ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -675,4 +669,3 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     </div>
   );
 }
-
