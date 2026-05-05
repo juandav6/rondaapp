@@ -5,24 +5,20 @@ import { Prisma } from "@prisma/client";
 
 type CreatePrestamoBody = {
   socioId: number;
-  monto: number;        // principal
-  tasaAnual: number;    // % anual, ej 24
-  plazoMeses: number;   // meses
-  fechaInicio: string;  // YYYY-MM-DD
+  monto: number;
+  tasaAnual: number;   // % mensual plano
+  plazoMeses: number;
+  fechaInicio: string; // YYYY-MM-DD
 };
 
-// ===== helpers =====
 function isValidDateOnly(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
 function addMonths(date: Date, months: number) {
-  // evita errores con meses y fin de mes
   const d = new Date(date);
   const day = d.getDate();
   d.setMonth(d.getMonth() + months);
-
-  // si el mes "saltó" (por ejemplo 31 → febrero), ajusta
   if (d.getDate() < day) d.setDate(0);
   return d;
 }
@@ -35,67 +31,50 @@ function toMoneyDecimal(n: number) {
   return new Prisma.Decimal(round2(n));
 }
 
-// Amortización francesa: cuota fija
+/** Meses completos entre dos fechas */
+function mesesEntre(desde: Date, hasta: Date): number {
+  const diffMs = hasta.getTime() - desde.getTime();
+  if (diffMs <= 0) return 0;
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.4375));
+}
+
+/** Interés plano: cuota fija = capital/n + principal*tasa_mensual */
 function buildSchedule(params: {
   principal: number;
-  tasaAnual: number;     // %
+  tasaMensualPct: number;
   plazoMeses: number;
   startDate: Date;
 }) {
   const P = params.principal;
   const n = params.plazoMeses;
-  const r = (params.tasaAnual / 100) / 12; // tasa mensual
+  const pct = params.tasaMensualPct / 100;
 
   if (n <= 0) throw new Error("plazoMeses debe ser mayor a 0");
   if (P <= 0) throw new Error("monto debe ser mayor a 0");
-  if (params.tasaAnual < 0) throw new Error("tasaAnual no puede ser negativa");
+  if (params.tasaMensualPct < 0) throw new Error("tasaAnual no puede ser negativa");
 
-  let cuota: number;
-  if (r === 0) cuota = P / n;
-  else {
-    const pow = Math.pow(1 + r, n);
-    cuota = (P * (r * pow)) / (pow - 1);
-  }
-  cuota = round2(cuota);
-
+  const interesMensual = round2(P * pct);
+  const capitalMensual = round2(P / n);
   let saldo = P;
-  const out: Array<{
-    numero: number;
-    fechaVenc: Date;
-    cuota: number;
-    interes: number;
-    capital: number;
-    saldo: number;
-  }> = [];
 
-  for (let i = 1; i <= n; i++) {
-    const interes = round2(saldo * r);
-    let capital = round2(cuota - interes);
-
-    // última cuota ajusta para cerrar saldo exacto
-    if (i === n) {
-      capital = round2(saldo);
-    }
+  return Array.from({ length: n }, (_, i) => {
+    const numero = i + 1;
+    const capital = numero === n ? round2(saldo) : capitalMensual;
     const newSaldo = round2(saldo - capital);
-
-    const fechaVenc = addMonths(params.startDate, i);
-
-    out.push({
-      numero: i,
-      fechaVenc,
-      cuota: round2(interes + capital),
-      interes,
+    const result = {
+      numero,
+      fechaVenc: addMonths(params.startDate, numero),
+      cuota: round2(interesMensual + capital),
+      interes: interesMensual,
       capital,
       saldo: newSaldo,
-    });
-
+    };
     saldo = newSaldo;
-  }
-
-  return out;
+    return result;
+  });
 }
 
-// ===== GET: listar préstamos (resumen) =====
+// ===== GET: listar préstamos =====
 export async function GET() {
   try {
     const prestamos = await prisma.prestamo.findMany({
@@ -103,15 +82,10 @@ export async function GET() {
       include: {
         socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } },
         ronda: { select: { id: true, nombre: true, activa: true, fechaInicio: true, fechaFin: true } },
-        cuotas: {
-          where: { pagada: false },
-          orderBy: { fechaVenc: "asc" },
-          take: 1, // próxima cuota
-        },
+        cuotas: { where: { pagada: false }, orderBy: { fechaVenc: "asc" }, take: 1 },
       },
     });
 
-    // serialización simple de Decimal
     const normalized = prestamos.map((p) => {
       const next = p.cuotas[0] ?? null;
       return {
@@ -124,26 +98,17 @@ export async function GET() {
         fechaInicio: p.fechaInicio,
         estado: p.estado,
         saldoActual: Number(p.saldoActual),
-        nextPayment: next
-          ? {
-              cuotaId: next.id,
-              fechaVenc: next.fechaVenc,
-              cuota: Number(next.cuota),
-            }
-          : null,
+        nextPayment: next ? { cuotaId: next.id, fechaVenc: next.fechaVenc, cuota: Number(next.cuota) } : null,
       };
     });
 
     return NextResponse.json({ prestamos: normalized });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "Error al listar préstamos" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message ?? "Error al listar préstamos" }, { status: 500 });
   }
 }
 
-// ===== POST: crear préstamo + cuotas en ronda activa =====
+// ===== POST: crear préstamo =====
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<CreatePrestamoBody>;
@@ -156,7 +121,7 @@ export async function POST(req: Request) {
 
     const socioId = Number(body.socioId);
     const monto = Number(body.monto);
-    const tasaAnual = Number(body.tasaAnual);
+    const tasaMensualPct = Number(body.tasaAnual);
     const plazoMeses = Number(body.plazoMeses);
     const fechaInicio = new Date(`${body.fechaInicio}T00:00:00`);
 
@@ -169,9 +134,20 @@ export async function POST(req: Request) {
     });
     if (!rondaActiva) throw new Error("No hay ronda activa. Crea/activa una ronda primero.");
 
+    // ✅ VALIDACIÓN: plazo no puede exceder meses restantes de la ronda
+    if (rondaActiva.fechaFin) {
+      const maxMeses = mesesEntre(fechaInicio, rondaActiva.fechaFin);
+      if (plazoMeses > maxMeses) {
+        throw new Error(
+          `El plazo (${plazoMeses} meses) excede los meses restantes de la ronda (${maxMeses} meses). ` +
+          `La ronda termina el ${rondaActiva.fechaFin.toISOString().slice(0, 10)}.`
+        );
+      }
+    }
+
     const schedule = buildSchedule({
       principal: monto,
-      tasaAnual,
+      tasaMensualPct,
       plazoMeses,
       startDate: fechaInicio,
     });
@@ -182,7 +158,7 @@ export async function POST(req: Request) {
           rondaId: rondaActiva.id,
           socioId,
           monto: toMoneyDecimal(monto),
-          tasaAnual: new Prisma.Decimal(round2(tasaAnual)),
+          tasaAnual: new Prisma.Decimal(round2(tasaMensualPct)),
           plazoMeses,
           fechaInicio,
           estado: "ACTIVO",
@@ -203,7 +179,7 @@ export async function POST(req: Request) {
         })),
       });
 
-      const full = await tx.prestamo.findUnique({
+      return tx.prestamo.findUnique({
         where: { id: prestamo.id },
         include: {
           socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } },
@@ -211,11 +187,10 @@ export async function POST(req: Request) {
           cuotas: { orderBy: { numero: "asc" } },
         },
       });
-
-      return full!;
     });
 
-    // normaliza decimales
+    if (!result) throw new Error("Error al obtener el préstamo creado");
+
     const payload = {
       ...result,
       monto: Number(result.monto),
@@ -232,9 +207,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ prestamo: payload }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "Error al crear préstamo" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: e?.message ?? "Error al crear préstamo" }, { status: 400 });
   }
 }
