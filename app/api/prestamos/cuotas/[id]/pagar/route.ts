@@ -1,41 +1,66 @@
-// app/api/socios/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
+// app/api/prestamos/cuotas/[id]/pagar/route.ts
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(req: Request | NextRequest, { params }: any) {
-  const id = Number(params.id);
-  const socio = await prisma.socio.findUnique({ where: { id } });
-  if (!socio) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
-  return NextResponse.json(socio);
-}
-
-export async function PUT(req: Request | NextRequest, { params }: any){
+export async function POST(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const id = Number(params.id);
-    const body = await req.json();
-
-    // Sanitiza; evita tocar relaciones / ids
-    const data: any = {
-      numeroCuenta: body.numeroCuenta?.trim(),
-      cedula: body.cedula?.trim(),
-      nombres: body.nombres?.trim(),
-      apellidos: body.apellidos?.trim(),
-      edad: body.edad != null ? Number(body.edad) : undefined,
-      multas: body.multas != null ? Number(body.multas) : undefined,
-    };
-
-    const socio = await prisma.socio.update({ where: { id }, data });
-    return NextResponse.json(socio);
-  } catch (err: any) {
-    if (err?.code === "P2002") {
-      return NextResponse.json({ error: "La cédula o el número de cuenta ya existe." }, { status: 409 });
+    const cuotaId = Number(params.id);
+    if (!cuotaId || isNaN(cuotaId)) {
+      return NextResponse.json({ error: "ID de cuota inválido" }, { status: 400 });
     }
-    return NextResponse.json({ error: "Error al actualizar socio" }, { status: 500 });
-  }
-}
 
-export async function DELETE(req: Request | NextRequest, { params }: any) {
-  const id = Number(params.id);
-  await prisma.socio.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+    const cuota = await prisma.prestamoCuota.findUnique({
+      where: { id: cuotaId },
+      include: { prestamo: true },
+    });
+
+    if (!cuota) {
+      return NextResponse.json({ error: "Cuota no encontrada" }, { status: 404 });
+    }
+    if (cuota.pagada) {
+      return NextResponse.json({ error: "Esta cuota ya fue pagada" }, { status: 400 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // marcar cuota como pagada
+      const cuotaActualizada = await tx.prestamoCuota.update({
+        where: { id: cuotaId },
+        data: { pagada: true, fechaPago: new Date() },
+      });
+
+      // actualizar saldo del préstamo
+      const nuevoSaldo = Number(cuota.prestamo.saldoActual) - Number(cuota.capital);
+
+      // verificar si quedan cuotas pendientes
+      const cuotasPendientes = await tx.prestamoCuota.count({
+        where: { prestamoId: cuota.prestamoId, pagada: false, id: { not: cuotaId } },
+      });
+
+      const nuevoEstado = cuotasPendientes === 0 ? "CANCELADO" : cuota.prestamo.estado;
+
+      const prestamoActualizado = await tx.prestamo.update({
+        where: { id: cuota.prestamoId },
+        data: {
+          saldoActual: Math.max(0, nuevoSaldo),
+          estado: nuevoEstado,
+        },
+      });
+
+      return { cuotaActualizada, prestamoActualizado };
+    });
+
+    return NextResponse.json({
+      ok: true,
+      saldoActual: Number(result.prestamoActualizado.saldoActual),
+      estado: result.prestamoActualizado.estado,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message ?? "Error al registrar pago" },
+      { status: 500 }
+    );
+  }
 }
