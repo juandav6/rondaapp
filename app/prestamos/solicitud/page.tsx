@@ -13,7 +13,7 @@ type Socio = {
 
 type CuotaPreview = {
   numero: number;
-  fechaVenc: string; // ISO
+  fechaVenc: string;
   cuota: number;
   interes: number;
   capital: number;
@@ -24,52 +24,36 @@ type PrestamoCreado = {
   id: number;
   estado: string;
   monto: number;
-  tasaAnual: number; // (lo seguimos llamando así para no romper tu API, pero se usa como % total del préstamo)
+  tasaAnual: number;
   plazoMeses: number;
   fechaInicio: string;
   saldoActual: number;
-  ronda: {
-    id: number;
-    nombre: string;
-    activa: boolean;
-    fechaInicio: string;
-    fechaFin: string | null;
-  };
+  ronda: { id: number; nombre: string; activa: boolean; fechaInicio: string; fechaFin: string | null };
   socio: { id: number; numeroCuenta: string; nombres: string; apellidos: string };
   cuotas: Array<{
-    id: number;
-    numero: number;
-    fechaVenc: string;
-    cuota: number;
-    interes: number;
-    capital: number;
-    saldo: number;
-    pagada: boolean;
-    fechaPago: string | null;
+    id: number; numero: number; fechaVenc: string; cuota: number;
+    interes: number; capital: number; saldo: number; pagada: boolean; fechaPago: string | null;
   }>;
 };
 
 // ===== Utils =====
 const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-const fmtMoney = (n: number | null | undefined, locale = "es-EC", currency = "USD") => {
+const fmtMoney = (n: number | null | undefined) => {
   if (n == null || Number.isNaN(Number(n))) return "-";
-  return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(n));
+  return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n));
 };
 
-const fmtDate = (iso: string | null | undefined, locale = "es-EC") => {
+const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d);
 };
 
 const todayDateOnly = () => {
   const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
 function addMonths(date: Date, months: number) {
@@ -84,15 +68,17 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-/**
- * ✅ NUEVA FÓRMULA (interés plano):
- * interes_mensual = (valor * %interes) / nro_meses
- * capital_mensual = valor / nro_meses
- * cuota = interes_mensual + capital_mensual (fija)
- *
- * Nota: `tasaAnual` aquí se usa como "% de interés total del préstamo" (no anual),
- * para respetar tu UI/API actual.
- */
+/** Calcula los meses completos que faltan entre hoy (o fechaInicio) y fechaFin */
+function mesesHastaFin(fechaInicioPrestamo: string, fechaFinRonda: string): number {
+  const inicio = new Date(`${fechaInicioPrestamo}T12:00:00Z`);
+  const fin = new Date(fechaFinRonda);
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) return 0;
+  const diffMs = fin.getTime() - inicio.getTime();
+  if (diffMs <= 0) return 0;
+  // meses completos
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.4375));
+}
+
 function buildPreviewSchedule(params: {
   principal: number;
   tasaInteresPct: number;
@@ -102,36 +88,28 @@ function buildPreviewSchedule(params: {
   const P = params.principal;
   const n = params.plazoMeses;
   const pct = params.tasaInteresPct / 100;
-
   if (!P || P <= 0 || !n || n <= 0 || params.tasaInteresPct < 0) return [];
-
   const start = new Date(`${params.fechaInicio}T00:00:00`);
   if (Number.isNaN(start.getTime())) return [];
 
-  // ✅ Interés mensual fijo = principal × tasa mensual
-  const interesMensual = round2(P * pct);      // $300 × 2% = $6/mes
-  const capitalMensual = round2(P / n);         // $300 / 6 = $50/mes
-
+  const interesMensual = round2(P * pct);
+  const capitalMensual = round2(P / n);
   let saldo = P;
   const out: CuotaPreview[] = [];
 
   for (let i = 1; i <= n; i++) {
     const capital = i === n ? round2(saldo) : capitalMensual;
     const newSaldo = round2(saldo - capital);
-    const fechaVenc = addMonths(start, i).toISOString();
-
     out.push({
       numero: i,
-      fechaVenc,
-      cuota: round2(interesMensual + capital),  // $6 + $50 = $56/mes
+      fechaVenc: addMonths(start, i).toISOString(),
+      cuota: round2(interesMensual + capital),
       interes: interesMensual,
       capital,
       saldo: newSaldo,
     });
-
     saldo = newSaldo;
   }
-
   return out;
 }
 
@@ -140,29 +118,24 @@ export default function PrestamoSolicitudPage() {
   const [loadingSocios, setLoadingSocios] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
   const [saving, setSaving] = useState(false);
 
-  // ✅ Límite por ahorros de la ronda
+  // Datos de la ronda activa
   const [maxMontoRonda, setMaxMontoRonda] = useState<number | null>(null);
-  const [rondaActivaInfo, setRondaActivaInfo] = useState<{ id: number; nombre: string } | null>(null);
+  const [rondaActivaInfo, setRondaActivaInfo] = useState<{
+    id: number; nombre: string; fechaFin: string | null;
+  } | null>(null);
 
-  // form
+  // Form
   const [qSocio, setQSocio] = useState("");
   const [socioId, setSocioId] = useState<number | null>(null);
   const [monto, setMonto] = useState<number>(0);
-
-  // OJO: lo seguimos llamando "tasaAnual" para no romper tu payload,
-  // pero ahora se interpreta como "% total del préstamo".
-  const [tasaAnual, setTasaAnual] = useState<number>(24);
-
+  const [tasaAnual, setTasaAnual] = useState<number>(2);
   const [plazoMeses, setPlazoMeses] = useState<number>(6);
   const [fechaInicio, setFechaInicio] = useState<string>(todayDateOnly());
-
   const [prestamoCreado, setPrestamoCreado] = useState<PrestamoCreado | null>(null);
 
   useEffect(() => {
-    setLoadingSocios(true);
     fetch("/api/socios")
       .then((r) => r.json())
       .then((data) => setSocios(Array.isArray(data) ? data : []))
@@ -170,63 +143,63 @@ export default function PrestamoSolicitudPage() {
       .finally(() => setLoadingSocios(false));
   }, []);
 
-  // ✅ intenta obtener el máximo permitido (ahorros totales de la ronda activa)
+  // Carga ronda activa: fechaFin + total ahorros
   useEffect(() => {
     let alive = true;
-
-    async function loadMax() {
+    async function loadRondaActiva() {
       try {
-        // Intenta varios endpoints (elige el que tengas). El primero que responda, gana.
-        const candidates = [
-          "/api/rondas/activa/resumen", // ideal: { ronda: {id,nombre}, totalAhorrosRonda }
-          "/api/rondas/activa", // alternativa: { id, nombre, totalAhorros } o similar
-          "/api/rondas/actual/resumen",
-          "/api/rondas/actual",
-        ];
+        // 1) Obtener info de la ronda activa (fechaFin)
+        const rRes = await fetch("/api/rondas");
+        if (!rRes.ok) return;
+        const rData = await rRes.json();
+        if (!alive || !rData?.id) return;
 
+        const fechaFin: string | null = rData.fechaFinISO ?? rData.fechaFinDate ?? null;
+        setRondaActivaInfo({
+          id: Number(rData.id),
+          nombre: String(rData.nombre ?? "Ronda activa"),
+          fechaFin,
+        });
+
+        // 2) Obtener total ahorros de la ronda activa
+        const candidates = [
+          `/api/rondas/${rData.id}/resumen`,
+          "/api/rondas/activa/resumen",
+        ];
         for (const url of candidates) {
           const r = await fetch(url);
           if (!r.ok) continue;
-          const data = await r.json().catch(() => null);
-
-          // Normaliza posibles shapes
-          const ronda =
-            data?.ronda ??
-            (data?.id ? { id: data.id, nombre: data.nombre } : null);
-
+          const d = await r.json().catch(() => null);
           const totalAhorros =
-            data?.totalAhorrosRonda ??
-            data?.totalAhorros ??
-            data?.total_ahorros ??
-            data?.resumen?.totalAhorros ??
-            data?.resumen?.total_ahorros ??
-            null;
-
-          if (alive && ronda?.id && typeof totalAhorros === "number") {
-            setRondaActivaInfo({ id: Number(ronda.id), nombre: String(ronda.nombre ?? "Ronda activa") });
-            setMaxMontoRonda(Number(totalAhorros));
+            d?.totalAhorros ?? d?.total_ahorros ?? d?.resumen?.totalAhorros ?? null;
+          if (alive && typeof totalAhorros === "number") {
+            setMaxMontoRonda(totalAhorros);
             return;
           }
         }
-
-        // si no hay endpoint aún, dejamos null (no bloquea)
-        if (alive) {
-          setMaxMontoRonda(null);
-          setRondaActivaInfo(null);
-        }
       } catch {
-        if (alive) {
-          setMaxMontoRonda(null);
-          setRondaActivaInfo(null);
-        }
+        // silencioso
       }
     }
-
-    loadMax();
-    return () => {
-      alive = false;
-    };
+    loadRondaActiva();
+    return () => { alive = false; };
   }, []);
+
+  // Máximo plazo permitido según fecha de inicio del préstamo y fechaFin de la ronda
+  const maxPlazoMeses = useMemo(() => {
+    if (!rondaActivaInfo?.fechaFin || !fechaInicio) return null;
+    return mesesHastaFin(fechaInicio, rondaActivaInfo.fechaFin);
+  }, [rondaActivaInfo, fechaInicio]);
+
+  const excedeMaximo = useMemo(() => {
+    if (maxMontoRonda == null || !monto) return false;
+    return Number(monto) > Number(maxMontoRonda);
+  }, [monto, maxMontoRonda]);
+
+  const excedePlazo = useMemo(() => {
+    if (maxPlazoMeses == null || !plazoMeses) return false;
+    return Number(plazoMeses) > maxPlazoMeses;
+  }, [plazoMeses, maxPlazoMeses]);
 
   const socioSeleccionado = useMemo(() => socios.find((s) => s.id === socioId) ?? null, [socios, socioId]);
 
@@ -238,59 +211,48 @@ export default function PrestamoSolicitudPage() {
       .slice(0, 30);
   }, [socios, qSocio]);
 
-  const preview = useMemo(() => {
-    return buildPreviewSchedule({
-      principal: Number(monto),
-      tasaInteresPct: Number(tasaAnual),
-      plazoMeses: Number(plazoMeses),
-      fechaInicio,
-    });
-  }, [monto, tasaAnual, plazoMeses, fechaInicio]);
+  const preview = useMemo(() => buildPreviewSchedule({
+    principal: Number(monto),
+    tasaInteresPct: Number(tasaAnual),
+    plazoMeses: Number(plazoMeses),
+    fechaInicio,
+  }), [monto, tasaAnual, plazoMeses, fechaInicio]);
 
-  const totals = useMemo(() => {
-    const totalInteres = round2(preview.reduce((acc, c) => acc + (c.interes || 0), 0));
-    const totalPagado = round2(preview.reduce((acc, c) => acc + (c.cuota || 0), 0));
-    return { totalInteres, totalPagado };
-  }, [preview]);
+  const totals = useMemo(() => ({
+    totalInteres: round2(preview.reduce((acc, c) => acc + (c.interes || 0), 0)),
+    totalPagado: round2(preview.reduce((acc, c) => acc + (c.cuota || 0), 0)),
+  }), [preview]);
 
-  const excedeMaximo = useMemo(() => {
-    if (maxMontoRonda == null) return false;
-    if (!monto) return false;
-    return Number(monto) > Number(maxMontoRonda);
-  }, [monto, maxMontoRonda]);
+  const formInvalid =
+    saving || !socioId || !monto || monto <= 0 ||
+    !plazoMeses || plazoMeses <= 0 || tasaAnual < 0 ||
+    excedeMaximo || excedePlazo;
 
   async function crearPrestamo() {
     try {
       setError(null);
       setSuccess(null);
-
       if (!socioId) throw new Error("Selecciona un socio");
       if (!monto || monto <= 0) throw new Error("Monto inválido");
       if (tasaAnual == null || tasaAnual < 0) throw new Error("Interés (%) inválido");
       if (!plazoMeses || plazoMeses <= 0) throw new Error("Plazo inválido");
       if (!fechaInicio) throw new Error("Fecha de inicio requerida");
-
-      // ✅ regla: no puede exceder ahorros de la ronda
-      if (maxMontoRonda != null && Number(monto) > Number(maxMontoRonda)) {
-        throw new Error(`El monto del préstamo no puede exceder los ahorros de la ronda (${fmtMoney(maxMontoRonda)}).`);
-      }
+      if (maxMontoRonda != null && Number(monto) > Number(maxMontoRonda))
+        throw new Error(`El monto no puede exceder los ahorros de la ronda (${fmtMoney(maxMontoRonda)}).`);
+      if (maxPlazoMeses != null && Number(plazoMeses) > maxPlazoMeses)
+        throw new Error(`El plazo no puede exceder ${maxPlazoMeses} meses (fin de ronda: ${fmtDate(rondaActivaInfo?.fechaFin)}).`);
 
       setSaving(true);
       const res = await fetch("/api/prestamos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          socioId,
-          monto: Number(monto),
-          tasaAnual: Number(tasaAnual), // (se usa como % total)
-          plazoMeses: Number(plazoMeses),
-          fechaInicio,
+          socioId, monto: Number(monto), tasaAnual: Number(tasaAnual),
+          plazoMeses: Number(plazoMeses), fechaInicio,
         }),
       });
-
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "No se pudo crear el préstamo");
-
       setPrestamoCreado(data?.prestamo ?? null);
       setSuccess("Préstamo creado correctamente");
     } catch (e: any) {
@@ -313,40 +275,43 @@ export default function PrestamoSolicitudPage() {
             </span>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Solicitud de préstamo</h1>
-              <p className="text-sm text-gray-600">
-                Genera amortización y registra el préstamo en la ronda activa.
-              </p>
-              {maxMontoRonda != null && (
+              <p className="text-sm text-gray-600">Genera amortización y registra el préstamo en la ronda activa.</p>
+              {rondaActivaInfo && (
                 <p className="mt-1 text-xs text-gray-500">
-                  Límite por ahorros{rondaActivaInfo ? ` (${rondaActivaInfo.nombre})` : ""}:{" "}
-                  <strong className="text-gray-800">{fmtMoney(maxMontoRonda)}</strong>
+                  Ronda: <strong className="text-gray-800">{rondaActivaInfo.nombre}</strong>
+                  {rondaActivaInfo.fechaFin && (
+                    <> · Fin: <strong className="text-gray-800">{fmtDate(rondaActivaInfo.fechaFin)}</strong></>
+                  )}
+                  {maxPlazoMeses != null && (
+                    <> · Plazo máximo: <strong className="text-orange-700">{maxPlazoMeses} meses</strong></>
+                  )}
+                </p>
+              )}
+              {maxMontoRonda != null && (
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Límite por ahorros: <strong className="text-gray-800">{fmtMoney(maxMontoRonda)}</strong>
                 </p>
               )}
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Link href="/prestamos/pendientes" className="rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-              Ver pendientes
-            </Link>
-          </div>
+          <Link href="/prestamos/pendientes" className="rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            Ver pendientes
+          </Link>
         </div>
       </div>
 
-      {/* Alerts */}
       {error && <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
       {success && <div className="rounded-md border border-green-200 bg-green-50 p-4 text-green-700">{success}</div>}
 
-      {/* Created */}
       {prestamoCreado && (
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">✅ Préstamo creado</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Socio: <strong>{prestamoCreado.socio.nombres} {prestamoCreado.socio.apellidos}</strong>{" "}
+                Socio: <strong>{prestamoCreado.socio.nombres} {prestamoCreado.socio.apellidos}</strong>
                 <span className="mx-2 text-gray-300">•</span>
-                Monto: <strong>{fmtMoney(prestamoCreado.monto)}</strong>{" "}
+                Monto: <strong>{fmtMoney(prestamoCreado.monto)}</strong>
                 <span className="mx-2 text-gray-300">•</span>
                 Estado: <strong>{prestamoCreado.estado}</strong>
               </p>
@@ -369,7 +334,7 @@ export default function PrestamoSolicitudPage() {
             </span>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Datos del préstamo</h2>
-              <p className="text-sm text-gray-600">Selecciona socio, monto, interés (%) y plazo.</p>
+              <p className="text-sm text-gray-600">Selecciona socio, monto, interés y plazo.</p>
             </div>
           </div>
 
@@ -377,21 +342,17 @@ export default function PrestamoSolicitudPage() {
             {/* Socio */}
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Socio</label>
-              <div className="relative">
-                <input
-                  value={qSocio}
-                  onChange={(e) => setQSocio(e.target.value)}
-                  placeholder="Buscar por nombre o cuenta…"
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">⌘K</span>
-              </div>
-
-              <div className="mt-2 max-h-64 overflow-auto rounded-lg border">
+              <input
+                value={qSocio}
+                onChange={(e) => setQSocio(e.target.value)}
+                placeholder="Buscar por nombre o cuenta…"
+                className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200"
+              />
+              <div className="mt-2 max-h-48 overflow-auto rounded-lg border">
                 {loadingSocios ? (
                   <div className="p-3 text-sm text-gray-600">Cargando...</div>
                 ) : sociosFiltrados.length === 0 ? (
-                  <div className="p-3 text-sm text-gray-600">No hay coincidencias.</div>
+                  <div className="p-3 text-sm text-gray-600">Sin coincidencias.</div>
                 ) : (
                   <ul className="divide-y">
                     {sociosFiltrados.map((s) => {
@@ -403,21 +364,8 @@ export default function PrestamoSolicitudPage() {
                             onClick={() => setSocioId(s.id)}
                             className={cn("w-full text-left p-3 hover:bg-gray-50", active && "bg-orange-50")}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="truncate font-medium text-gray-900">
-                                  {s.nombres} {s.apellidos}
-                                </p>
-                                <p className="truncate text-xs text-gray-500">
-                                  Cuenta <span className="font-mono">{s.numeroCuenta}</span>
-                                </p>
-                              </div>
-                              {active && (
-                                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-                                  Seleccionado
-                                </span>
-                              )}
-                            </div>
+                            <p className="truncate font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
+                            <p className="truncate text-xs text-gray-500">Cuenta <span className="font-mono">{s.numeroCuenta}</span></p>
                           </button>
                         </li>
                       );
@@ -425,13 +373,9 @@ export default function PrestamoSolicitudPage() {
                   </ul>
                 )}
               </div>
-
               {socioSeleccionado && (
-                <p className="mt-2 text-xs text-gray-500">
-                  Socio seleccionado:{" "}
-                  <strong>
-                    {socioSeleccionado.nombres} {socioSeleccionado.apellidos}
-                  </strong>
+                <p className="mt-1 text-xs text-gray-500">
+                  Seleccionado: <strong>{socioSeleccionado.nombres} {socioSeleccionado.apellidos}</strong>
                 </p>
               )}
             </div>
@@ -440,52 +384,48 @@ export default function PrestamoSolicitudPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Monto (principal)</label>
               <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={monto || ""}
+                type="number" min={0} step="0.01" value={monto || ""}
                 onChange={(e) => setMonto(Number(e.target.value))}
                 className={cn(
                   "w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1",
-                  excedeMaximo
-                    ? "border-red-300 focus:border-red-500 focus:ring-red-200"
-                    : "focus:border-orange-500 focus:ring-orange-200"
+                  excedeMaximo ? "border-red-300 focus:border-red-500 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200"
                 )}
                 placeholder="0.00"
               />
               {maxMontoRonda != null && (
-                <p className={cn("mt-1 text-xs", excedeMaximo ? "text-red-600" : "text-gray-500")}>
-                  Máximo permitido: <strong>{fmtMoney(maxMontoRonda)}</strong>
+                <p className={cn("mt-1 text-xs", excedeMaximo ? "text-red-600 font-medium" : "text-gray-500")}>
+                  {excedeMaximo ? "⚠️ Excede el límite de ahorros. " : ""}
+                  Máximo: <strong>{fmtMoney(maxMontoRonda)}</strong>
                 </p>
               )}
             </div>
 
             {/* Interés y plazo */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Interés (%)</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Interés mensual (%)</label>
                 <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={tasaAnual}
+                  type="number" min={0} step="0.01" value={tasaAnual}
                   onChange={(e) => setTasaAnual(Number(e.target.value))}
                   className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200"
                 />
-                <p className="mt-1 text-xs text-gray-500">
-                  Interés total del préstamo (se reparte entre los meses).
-                </p>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Plazo (meses)</label>
                 <input
-                  type="number"
-                  min={1}
-                  step="1"
-                  value={plazoMeses}
+                  type="number" min={1} step="1" value={plazoMeses}
                   onChange={(e) => setPlazoMeses(Number(e.target.value))}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200"
+                  className={cn(
+                    "w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1",
+                    excedePlazo ? "border-red-300 focus:border-red-500 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200"
+                  )}
                 />
+                {maxPlazoMeses != null && (
+                  <p className={cn("mt-1 text-xs", excedePlazo ? "text-red-600 font-medium" : "text-gray-500")}>
+                    {excedePlazo ? "⚠️ Excede el fin de ronda. " : ""}
+                    Máximo: <strong>{maxPlazoMeses} meses</strong>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -493,38 +433,19 @@ export default function PrestamoSolicitudPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Fecha de inicio</label>
               <input
-                type="date"
-                value={fechaInicio}
+                type="date" value={fechaInicio}
                 onChange={(e) => setFechaInicio(e.target.value)}
                 className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200"
               />
-              <p className="mt-1 text-xs text-gray-500">Las cuotas se vencen mes a mes desde esta fecha.</p>
+              <p className="mt-1 text-xs text-gray-500">Cambia la fecha para recalcular el plazo máximo.</p>
             </div>
 
             <button
               onClick={crearPrestamo}
-              disabled={
-                saving ||
-                !socioId ||
-                !monto ||
-                monto <= 0 ||
-                !plazoMeses ||
-                plazoMeses <= 0 ||
-                tasaAnual < 0 ||
-                excedeMaximo
-              }
+              disabled={formInvalid}
               className={cn(
                 "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white",
-                saving ||
-                  !socioId ||
-                  !monto ||
-                  monto <= 0 ||
-                  !plazoMeses ||
-                  plazoMeses <= 0 ||
-                  tasaAnual < 0 ||
-                  excedeMaximo
-                  ? "bg-orange-300 opacity-80"
-                  : "bg-orange-600 hover:bg-orange-700"
+                formInvalid ? "bg-orange-300 opacity-80 cursor-not-allowed" : "bg-orange-600 hover:bg-orange-700"
               )}
             >
               {saving ? (
@@ -535,23 +456,12 @@ export default function PrestamoSolicitudPage() {
                   </svg>
                   Guardando…
                 </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                    <path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm1 14.59 5.3-5.3a1 1 0 0 0-1.42-1.42L13 13.76l-2.3-2.29a1 1 0 0 0-1.42 1.42l3 3a1 1 0 0 0 1.42 0Z" />
-                  </svg>
-                  Crear préstamo
-                </>
-              )}
+              ) : "Crear préstamo"}
             </button>
-
-            <p className="text-xs text-gray-500">
-              Nota: se asigna automáticamente a la <strong>ronda activa</strong>.
-            </p>
           </div>
         </section>
 
-        {/* Preview */}
+        {/* Preview amortización */}
         <section className="rounded-xl border bg-white shadow-sm lg:col-span-2 overflow-hidden">
           <div className="border-b bg-gray-50 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -560,19 +470,15 @@ export default function PrestamoSolicitudPage() {
                 <p className="text-sm text-gray-600">
                   {preview.length ? (
                     <>
-                      Cuota aprox.: <strong>{fmtMoney(preview[0].cuota)}</strong>{" "}
+                      Cuota: <strong>{fmtMoney(preview[0].cuota)}</strong>
                       <span className="mx-2 text-gray-300">•</span>
-                      Interés total aprox.:{" "}
-                      <strong className="text-amber-700">{fmtMoney(totals.totalInteres)}</strong>{" "}
+                      Interés total: <strong className="text-amber-700">{fmtMoney(totals.totalInteres)}</strong>
                       <span className="mx-2 text-gray-300">•</span>
-                      Total a pagar aprox.: <strong>{fmtMoney(totals.totalPagado)}</strong>
+                      Total a pagar: <strong>{fmtMoney(totals.totalPagado)}</strong>
                     </>
-                  ) : (
-                    "Completa los datos para ver la tabla."
-                  )}
+                  ) : "Completa los datos para ver la tabla."}
                 </p>
               </div>
-
               {preview.length > 0 && (
                 <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
                   {plazoMeses} cuotas
@@ -583,7 +489,7 @@ export default function PrestamoSolicitudPage() {
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600 sticky top-0 z-10">
+              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
                 <tr>
                   <th className="px-4 py-3">#</th>
                   <th className="px-4 py-3">Vence</th>
@@ -596,8 +502,8 @@ export default function PrestamoSolicitudPage() {
               <tbody>
                 {preview.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-600">
-                      Ingresa socio, monto, interés, plazo y fecha para generar la amortización.
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                      Ingresa los datos para generar la amortización.
                     </td>
                   </tr>
                 ) : (
@@ -617,7 +523,7 @@ export default function PrestamoSolicitudPage() {
           </div>
 
           <div className="border-t bg-gray-50 p-4 text-xs text-gray-600">
-            Fórmula usada: <strong>valor × %interés mensual</strong> por cuota (interés plano sobre saldo inicial).
+            Fórmula: <strong>capital / plazo + capital × %interés mensual</strong> (interés plano sobre saldo inicial).
           </div>
         </section>
       </div>
