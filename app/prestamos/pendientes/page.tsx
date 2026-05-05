@@ -50,7 +50,7 @@ export default function PrestamosPendientesPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/prestamos/pendientes");
+      const res = await fetch("/api/prestamos");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "No se pudieron cargar préstamos pendientes");
       setItems(Array.isArray(data?.prestamos) ? data.prestamos : []);
