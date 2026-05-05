@@ -1,41 +1,55 @@
-// app/api/socios/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
+// app/api/prestamos/[id]/route.ts
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(req: Request | NextRequest, { params }: any) {
-  const id = Number(params.id);
-  const socio = await prisma.socio.findUnique({ where: { id } });
-  if (!socio) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
-  return NextResponse.json(socio);
-}
-
-export async function PUT(req: Request | NextRequest, { params }: any){
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const id = Number(params.id);
-    const body = await req.json();
+    if (!id || isNaN(id)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
 
-    // Sanitiza; evita tocar relaciones / ids
-    const data: any = {
-      numeroCuenta: body.numeroCuenta?.trim(),
-      cedula: body.cedula?.trim(),
-      nombres: body.nombres?.trim(),
-      apellidos: body.apellidos?.trim(),
-      edad: body.edad != null ? Number(body.edad) : undefined,
-      multas: body.multas != null ? Number(body.multas) : undefined,
+    const prestamo = await prisma.prestamo.findUnique({
+      where: { id },
+      include: {
+        socio: {
+          select: { id: true, nombres: true, apellidos: true, numeroCuenta: true },
+        },
+        ronda: {
+          select: { id: true, nombre: true, activa: true },
+        },
+        cuotas: {
+          orderBy: { numero: "asc" },
+        },
+      },
+    });
+
+    if (!prestamo) {
+      return NextResponse.json({ error: "Préstamo no encontrado" }, { status: 404 });
+    }
+
+    const normalized = {
+      ...prestamo,
+      monto: Number(prestamo.monto),
+      tasaAnual: Number(prestamo.tasaAnual),
+      saldoActual: Number(prestamo.saldoActual),
+      cuotas: prestamo.cuotas.map((c) => ({
+        ...c,
+        cuota: Number(c.cuota),
+        interes: Number(c.interes),
+        capital: Number(c.capital),
+        saldo: Number(c.saldo),
+      })),
     };
 
-    const socio = await prisma.socio.update({ where: { id }, data });
-    return NextResponse.json(socio);
-  } catch (err: any) {
-    if (err?.code === "P2002") {
-      return NextResponse.json({ error: "La cédula o el número de cuenta ya existe." }, { status: 409 });
-    }
-    return NextResponse.json({ error: "Error al actualizar socio" }, { status: 500 });
+    return NextResponse.json({ prestamo: normalized });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message ?? "Error al obtener préstamo" },
+      { status: 500 }
+    );
   }
-}
-
-export async function DELETE(req: Request | NextRequest, { params }: any) {
-  const id = Number(params.id);
-  await prisma.socio.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
 }
