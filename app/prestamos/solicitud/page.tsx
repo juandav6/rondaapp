@@ -93,7 +93,12 @@ function round2(n: number) {
  * Nota: `tasaAnual` aquí se usa como "% de interés total del préstamo" (no anual),
  * para respetar tu UI/API actual.
  */
-function buildPreviewSchedule(params: { principal: number; tasaInteresPct: number; plazoMeses: number; fechaInicio: string }) {
+function buildPreviewSchedule(params: {
+  principal: number;
+  tasaInteresPct: number;
+  plazoMeses: number;
+  fechaInicio: string;
+}) {
   const P = params.principal;
   const n = params.plazoMeses;
   const pct = params.tasaInteresPct / 100;
@@ -103,24 +108,22 @@ function buildPreviewSchedule(params: { principal: number; tasaInteresPct: numbe
   const start = new Date(`${params.fechaInicio}T00:00:00`);
   if (Number.isNaN(start.getTime())) return [];
 
-  const totalInteres = round2(P * pct);
-  const interesMensual = round2(totalInteres / n);
-  const capitalMensual = round2(P / n);
+  // ✅ Interés mensual fijo = principal × tasa mensual
+  const interesMensual = round2(P * pct);      // $300 × 2% = $6/mes
+  const capitalMensual = round2(P / n);         // $300 / 6 = $50/mes
 
   let saldo = P;
   const out: CuotaPreview[] = [];
 
   for (let i = 1; i <= n; i++) {
-    // En la última cuota ajustamos para que el saldo quede exacto en 0
     const capital = i === n ? round2(saldo) : capitalMensual;
     const newSaldo = round2(saldo - capital);
-
     const fechaVenc = addMonths(start, i).toISOString();
 
     out.push({
       numero: i,
       fechaVenc,
-      cuota: round2(interesMensual + capital),
+      cuota: round2(interesMensual + capital),  // $6 + $50 = $56/mes
       interes: interesMensual,
       capital,
       saldo: newSaldo,
@@ -614,7 +617,7 @@ export default function PrestamoSolicitudPage() {
           </div>
 
           <div className="border-t bg-gray-50 p-4 text-xs text-gray-600">
-            Fórmula usada: <strong>(valor × %interés) / meses</strong> para el interés mensual (interés plano).
+            Fórmula usada: <strong>valor × %interés mensual</strong> por cuota (interés plano sobre saldo inicial).
           </div>
         </section>
       </div>
