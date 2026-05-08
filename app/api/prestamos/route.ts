@@ -6,20 +6,18 @@ import { Prisma } from "@prisma/client";
 type CreatePrestamoBody = {
   socioId: number;
   monto: number;
-  tasaAnual: number;   // % mensual plano
-  plazoMeses: number;
-  fechaInicio: string; // YYYY-MM-DD
+  tasaAnual: number;      // % mensual plano
+  plazoSemanas: number;   // plazo en semanas
+  fechaInicio: string;    // YYYY-MM-DD
 };
 
 function isValidDateOnly(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-function addMonths(date: Date, months: number) {
+function addDays(date: Date, days: number): Date {
   const d = new Date(date);
-  const day = d.getDate();
-  d.setMonth(d.getMonth() + months);
-  if (d.getDate() < day) d.setDate(0);
+  d.setDate(d.getDate() + days);
   return d;
 }
 
@@ -27,45 +25,62 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function toMoneyDecimal(n: number) {
+function toDecimal(n: number) {
   return new Prisma.Decimal(round2(n));
 }
 
-/** Meses completos entre dos fechas */
-function mesesEntre(desde: Date, hasta: Date): number {
+/** Semanas completas entre dos fechas */
+function semanasEntre(desde: Date, hasta: Date): number {
   const diffMs = hasta.getTime() - desde.getTime();
   if (diffMs <= 0) return 0;
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.4375));
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
 }
 
-/** Interés plano: cuota fija = capital/n + principal*tasa_mensual */
+/**
+ * Cronograma con plazo en SEMANAS.
+ * - Cada 4 semanas = cuota mensual completa
+ * - Semanas sobrantes = última cuota con interés proporcional
+ */
 function buildSchedule(params: {
   principal: number;
   tasaMensualPct: number;
-  plazoMeses: number;
+  plazoSemanas: number;
   startDate: Date;
 }) {
-  const P = params.principal;
-  const n = params.plazoMeses;
-  const pct = params.tasaMensualPct / 100;
+  const { principal: P, tasaMensualPct, plazoSemanas, startDate } = params;
 
-  if (n <= 0) throw new Error("plazoMeses debe ser mayor a 0");
+  if (plazoSemanas <= 0) throw new Error("plazoSemanas debe ser mayor a 0");
   if (P <= 0) throw new Error("monto debe ser mayor a 0");
-  if (params.tasaMensualPct < 0) throw new Error("tasaAnual no puede ser negativa");
+  if (tasaMensualPct < 0) throw new Error("tasaAnual no puede ser negativa");
 
-  const interesMensual = round2(P * pct);
-  const capitalMensual = round2(P / n);
+  const interesMensual = round2(P * (tasaMensualPct / 100));
+  const mesesCompletos = Math.floor(plazoSemanas / 4);
+  const semanasRestantes = plazoSemanas % 4;
+  const totalCuotas = mesesCompletos + (semanasRestantes > 0 ? 1 : 0);
+
+  if (totalCuotas === 0) throw new Error("El plazo no genera cuotas");
+
+  const capitalPorCuota = round2(P / totalCuotas);
   let saldo = P;
+  let diaAcumulado = 0;
 
-  return Array.from({ length: n }, (_, i) => {
+  return Array.from({ length: totalCuotas }, (_, i) => {
     const numero = i + 1;
-    const capital = numero === n ? round2(saldo) : capitalMensual;
+    const esUltima = numero === totalCuotas;
+    const esParcial = esUltima && semanasRestantes > 0;
+    const diasEstaCuota = esParcial ? semanasRestantes * 7 : 28;
+    diaAcumulado += diasEstaCuota;
+
+    const capital = esUltima ? round2(saldo) : capitalPorCuota;
+    const interes = esParcial
+      ? round2(interesMensual * (semanasRestantes / 4))
+      : interesMensual;
     const newSaldo = round2(saldo - capital);
     const result = {
       numero,
-      fechaVenc: addMonths(params.startDate, numero),
-      cuota: round2(interesMensual + capital),
-      interes: interesMensual,
+      fechaVenc: addDays(startDate, diaAcumulado),
+      cuota: round2(capital + interes),
+      interes,
       capital,
       saldo: newSaldo,
     };
@@ -74,7 +89,7 @@ function buildSchedule(params: {
   });
 }
 
-// ===== GET: listar préstamos =====
+// ===== GET =====
 export async function GET() {
   try {
     const prestamos = await prisma.prestamo.findMany({
@@ -86,29 +101,23 @@ export async function GET() {
       },
     });
 
-    const normalized = prestamos.map((p) => {
-      const next = p.cuotas[0] ?? null;
-      return {
-        id: p.id,
-        socio: p.socio,
-        ronda: p.ronda,
-        monto: Number(p.monto),
-        tasaAnual: Number(p.tasaAnual),
-        plazoMeses: p.plazoMeses,
-        fechaInicio: p.fechaInicio,
-        estado: p.estado,
-        saldoActual: Number(p.saldoActual),
-        nextPayment: next ? { cuotaId: next.id, fechaVenc: next.fechaVenc, cuota: Number(next.cuota) } : null,
-      };
+    return NextResponse.json({
+      prestamos: prestamos.map(p => ({
+        id: p.id, socio: p.socio, ronda: p.ronda,
+        monto: Number(p.monto), tasaAnual: Number(p.tasaAnual),
+        plazoMeses: p.plazoMeses, fechaInicio: p.fechaInicio,
+        estado: p.estado, saldoActual: Number(p.saldoActual),
+        nextPayment: p.cuotas[0]
+          ? { cuotaId: p.cuotas[0].id, fechaVenc: p.cuotas[0].fechaVenc, cuota: Number(p.cuotas[0].cuota) }
+          : null,
+      })),
     });
-
-    return NextResponse.json({ prestamos: normalized });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Error al listar préstamos" }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? "Error" }, { status: 500 });
   }
 }
 
-// ===== POST: crear préstamo =====
+// ===== POST =====
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<CreatePrestamoBody>;
@@ -116,13 +125,13 @@ export async function POST(req: Request) {
     if (!body?.socioId) throw new Error("socioId es requerido");
     if (!body?.monto || Number(body.monto) <= 0) throw new Error("monto inválido");
     if (body.tasaAnual == null || Number(body.tasaAnual) < 0) throw new Error("tasaAnual inválida");
-    if (!body?.plazoMeses || Number(body.plazoMeses) <= 0) throw new Error("plazoMeses inválido");
+    if (!body?.plazoSemanas || Number(body.plazoSemanas) <= 0) throw new Error("plazoSemanas inválido");
     if (!body?.fechaInicio || !isValidDateOnly(body.fechaInicio)) throw new Error("fechaInicio debe ser YYYY-MM-DD");
 
     const socioId = Number(body.socioId);
     const monto = Number(body.monto);
     const tasaMensualPct = Number(body.tasaAnual);
-    const plazoMeses = Number(body.plazoMeses);
+    const plazoSemanas = Number(body.plazoSemanas);
     const fechaInicio = new Date(`${body.fechaInicio}T00:00:00`);
 
     const socio = await prisma.socio.findUnique({ where: { id: socioId } });
@@ -132,49 +141,47 @@ export async function POST(req: Request) {
       where: { activa: true },
       orderBy: { fechaInicio: "desc" },
     });
-    if (!rondaActiva) throw new Error("No hay ronda activa. Crea/activa una ronda primero.");
+    if (!rondaActiva) throw new Error("No hay ronda activa.");
 
-    // ✅ VALIDACIÓN: plazo no puede exceder meses restantes de la ronda
+    // ✅ Validación: semanas no pueden exceder el fin de la ronda
     if (rondaActiva.fechaFin) {
-      const maxMeses = mesesEntre(fechaInicio, rondaActiva.fechaFin);
-      if (plazoMeses > maxMeses) {
+      const maxSemanas = semanasEntre(fechaInicio, rondaActiva.fechaFin);
+      if (plazoSemanas > maxSemanas) {
         throw new Error(
-          `El plazo (${plazoMeses} meses) excede los meses restantes de la ronda (${maxMeses} meses). ` +
+          `El plazo (${plazoSemanas} sem.) excede las semanas restantes de la ronda (${maxSemanas} sem.). ` +
           `La ronda termina el ${rondaActiva.fechaFin.toISOString().slice(0, 10)}.`
         );
       }
     }
 
-    const schedule = buildSchedule({
-      principal: monto,
-      tasaMensualPct,
-      plazoMeses,
-      startDate: fechaInicio,
-    });
+    const schedule = buildSchedule({ principal: monto, tasaMensualPct, plazoSemanas, startDate: fechaInicio });
+
+    // plazoMeses guardado como número decimal para compatibilidad con el schema
+    const plazoMesesDecimal = Math.round((plazoSemanas / 4) * 100) / 100;
 
     const result = await prisma.$transaction(async (tx) => {
       const prestamo = await tx.prestamo.create({
         data: {
           rondaId: rondaActiva.id,
           socioId,
-          monto: toMoneyDecimal(monto),
-          tasaAnual: new Prisma.Decimal(round2(tasaMensualPct)),
-          plazoMeses,
+          monto: toDecimal(monto),
+          tasaAnual: toDecimal(tasaMensualPct),
+          plazoMeses: Math.ceil(plazoSemanas / 4), // redondeado hacia arriba para el campo Int
           fechaInicio,
           estado: "ACTIVO",
-          saldoActual: toMoneyDecimal(monto),
+          saldoActual: toDecimal(monto),
         },
       });
 
       await tx.prestamoCuota.createMany({
-        data: schedule.map((c) => ({
+        data: schedule.map(c => ({
           prestamoId: prestamo.id,
           numero: c.numero,
           fechaVenc: c.fechaVenc,
-          cuota: toMoneyDecimal(c.cuota),
-          interes: toMoneyDecimal(c.interes),
-          capital: toMoneyDecimal(c.capital),
-          saldo: toMoneyDecimal(c.saldo),
+          cuota: toDecimal(c.cuota),
+          interes: toDecimal(c.interes),
+          capital: toDecimal(c.capital),
+          saldo: toDecimal(c.saldo),
           pagada: false,
         })),
       });
@@ -191,21 +198,21 @@ export async function POST(req: Request) {
 
     if (!result) throw new Error("Error al obtener el préstamo creado");
 
-    const payload = {
-      ...result,
-      monto: Number(result.monto),
-      tasaAnual: Number(result.tasaAnual),
-      saldoActual: Number(result.saldoActual),
-      cuotas: result.cuotas.map((c) => ({
-        ...c,
-        cuota: Number(c.cuota),
-        interes: Number(c.interes),
-        capital: Number(c.capital),
-        saldo: Number(c.saldo),
-      })),
-    };
-
-    return NextResponse.json({ prestamo: payload }, { status: 201 });
+    return NextResponse.json({
+      prestamo: {
+        ...result,
+        monto: Number(result.monto),
+        tasaAnual: Number(result.tasaAnual),
+        saldoActual: Number(result.saldoActual),
+        cuotas: result.cuotas.map(c => ({
+          ...c,
+          cuota: Number(c.cuota),
+          interes: Number(c.interes),
+          capital: Number(c.capital),
+          saldo: Number(c.saldo),
+        })),
+      },
+    }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Error al crear préstamo" }, { status: 400 });
   }
