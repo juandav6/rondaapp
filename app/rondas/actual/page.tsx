@@ -383,7 +383,31 @@ export default function RondaActualPage() {
     }
   }
 
-  if (!estado) return <div className="p-6">{error ?? "Cargando ronda..."}</div>;
+  // ✅ Después
+  if (!estado) return (
+    <div className="flex flex-col items-center justify-center min-h-[420px] p-12 text-center">
+      <div className="inline-flex h-20 w-20 items-center justify-center rounded-full border bg-gray-50 mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 text-gray-300">
+          <path fillRule="evenodd" d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-1-9V7a1 1 0 1 1 2 0v4a1 1 0 0 1-.293.707l-2.5 2.5a1 1 0 0 1-1.414-1.414L11 11Z" clipRule="evenodd"/>
+        </svg>
+      </div>
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">No hay una ronda activa</h2>
+      <p className="text-sm text-gray-500 mb-8 max-w-sm leading-relaxed">
+        Para comenzar, crea una nueva ronda, agrega los participantes y define el fondo de inversión.
+      </p>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        <a href="/rondas/registro_ronda"
+          className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700">
+          + Crear nueva ronda
+        </a>
+        <a href="/rondas/historial"
+          className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
+          Ver historial de rondas
+        </a>
+      </div>
+      {error && <p className="mt-4 text-xs text-red-500">{error}</p>}
+    </div>
+  );
 
   const itemsOrdenados = [...estado.items].sort((a, b) => a.orden - b.orden);
   const idx =
