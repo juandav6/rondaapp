@@ -7,13 +7,8 @@ import Link from "next/link";
 type Socio = { id: number; numeroCuenta: string; nombres: string; apellidos: string };
 
 type CuotaPreview = {
-  numero: number;
-  fechaVenc: string;
-  cuota: number;
-  interes: number;
-  capital: number;
-  saldo: number;
-  esParcial?: boolean;
+  numero: number; fechaVenc: string; cuota: number;
+  interes: number; capital: number; saldo: number; esParcial?: boolean;
 };
 
 type PrestamoCreado = {
@@ -22,6 +17,16 @@ type PrestamoCreado = {
   ronda: { id: number; nombre: string; activa: boolean; fechaInicio: string; fechaFin: string | null };
   socio: { id: number; numeroCuenta: string; nombres: string; apellidos: string };
   cuotas: Array<{ id: number; numero: number; fechaVenc: string; cuota: number; interes: number; capital: number; saldo: number; pagada: boolean; fechaPago: string | null }>;
+};
+
+type RondaInfo = {
+  id: number;
+  nombre: string;
+  fechaFin: string | null;
+  // Fondo de inversión
+  fondoTotal: number;       // suma de cuenta_inversion.monto_invertido
+  fondoPrestado: number;    // suma de prestamos activos
+  fondoDisponible: number;  // fondoTotal - fondoPrestado
 };
 
 const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -43,14 +48,10 @@ const todayDateOnly = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-function round2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
+function round2(n: number) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+  const d = new Date(date); d.setDate(d.getDate() + days); return d;
 }
 
 function semanasHastaFin(fechaInicioStr: string, fechaFinStr: string): number {
@@ -62,20 +63,9 @@ function semanasHastaFin(fechaInicioStr: string, fechaFinStr: string): number {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
 }
 
-/**
- * Plazo en SEMANAS. Cuotas mensuales (cada 4 semanas).
- * Si el plazo tiene semanas sobrantes (no múltiplo de 4),
- * la última cuota lleva interés proporcional.
- *
- * Ejemplo 6 semanas, $300, 2% mensual:
- *   - Cuota 1 (día 28): capital=$150, interés=$6  → total=$156
- *   - Cuota 2 (día 42): capital=$150, interés=$3  → total=$153 (2/4 del mes)
- */
 function buildPreviewSchedule(params: {
-  principal: number;
-  tasaMensualPct: number;
-  plazoSemanas: number;
-  fechaInicio: string;
+  principal: number; tasaMensualPct: number;
+  plazoSemanas: number; fechaInicio: string;
 }): CuotaPreview[] {
   const { principal: P, tasaMensualPct, plazoSemanas, fechaInicio } = params;
   if (!P || P <= 0 || plazoSemanas <= 0 || tasaMensualPct < 0) return [];
@@ -96,36 +86,62 @@ function buildPreviewSchedule(params: {
   for (let i = 1; i <= totalCuotas; i++) {
     const esUltima = i === totalCuotas;
     const esParcial = esUltima && semanasRestantes > 0;
-    const diasEstaCuota = esParcial ? semanasRestantes * 7 : 28;
-    diaAcumulado += diasEstaCuota;
-
+    diaAcumulado += esParcial ? semanasRestantes * 7 : 28;
     const capital = esUltima ? round2(saldo) : capitalPorCuota;
     const interes = esParcial ? round2(interesMensual * (semanasRestantes / 4)) : interesMensual;
     const newSaldo = round2(saldo - capital);
-
-    out.push({
-      numero: i,
-      fechaVenc: addDays(start, diaAcumulado).toISOString(),
-      cuota: round2(capital + interes),
-      interes,
-      capital,
-      saldo: newSaldo,
-      esParcial,
-    });
+    out.push({ numero: i, fechaVenc: addDays(start, diaAcumulado).toISOString(), cuota: round2(capital + interes), interes, capital, saldo: newSaldo, esParcial });
     saldo = newSaldo;
   }
   return out;
 }
 
+// ── Estado vacío cuando no hay ronda activa ────────────────────────────────────
+function SinRondaActiva() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+      <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-orange-50 border-2 border-orange-100 mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-10 w-10 text-orange-300">
+          <path d="M12 7.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z" />
+          <path fillRule="evenodd" d="M1.5 4.875C1.5 3.839 2.34 3 3.375 3h17.25c1.035 0 1.875.84 1.875 1.875v9.75c0 1.036-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 14.625v-9.75ZM8.25 9.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0ZM18.75 9a.75.75 0 0 0-.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 0 0 .75-.75V9.75a.75.75 0 0 0-.75-.75h-.008ZM4.5 9.75A.75.75 0 0 1 5.25 9h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75V9.75Z" clipRule="evenodd" />
+          <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
+        </svg>
+      </div>
+
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">No hay una ronda activa</h2>
+      <p className="text-sm text-gray-500 max-w-sm leading-relaxed mb-8">
+        Los préstamos se otorgan con el fondo de inversión de la ronda activa.
+        Primero debes crear e iniciar una ronda para poder solicitar préstamos.
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Link href="/rondas/registro_ronda"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <path fillRule="evenodd" d="M12 3.75a.75.75 0 0 1 .75.75v6.75h6.75a.75.75 0 0 1 0 1.5h-6.75v6.75a.75.75 0 0 1-1.5 0v-6.75H4.5a.75.75 0 0 1 0-1.5h6.75V4.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+          </svg>
+          Crear nueva ronda
+        </Link>
+        <Link href="/prestamos/pendientes"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border px-5 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+          Ver préstamos existentes
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Page principal ─────────────────────────────────────────────────────────────
 export default function PrestamoSolicitudPage() {
   const [socios, setSocios] = useState<Socio[]>([]);
   const [loadingSocios, setLoadingSocios] = useState(true);
+  const [loadingRonda, setLoadingRonda] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [maxMontoRonda, setMaxMontoRonda] = useState<number | null>(null);
-  const [rondaActivaInfo, setRondaActivaInfo] = useState<{ id: number; nombre: string; fechaFin: string | null } | null>(null);
+  const [rondaInfo, setRondaInfo] = useState<RondaInfo | null>(null);
+  const [sinRonda, setSinRonda] = useState(false);
 
   const [qSocio, setQSocio] = useState("");
   const [socioId, setSocioId] = useState<number | null>(null);
@@ -143,42 +159,78 @@ export default function PrestamoSolicitudPage() {
     let alive = true;
     async function load() {
       try {
+        setLoadingRonda(true);
+        // 1. Obtener ronda activa
         const rRes = await fetch("/api/rondas");
-        if (!rRes.ok) return;
+        if (rRes.status === 204 || !rRes.ok) { if (alive) { setSinRonda(true); setLoadingRonda(false); } return; }
         const rData = await rRes.json();
-        if (!alive || !rData?.id) return;
+        if (!alive || !rData?.id) { setSinRonda(true); setLoadingRonda(false); return; }
+
+        const rondaId = Number(rData.id);
         const fechaFin: string | null = rData.fechaFinISO ?? rData.fechaFinDate ?? null;
-        setRondaActivaInfo({ id: Number(rData.id), nombre: String(rData.nombre ?? "Ronda activa"), fechaFin });
-        for (const url of [`/api/rondas/${rData.id}/resumen`, "/api/rondas/activa/resumen"]) {
-          const r = await fetch(url);
-          if (!r.ok) continue;
-          const d = await r.json().catch(() => null);
-          const t = d?.totalAhorros ?? d?.total_ahorros ?? d?.resumen?.totalAhorros ?? null;
-          if (alive && typeof t === "number") { setMaxMontoRonda(t); return; }
+
+        // 2. Fondo de inversión: suma de cuenta_inversion de esta ronda
+        // Lo obtenemos del endpoint de inversión que creamos antes
+        let fondoTotal = 0;
+        try {
+          const invRes = await fetch(`/api/rondas/${rondaId}/inversion`);
+          if (invRes.ok) {
+            const invData = await invRes.json();
+            fondoTotal = Number(invData?.totalFondo ?? 0);
+          }
+        } catch { /* si no existe el endpoint, queda en 0 */ }
+
+        // 3. Total prestado (préstamos activos de esta ronda)
+        let fondoPrestado = 0;
+        try {
+          const presRes = await fetch("/api/prestamos");
+          if (presRes.ok) {
+            const presData = await presRes.json();
+            const prestamos = Array.isArray(presData?.prestamos) ? presData.prestamos : [];
+            fondoPrestado = prestamos
+              .filter((p: any) => p.ronda?.id === rondaId && p.estado === "ACTIVO")
+              .reduce((acc: number, p: any) => acc + Number(p.monto ?? 0), 0);
+          }
+        } catch { /* silencioso */ }
+
+        if (alive) {
+          setRondaInfo({
+            id: rondaId,
+            nombre: String(rData.nombre ?? "Ronda activa"),
+            fechaFin,
+            fondoTotal,
+            fondoPrestado,
+            fondoDisponible: Math.max(0, fondoTotal - fondoPrestado),
+          });
+          setSinRonda(false);
         }
-      } catch { /* silencioso */ }
+      } catch {
+        if (alive) setSinRonda(true);
+      } finally {
+        if (alive) setLoadingRonda(false);
+      }
     }
     load();
     return () => { alive = false; };
   }, []);
 
   const maxPlazoSemanas = useMemo(() => {
-    if (!rondaActivaInfo?.fechaFin || !fechaInicio) return null;
-    return semanasHastaFin(fechaInicio, rondaActivaInfo.fechaFin);
-  }, [rondaActivaInfo, fechaInicio]);
+    if (!rondaInfo?.fechaFin || !fechaInicio) return null;
+    return semanasHastaFin(fechaInicio, rondaInfo.fechaFin);
+  }, [rondaInfo, fechaInicio]);
 
-  const excedeMaximo = useMemo(() => maxMontoRonda != null && !!monto && monto > maxMontoRonda, [monto, maxMontoRonda]);
-  const excedePlazo = useMemo(() => maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas, [plazoSemanas, maxPlazoSemanas]);
+  const excedeMaximo = useMemo(() => rondaInfo != null && !!monto && monto > rondaInfo.fondoDisponible, [monto, rondaInfo]);
+  const excedePlazo  = useMemo(() => maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas, [plazoSemanas, maxPlazoSemanas]);
 
   const socioSeleccionado = useMemo(() => socios.find(s => s.id === socioId) ?? null, [socios, socioId]);
-  const sociosFiltrados = useMemo(() => {
+  const sociosFiltrados   = useMemo(() => {
     const s = qSocio.trim().toLowerCase();
     if (!s) return socios.slice(0, 30);
     return socios.filter(x => [x.nombres, x.apellidos, x.numeroCuenta].some(v => v.toLowerCase().includes(s))).slice(0, 30);
   }, [socios, qSocio]);
 
   const preview = useMemo(() => buildPreviewSchedule({ principal: monto, tasaMensualPct: tasaAnual, plazoSemanas, fechaInicio }), [monto, tasaAnual, plazoSemanas, fechaInicio]);
-  const totals = useMemo(() => ({ totalInteres: round2(preview.reduce((a, c) => a + c.interes, 0)), totalPagado: round2(preview.reduce((a, c) => a + c.cuota, 0)) }), [preview]);
+  const totals  = useMemo(() => ({ totalInteres: round2(preview.reduce((a, c) => a + c.interes, 0)), totalPagado: round2(preview.reduce((a, c) => a + c.cuota, 0)) }), [preview]);
 
   const plazoInfo = useMemo(() => {
     const m = Math.floor(plazoSemanas / 4), s = plazoSemanas % 4;
@@ -197,46 +249,90 @@ export default function PrestamoSolicitudPage() {
       if (tasaAnual < 0) throw new Error("Interés inválido");
       if (plazoSemanas <= 0) throw new Error("Plazo inválido");
       if (!fechaInicio) throw new Error("Fecha de inicio requerida");
-      if (maxMontoRonda != null && monto > maxMontoRonda) throw new Error(`El monto no puede exceder ${fmtMoney(maxMontoRonda)}.`);
-      if (maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas) throw new Error(`El plazo no puede exceder ${maxPlazoSemanas} semanas (fin: ${fmtDate(rondaActivaInfo?.fechaFin)}).`);
+      if (rondaInfo && monto > rondaInfo.fondoDisponible)
+        throw new Error(`El monto no puede exceder el fondo disponible (${fmtMoney(rondaInfo.fondoDisponible)}).`);
+      if (maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas)
+        throw new Error(`El plazo no puede exceder ${maxPlazoSemanas} semanas (fin: ${fmtDate(rondaInfo?.fechaFin)}).`);
       setSaving(true);
       const res = await fetch("/api/prestamos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ socioId, monto, tasaAnual, plazoSemanas, fechaInicio }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "No se pudo crear el préstamo");
       setPrestamoCreado(data?.prestamo ?? null);
       setSuccess("Préstamo creado correctamente");
+      // Actualizar fondo disponible localmente
+      if (rondaInfo) setRondaInfo(prev => prev ? { ...prev, fondoPrestado: prev.fondoPrestado + monto, fondoDisponible: Math.max(0, prev.fondoDisponible - monto) } : prev);
     } catch (e: any) {
       setError(e?.message ?? "Error");
     } finally { setSaving(false); }
   }
 
+  // ── Loading ──
+  if (loadingRonda) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
+        <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
+      </div>
+    );
+  }
+
+  // ── Sin ronda activa ──
+  if (sinRonda) return <SinRondaActiva />;
+
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="rounded-xl border bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-700">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path d="M12 1.5a10.5 10.5 0 1 0 10.5 10.5A10.512 10.512 0 0 0 12 1.5Zm.75 6a.75.75 0 0 0-1.5 0v4.19c0 .3.18.57.46.69l3.75 1.6a.75.75 0 1 0 .58-1.38l-3.29-1.4Z" /></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path d="M12 7.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z" />
+                <path fillRule="evenodd" d="M1.5 4.875C1.5 3.839 2.34 3 3.375 3h17.25c1.035 0 1.875.84 1.875 1.875v9.75c0 1.036-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 14.625v-9.75ZM8.25 9.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0ZM18.75 9a.75.75 0 0 0-.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 0 0 .75-.75V9.75a.75.75 0 0 0-.75-.75h-.008ZM4.5 9.75A.75.75 0 0 1 5.25 9h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75V9.75Z" clipRule="evenodd" />
+                <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
+              </svg>
             </span>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Solicitud de préstamo</h1>
-              <p className="text-sm text-gray-600">Cuotas mensuales (cada 4 semanas), última cuota proporcional si aplica.</p>
-              {rondaActivaInfo && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Ronda: <strong>{rondaActivaInfo.nombre}</strong>
-                  {rondaActivaInfo.fechaFin && <> · Fin: <strong>{fmtDate(rondaActivaInfo.fechaFin)}</strong></>}
-                  {maxPlazoSemanas != null && <> · Máximo: <strong className="text-orange-700">{maxPlazoSemanas} semanas</strong></>}
-                </p>
-              )}
-              {maxMontoRonda != null && <p className="mt-0.5 text-xs text-gray-500">Límite por ahorros: <strong>{fmtMoney(maxMontoRonda)}</strong></p>}
+              <p className="text-sm text-gray-500">
+                Ronda: <strong className="text-gray-800">{rondaInfo?.nombre}</strong>
+                {rondaInfo?.fechaFin && <> · Fin: <strong className="text-gray-800">{fmtDate(rondaInfo.fechaFin)}</strong></>}
+                {maxPlazoSemanas != null && <> · Plazo máx: <strong className="text-orange-700">{maxPlazoSemanas} sem.</strong></>}
+              </p>
             </div>
           </div>
-          <Link href="/prestamos/pendientes" className="rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Ver pendientes</Link>
+          <Link href="/prestamos/pendientes" className="rounded-lg border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            Ver pendientes
+          </Link>
         </div>
+
+        {/* ── Fondo de inversión ── */}
+        {rondaInfo && (
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-blue-50 border border-blue-100 p-4">
+              <p className="text-xs text-blue-600 font-medium">Fondo total de inversión</p>
+              <p className="mt-1 text-xl font-bold text-blue-800 tabular-nums">{fmtMoney(rondaInfo.fondoTotal)}</p>
+              <p className="text-xs text-blue-500 mt-0.5">Aportado por los socios</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 border border-amber-100 p-4">
+              <p className="text-xs text-amber-600 font-medium">Ya prestado</p>
+              <p className="mt-1 text-xl font-bold text-amber-800 tabular-nums">{fmtMoney(rondaInfo.fondoPrestado)}</p>
+              <p className="text-xs text-amber-500 mt-0.5">Préstamos activos</p>
+            </div>
+            <div className={cn("rounded-lg border p-4", rondaInfo.fondoDisponible > 0 ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-200")}>
+              <p className={cn("text-xs font-medium", rondaInfo.fondoDisponible > 0 ? "text-emerald-600" : "text-gray-500")}>Disponible para préstamos</p>
+              <p className={cn("mt-1 text-xl font-bold tabular-nums", rondaInfo.fondoDisponible > 0 ? "text-emerald-800" : "text-gray-400")}>
+                {fmtMoney(rondaInfo.fondoDisponible)}
+              </p>
+              <p className={cn("text-xs mt-0.5", rondaInfo.fondoDisponible > 0 ? "text-emerald-500" : "text-gray-400")}>
+                {rondaInfo.fondoDisponible > 0 ? "Máximo por préstamo" : "Sin fondos disponibles"}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
@@ -246,13 +342,27 @@ export default function PrestamoSolicitudPage() {
         <div className="rounded-xl border bg-white p-6 shadow-sm flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">✅ Préstamo creado</h2>
-            <p className="mt-1 text-sm text-gray-600">Socio: <strong>{prestamoCreado.socio.nombres} {prestamoCreado.socio.apellidos}</strong> · Monto: <strong>{fmtMoney(prestamoCreado.monto)}</strong></p>
+            <p className="mt-1 text-sm text-gray-600">
+              Socio: <strong>{prestamoCreado.socio.nombres} {prestamoCreado.socio.apellidos}</strong>
+              <span className="mx-2 text-gray-300">·</span>
+              Monto: <strong>{fmtMoney(prestamoCreado.monto)}</strong>
+            </p>
           </div>
-          <Link href="/prestamos/pendientes" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700">Ir a pendientes</Link>
+          <Link href="/prestamos/pendientes" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700">
+            Ir a pendientes
+          </Link>
+        </div>
+      )}
+
+      {/* Sin fondos disponibles */}
+      {rondaInfo && rondaInfo.fondoDisponible <= 0 && rondaInfo.fondoTotal > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          ⚠️ El fondo de préstamos está completamente utilizado. Para otorgar más préstamos, espera a que los actuales sean pagados.
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Form */}
         <section className="rounded-xl border bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Datos del préstamo</h2>
           <div className="grid gap-4">
@@ -265,14 +375,14 @@ export default function PrestamoSolicitudPage() {
                 {loadingSocios ? <div className="p-3 text-sm text-gray-500">Cargando...</div>
                   : sociosFiltrados.length === 0 ? <div className="p-3 text-sm text-gray-500">Sin coincidencias.</div>
                   : <ul className="divide-y">{sociosFiltrados.map(s => (
-                      <li key={s.id}>
-                        <button type="button" onClick={() => setSocioId(s.id)}
-                          className={cn("w-full text-left p-3 hover:bg-gray-50", s.id === socioId && "bg-orange-50")}>
-                          <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
-                          <p className="text-xs text-gray-500 truncate">Cuenta <span className="font-mono">{s.numeroCuenta}</span></p>
-                        </button>
-                      </li>
-                    ))}</ul>}
+                    <li key={s.id}>
+                      <button type="button" onClick={() => setSocioId(s.id)}
+                        className={cn("w-full text-left p-3 hover:bg-gray-50", s.id === socioId && "bg-orange-50")}>
+                        <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
+                        <p className="text-xs text-gray-500 truncate">Cuenta <span className="font-mono">{s.numeroCuenta}</span></p>
+                      </button>
+                    </li>
+                  ))}</ul>}
               </div>
               {socioSeleccionado && <p className="mt-1 text-xs text-gray-500">✓ <strong>{socioSeleccionado.nombres} {socioSeleccionado.apellidos}</strong></p>}
             </div>
@@ -281,8 +391,14 @@ export default function PrestamoSolicitudPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Monto (principal)</label>
               <input type="number" min={0} step="0.01" value={monto || ""} onChange={e => setMonto(Number(e.target.value))} placeholder="0.00"
-                className={cn("w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1", excedeMaximo ? "border-red-300 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200")} />
-              {maxMontoRonda != null && <p className={cn("mt-1 text-xs", excedeMaximo ? "text-red-600 font-medium" : "text-gray-500")}>{excedeMaximo ? "⚠️ Excede el límite. " : ""}Máx: <strong>{fmtMoney(maxMontoRonda)}</strong></p>}
+                className={cn("w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1",
+                  excedeMaximo ? "border-red-300 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200")} />
+              {rondaInfo && (
+                <p className={cn("mt-1 text-xs", excedeMaximo ? "text-red-600 font-medium" : "text-gray-500")}>
+                  {excedeMaximo ? "⚠️ Excede el fondo disponible. " : ""}
+                  Disponible: <strong>{fmtMoney(rondaInfo.fondoDisponible)}</strong>
+                </p>
+              )}
             </div>
 
             {/* Interés + Plazo */}
@@ -291,15 +407,16 @@ export default function PrestamoSolicitudPage() {
                 <label className="mb-1 block text-sm font-medium text-gray-700">Interés mensual (%)</label>
                 <input type="number" min={0} step="0.01" value={tasaAnual} onChange={e => setTasaAnual(Number(e.target.value))}
                   className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200" />
-                <p className="mt-1 text-xs text-gray-400">% sobre el capital total</p>
+                <p className="mt-1 text-xs text-gray-400">% sobre el capital</p>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Plazo (semanas)</label>
                 <input type="number" min={1} step="1" value={plazoSemanas} onChange={e => setPlazoSemanas(Number(e.target.value))}
-                  className={cn("w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1", excedePlazo ? "border-red-300 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200")} />
+                  className={cn("w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1",
+                    excedePlazo ? "border-red-300 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200")} />
                 <p className={cn("mt-1 text-xs", excedePlazo ? "text-red-600 font-medium" : "text-gray-400")}>
                   {excedePlazo ? "⚠️ Excede fin de ronda. " : ""}{plazoInfo}
-                  {maxPlazoSemanas != null && <> · Máx: <strong>{maxPlazoSemanas} sem</strong></>}
+                  {maxPlazoSemanas != null && <> · Máx: <strong>{maxPlazoSemanas}</strong></>}
                 </p>
               </div>
             </div>
@@ -312,13 +429,14 @@ export default function PrestamoSolicitudPage() {
             </div>
 
             <button onClick={crearPrestamo} disabled={formInvalid}
-              className={cn("mt-2 w-full rounded-lg px-4 py-2 text-sm font-medium text-white", formInvalid ? "bg-orange-300 cursor-not-allowed" : "bg-orange-600 hover:bg-orange-700")}>
+              className={cn("mt-2 w-full rounded-lg px-4 py-2 text-sm font-medium text-white",
+                formInvalid ? "bg-orange-300 cursor-not-allowed" : "bg-orange-600 hover:bg-orange-700")}>
               {saving ? "Guardando…" : "Crear préstamo"}
             </button>
           </div>
         </section>
 
-        {/* Preview */}
+        {/* Preview amortización */}
         <section className="rounded-xl border bg-white shadow-sm lg:col-span-2 overflow-hidden">
           <div className="border-b bg-gray-50 p-4 flex items-start justify-between gap-3">
             <div>
@@ -339,41 +457,36 @@ export default function PrestamoSolicitudPage() {
               </span>
             )}
           </div>
-
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
                 <tr>
-                  <th className="px-4 py-3">#</th>
-                  <th className="px-4 py-3">Vence</th>
-                  <th className="px-4 py-3 text-right">Cuota</th>
-                  <th className="px-4 py-3 text-right">Interés</th>
-                  <th className="px-4 py-3 text-right">Capital</th>
-                  <th className="px-4 py-3 text-right">Saldo</th>
+                  <th className="px-4 py-3">#</th><th className="px-4 py-3">Vence</th>
+                  <th className="px-4 py-3 text-right">Cuota</th><th className="px-4 py-3 text-right">Interés</th>
+                  <th className="px-4 py-3 text-right">Capital</th><th className="px-4 py-3 text-right">Saldo</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">Ingresa los datos para generar la amortización.</td></tr>
-                ) : preview.map(c => (
-                  <tr key={c.numero} className={cn("border-t hover:bg-gray-50/70", c.esParcial && "bg-amber-50/50")}>
-                    <td className="px-4 py-3 font-medium text-gray-900">{c.numero}</td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {fmtDate(c.fechaVenc)}
-                      {c.esParcial && <span className="ml-2 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">parcial</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium">{fmtMoney(c.cuota)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-amber-700">{fmtMoney(c.interes)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmtMoney(c.capital)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{fmtMoney(c.saldo)}</td>
-                  </tr>
-                ))}
+                {preview.length === 0
+                  ? <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">Ingresa los datos para generar la amortización.</td></tr>
+                  : preview.map(c => (
+                    <tr key={c.numero} className={cn("border-t hover:bg-gray-50/70", c.esParcial && "bg-amber-50/50")}>
+                      <td className="px-4 py-3 font-medium text-gray-900">{c.numero}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {fmtDate(c.fechaVenc)}
+                        {c.esParcial && <span className="ml-2 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">parcial</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium">{fmtMoney(c.cuota)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-amber-700">{fmtMoney(c.interes)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{fmtMoney(c.capital)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">{fmtMoney(c.saldo)}</td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
-
           <div className="border-t bg-gray-50 p-4 text-xs text-gray-500">
-            Cuota mensual cada 4 semanas · Interés = capital × %mensual · Última cuota proporcional si el plazo tiene semanas sobrantes
+            Cuota mensual cada 4 semanas · Interés = capital × %mensual · Última cuota proporcional si hay semanas sobrantes
           </div>
         </section>
       </div>
