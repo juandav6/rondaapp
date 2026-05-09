@@ -15,47 +15,103 @@ model Socio {
   apellidos       String
   cedula          String          @unique
   edad            Int
-  ahorros         Ahorro[]
   multas          Float           @default(0)
+  saldoAhorros    Decimal         @default(0) @db.Decimal(12, 2) @map("saldo_ahorros")
   fechaCreacion   DateTime        @default(now()) @map("fecha_creacion")
-  aportes         Aporte[]
-  participaciones Participacion[]
-  rondasResponsable Ronda[] @relation("RondaResponsable")
+
+  ahorros                  Ahorro[]
+  aportes                  Aporte[]
+  participaciones          Participacion[]
+  rondasResponsable        Ronda[]                  @relation("RondaResponsable")
   responsabilidadesSemana  ResponsableCobroSemana[]
-  prestamos Prestamo[]
-  prestamosExpress PrestamoExpress[]
+  prestamos                Prestamo[]
+  prestamosExpress         PrestamoExpress[]
+  cuentasInversion         CuentaInversion[]
+  movimientos              MovimientoCuenta[]
 
   @@map("socios")
 }
-model Ronda {
-  id              Int             @id @default(autoincrement())
-  nombre          String
-  montoAporte     Decimal         @db.Decimal(12, 2)
-  activa          Boolean         @default(true)
-  fechaInicio     DateTime        @map("fecha_inicio")
-  fechaFin        DateTime?       @map("fecha_fin")
-  semanaActual    Int             @default(1) @map("semana_actual")
-  intervaloDiasCobro Int          @default(7) @map("intervalo_dias_cobro")
-  aportes         Aporte[]
-  participaciones Participacion[]
-  ahorroObjetivoPorSocio Decimal  @db.Decimal(12,2) @default(0)
-  responsableId   Int?            @map("responsable_id")
-  responsable     Socio?          @relation("RondaResponsable", fields: [responsableId], references: [id])
-  responsablesSemana       ResponsableCobroSemana[]
-  ahorros         Ahorro[]  
-  prestamos Prestamo[]
 
-  // 👇 NUEVO: relación inversa con PrestamoExpress
-  prestamosExpress PrestamoExpress[]
+model Ronda {
+  id                    Int             @id @default(autoincrement())
+  nombre                String
+  montoAporte           Decimal         @db.Decimal(12, 2)
+  activa                Boolean         @default(true)
+  fechaInicio           DateTime        @map("fecha_inicio")
+  fechaFin              DateTime?       @map("fecha_fin")
+  semanaActual          Int             @default(1) @map("semana_actual")
+  intervaloDiasCobro    Int             @default(7) @map("intervalo_dias_cobro")
+  ahorroObjetivoPorSocio Decimal        @db.Decimal(12, 2) @default(0)
+  responsableId         Int?            @map("responsable_id")
+
+  responsable          Socio?                   @relation("RondaResponsable", fields: [responsableId], references: [id])
+  aportes              Aporte[]
+  participaciones      Participacion[]
+  responsablesSemana   ResponsableCobroSemana[]
+  ahorros              Ahorro[]
+  prestamos            Prestamo[]
+  prestamosExpress     PrestamoExpress[]
+  cuentasInversion     CuentaInversion[]
+  movimientos          MovimientoCuenta[]
 
   @@map("rondas")
 }
+
+model CuentaInversion {
+  id                Int      @id @default(autoincrement())
+  rondaId           Int      @map("ronda_id")
+  socioId           Int      @map("socio_id")
+
+  // Monto que el socio transfirió de ahorros → inversión al inicio de la ronda
+  montoInvertido    Decimal  @db.Decimal(12, 2) @map("monto_invertido")
+
+  // % de participación en el fondo total de inversión (se calcula al cerrar el paso 3)
+  porcentajeParticipacion Decimal @db.Decimal(7, 4) @default(0) @map("porcentaje_participacion")
+
+  // Intereses acumulados conforme se pagan cuotas de préstamos
+  interesesAcumulados Decimal @db.Decimal(12, 2) @default(0) @map("intereses_acumulados")
+
+  // true = devuelto al final de la ronda (monto + intereses → saldoAhorros)
+  devuelto          Boolean  @default(false)
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  ronda  Ronda  @relation(fields: [rondaId], references: [id])
+  socio  Socio  @relation(fields: [socioId], references: [id])
+
+  @@unique([rondaId, socioId])
+  @@map("cuenta_inversion")
+}
+
+model MovimientoCuenta {
+  id        Int      @id @default(autoincrement())
+  socioId   Int      @map("socio_id")
+  rondaId   Int?     @map("ronda_id")
+
+  // INVERSION    → transferencia ahorros → cuenta inversión (inicio ronda)
+  // RETIRO       → retiro de saldo de ahorros libre
+  // DEVOLUCION   → devolución al cierre de ronda (inversión + intereses → ahorros)
+  // INTERES      → abono de intereses por cuota pagada
+  tipo      String
+
+  monto     Decimal  @db.Decimal(12, 2)
+  nota      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  socio  Socio  @relation(fields: [socioId], references: [id])
+  ronda  Ronda? @relation(fields: [rondaId], references: [id])
+
+  @@map("movimientos_cuenta")
+}
+
 model Participacion {
   id      Int     @id @default(autoincrement())
   rondaId Int     @map("ronda_id")
   socioId Int     @map("socio_id")
   orden   Int
   activo  Boolean @default(true)
+
   ronda   Ronda   @relation(fields: [rondaId], references: [id])
   socio   Socio   @relation(fields: [socioId], references: [id])
 
@@ -72,31 +128,32 @@ model Aporte {
   monto             Decimal  @db.Decimal(12, 2)
   multa             Decimal  @default(0) @db.Decimal(12, 2)
   fecha             DateTime @default(now())
-  ronda             Ronda    @relation(fields: [rondaId], references: [id])
-  socio             Socio    @relation(fields: [socioId], references: [id])
 
-  // 👇 FK opcional al préstamo express que cubrió este aporte
   prestamoExpressId Int?     @unique
   prestamoExpress   PrestamoExpress? @relation(fields: [prestamoExpressId], references: [id])
+
+  ronda  Ronda  @relation(fields: [rondaId], references: [id])
+  socio  Socio  @relation(fields: [socioId], references: [id])
 
   @@unique([rondaId, socioId, semana])
   @@map("aportes")
 }
-model Ahorro { 
-  id Int @id @default(autoincrement())
-  rondaId Int @map("ronda_id")
-  socioId Int @map("socio_id")
-  semana Int 
-  monto Decimal @db.Decimal(12, 2)
-  observaciones       String  @default("")
-  fecha DateTime @default(now())
-  ronda Ronda @relation(fields: [rondaId], references: [id])
-  socio Socio @relation(fields: [socioId], references: [id])
-  @@unique([rondaId, socioId, semana]) 
-  @@map("ahorros") 
+
+model Ahorro {
+  id            Int      @id @default(autoincrement())
+  rondaId       Int      @map("ronda_id")
+  socioId       Int      @map("socio_id")
+  semana        Int
+  monto         Decimal  @db.Decimal(12, 2)
+  observaciones String   @default("")
+  fecha         DateTime @default(now())
+
+  ronda  Ronda  @relation(fields: [rondaId], references: [id])
+  socio  Socio  @relation(fields: [socioId], references: [id])
+
+  @@unique([rondaId, socioId, semana])
+  @@map("ahorros")
 }
-
-
 
 model ResponsableCobroSemana {
   id        Int      @id @default(autoincrement())
@@ -104,80 +161,70 @@ model ResponsableCobroSemana {
   semana    Int
   socioId   Int      @map("socio_id")
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt      @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  ronda     Ronda    @relation(fields: [rondaId], references: [id])
-  socio     Socio    @relation(fields: [socioId], references: [id])
+  ronda  Ronda  @relation(fields: [rondaId], references: [id])
+  socio  Socio  @relation(fields: [socioId], references: [id])
 
   @@unique([rondaId, semana])
   @@map("responsables_semana")
 }
 
 model PrestamoExpress {
-  id            Int       @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   rondaId       Int
   socioId       Int
   semana        Int
-  principal     Decimal   @db.Decimal(12,2)
-  interes       Decimal   @db.Decimal(12,2)
-  total         Decimal   @db.Decimal(12,2)
-  estado        String    @default("PENDIENTE") // PENDIENTE | PAGADO | CANCELADO
+  principal     Decimal  @db.Decimal(12, 2)
+  interes       Decimal  @db.Decimal(12, 2)
+  total         Decimal  @db.Decimal(12, 2)
+  estado        String   @default("PENDIENTE")
   observaciones String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Relaciones hacia Ronda y Socio
-  ronda Ronda @relation(fields: [rondaId], references: [id])
-  socio Socio @relation(fields: [socioId], references: [id])
-
-  // 👇 lado opuesto (1:1) del vínculo con Aporte
+  ronda  Ronda  @relation(fields: [rondaId], references: [id])
+  socio  Socio  @relation(fields: [socioId], references: [id])
   aporte Aporte?
 
-  // @@map("prestamos_express") // opcional si quieres nombre de tabla custom
+  @@map("prestamos_express")
 }
 
 model Prestamo {
-  id            Int       @id @default(autoincrement())
-  rondaId       Int       @map("ronda_id")
-  socioId       Int       @map("socio_id")
+  id          Int      @id @default(autoincrement())
+  rondaId     Int      @map("ronda_id")
+  socioId     Int      @map("socio_id")
+  monto       Decimal  @db.Decimal(12, 2)
+  tasaAnual   Decimal  @db.Decimal(5, 2)
+  plazoMeses  Int      @map("plazo_meses")
+  fechaInicio DateTime @map("fecha_inicio")
+  estado      String   @default("ACTIVO")
+  saldoActual Decimal  @db.Decimal(12, 2) @map("saldo_actual")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  monto         Decimal   @db.Decimal(12, 2) // principal
-  tasaAnual     Decimal   @db.Decimal(5, 2)  // ejemplo: 24.00
-  plazoMeses    Int       @map("plazo_meses")
-  fechaInicio   DateTime  @map("fecha_inicio")
-
-  estado        String    @default("ACTIVO") // ACTIVO | CANCELADO | MORA
-  saldoActual   Decimal   @db.Decimal(12, 2) @map("saldo_actual")
-
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt      @map("updated_at")
-
-  // relaciones
-  ronda         Ronda     @relation(fields: [rondaId], references: [id])
-  socio         Socio     @relation(fields: [socioId], references: [id])
-  cuotas        PrestamoCuota[]
+  ronda   Ronda           @relation(fields: [rondaId], references: [id])
+  socio   Socio           @relation(fields: [socioId], references: [id])
+  cuotas  PrestamoCuota[]
 
   @@map("prestamos")
 }
 
 model PrestamoCuota {
-  id             Int       @id @default(autoincrement())
-  prestamoId     Int       @map("prestamo_id")
-  numero         Int       // 1..n
+  id         Int      @id @default(autoincrement())
+  prestamoId Int      @map("prestamo_id")
+  numero     Int
+  fechaVenc  DateTime @map("fecha_vencimiento")
+  cuota      Decimal  @db.Decimal(12, 2)
+  interes    Decimal  @db.Decimal(12, 2)
+  capital    Decimal  @db.Decimal(12, 2)
+  saldo      Decimal  @db.Decimal(12, 2)
+  pagada     Boolean  @default(false)
+  fechaPago  DateTime? @map("fecha_pago")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  fechaVenc      DateTime  @map("fecha_vencimiento")
-  cuota          Decimal   @db.Decimal(12, 2)
-  interes        Decimal   @db.Decimal(12, 2)
-  capital        Decimal   @db.Decimal(12, 2)
-  saldo          Decimal   @db.Decimal(12, 2)
-
-  pagada         Boolean   @default(false)
-  fechaPago      DateTime? @map("fecha_pago")
-
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt      @map("updated_at")
-
-  prestamo       Prestamo  @relation(fields: [prestamoId], references: [id])
+  prestamo   Prestamo @relation(fields: [prestamoId], references: [id])
 
   @@unique([prestamoId, numero])
   @@index([prestamoId, pagada, fechaVenc])
