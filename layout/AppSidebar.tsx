@@ -26,13 +26,18 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { icon: <GridIcon />, name: "Dashboard", subItems: [{ name: "Inicio", path: "/" }] },
+  {
+    icon: <GridIcon />,
+    name: "Dashboard",
+    subItems: [{ name: "Inicio", path: "/" }],
+  },
   {
     icon: <UserCircleIcon />,
     name: "Socios",
     subItems: [
       { name: "Lista de socios", path: "/socios" },
       { name: "Detalle por socio", path: "/socios/detalle" },
+      { name: "Retiro de ahorros", path: "/socios/retiros" },
     ],
   },
   {
@@ -41,24 +46,23 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Registrar ronda", path: "/rondas/registro_ronda" },
       { name: "Ronda actual", path: "/rondas/actual" },
-      { name: "Historial de rondas", path: "/historial" },
+      { name: "Historial de rondas", path: "/rondas/historial" },
     ],
   },
   {
     icon: <TableIcon />,
     name: "Préstamos",
     subItems: [
-       { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
-      { name: "Aprobación y pagos", path: "/prestamos/gestion" },
-      { name: "Prestamos pendientes", path: "/prestamos/pendientes" },
+      { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
+      { name: "Préstamos pendientes", path: "/prestamos/pendientes" },
       { name: "Historial por socio", path: "/prestamos/historial" },
-      { name: "Reportes prestamos", path: "/prestamos/resumen" },
+      { name: "Reportes préstamos", path: "/prestamos/resumen" },
     ],
   },
   {
     icon: <BoxCubeIcon />,
     name: "Ahorros",
-   subItems: [
+    subItems: [
       { name: "Registro de ahorros", path: "/ahorros/registro" },
       { name: "Resumen por socio", path: "/ahorros/resumen" },
       { name: "Reportes de beneficios", path: "/ahorros/reportes" },
@@ -94,6 +98,15 @@ const AppSidebar: React.FC = () => {
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isActive = useCallback((path: string) => path === pathname, [pathname]);
+
+  // Auto-abrir el submenu del item activo al cargar
+  useEffect(() => {
+    navItems.forEach((nav, index) => {
+      if (nav.subItems?.some((sub) => sub.path === pathname)) {
+        setOpenSubmenu({ type: "main", index });
+      }
+    });
+  }, [pathname]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
@@ -133,11 +146,15 @@ const AppSidebar: React.FC = () => {
               >
                 {nav.icon}
               </span>
-              {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
+              {(isExpanded || isHovered || isMobileOpen) && (
+                <span className="menu-item-text">{nav.name}</span>
+              )}
               {(isExpanded || isHovered || isMobileOpen) && (
                 <ChevronDownIcon
                   className={`ml-auto h-5 w-5 transition-transform duration-200 ${
-                    openSubmenu?.type === menuType && openSubmenu?.index === index ? "rotate-180 text-brand-500" : ""
+                    openSubmenu?.type === menuType && openSubmenu?.index === index
+                      ? "rotate-180 text-brand-500"
+                      : ""
                   }`}
                 />
               )}
@@ -151,16 +168,16 @@ const AppSidebar: React.FC = () => {
                 <span className={`${isActive(nav.path) ? "menu-item-icon-active" : "menu-item-icon-inactive"}`}>
                   {nav.icon}
                 </span>
-                {(isExpanded || isHovered || isMobileOpen) && <span className="menu-item-text">{nav.name}</span>}
+                {(isExpanded || isHovered || isMobileOpen) && (
+                  <span className="menu-item-text">{nav.name}</span>
+                )}
               </Link>
             )
           )}
 
           {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
             <div
-              ref={(el) => {
-                subMenuRefs.current[`${menuType}-${index}`] = el;
-              }}
+              ref={(el) => { subMenuRefs.current[`${menuType}-${index}`] = el; }}
               className="overflow-hidden transition-all duration-300"
               style={{
                 height:
@@ -181,20 +198,12 @@ const AppSidebar: React.FC = () => {
                       {sub.name}
                       <span className="ml-auto flex items-center gap-1">
                         {sub.new && (
-                          <span
-                            className={`menu-dropdown-badge ${
-                              isActive(sub.path) ? "menu-dropdown-badge-active" : "menu-dropdown-badge-inactive"
-                            }`}
-                          >
+                          <span className={`menu-dropdown-badge ${isActive(sub.path) ? "menu-dropdown-badge-active" : "menu-dropdown-badge-inactive"}`}>
                             new
                           </span>
                         )}
                         {sub.pro && (
-                          <span
-                            className={`menu-dropdown-badge ${
-                              isActive(sub.path) ? "menu-dropdown-badge-active" : "menu-dropdown-badge-inactive"
-                            }`}
-                          >
+                          <span className={`menu-dropdown-badge ${isActive(sub.path) ? "menu-dropdown-badge-active" : "menu-dropdown-badge-inactive"}`}>
                             pro
                           </span>
                         )}
@@ -212,7 +221,6 @@ const AppSidebar: React.FC = () => {
 
   return (
     <>
-      {/* hace que el contenedor scrollable funcione */}
       <aside
         className={`fixed left-0 z-50 border-r border-gray-200 bg-white text-gray-900 dark:border-gray-800 dark:bg-gray-900 dark:text-white
         transition-all duration-300 ease-in-out
@@ -230,13 +238,7 @@ const AppSidebar: React.FC = () => {
             {isExpanded || isHovered || isMobileOpen ? (
               <>
                 <Image className="dark:hidden" src="/images/logo/logoappweb.jpeg" alt="Logo" width={150} height={40} />
-                <Image
-                  className="hidden dark:block"
-                  src="/images/logo/logoappweb.jpeg"
-                  alt="Logo"
-                  width={150}
-                  height={40}
-                />
+                <Image className="hidden dark:block" src="/images/logo/logoappweb.jpeg" alt="Logo" width={150} height={40} />
               </>
             ) : (
               <Image src="/images/logo/logoappweb.jpeg" alt="Logo" width={32} height={32} />
@@ -248,11 +250,7 @@ const AppSidebar: React.FC = () => {
           <nav className="mb-6">
             <div className="flex flex-col gap-4">
               <div>
-                <h2
-                  className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${
-                    !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-                  }`}
-                >
+                <h2 className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"}`}>
                   {isExpanded || isHovered || isMobileOpen ? "Menu" : <HorizontaLDots />}
                 </h2>
                 {renderMenuItems(navItems, "main")}
