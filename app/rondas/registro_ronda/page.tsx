@@ -300,7 +300,7 @@ export default function RegistrarRondaPage() {
         : "-");
 
   // totales inversión
-  const totalFondoInversion = Object.values(aportesInversion).reduce((a, b) => a + b, 0);
+  const totalFondoInversion = Object.values(aportesInversion).reduce((a, b) => a + Number(b || 0), 0);
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -602,10 +602,17 @@ export default function RegistrarRondaPage() {
                             {excede && <span className="text-xs text-red-600 font-medium">⚠️ Excede</span>}
                             <input
                               type="number" min={0} max={saldo} step="0.01"
-                              value={aporte || ""}
+                              value={aporte ?? ""}
                               onChange={e => {
-                                const v = Math.min(Number(e.target.value), saldo);
-                                setAportesInversion(prev => ({ ...prev, [s.id]: v }));
+                                const raw = e.target.value;
+                                const num = raw === "" ? 0 : Number(raw);
+                              
+                                const v = Math.min(num, saldo);
+                              
+                                setAportesInversion(prev => ({
+                                  ...prev,
+                                  [s.id]: v,
+                                }));
                               }}
                               className={cn(
                                 "w-32 rounded-md border px-2 py-1.5 text-right text-sm tabular-nums focus:outline-none focus:ring-2",
