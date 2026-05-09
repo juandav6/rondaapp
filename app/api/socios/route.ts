@@ -18,6 +18,7 @@ export async function GET(req: Request) {
       cedula: true,
       edad: true,
       multas: true, // multas "extra" de Socio
+      saldoAhorros: true,
     },
     orderBy: { id: "asc" },
   });
