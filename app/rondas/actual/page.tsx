@@ -173,9 +173,7 @@ export default function RondaActualPage() {
       const it = estado.items.find((x) => x.socioId === socioId);
       const objetivo = Number(estado.ronda.ahorroObjetivoPorSocio ?? 0);
       const acum = Number(it?.ahorroAcumulado ?? 0);
-      const restante = Math.max(objetivo - acum, 0);
       if (monto <= 0) throw new Error("El monto de ahorro debe ser mayor a 0");
-      if (monto > restante) throw new Error(`No puedes ahorrar más de ${restante.toFixed(2)} esta ronda`);
 
       setSaving(socioId);
 
@@ -614,8 +612,8 @@ export default function RondaActualPage() {
                       step="0.01"
                       className="w-28 rounded border px-2 py-1 text-right disabled:bg-gray-100"
                       disabled={disabledAhorro}
-                      value={valorInput}
-                      onChange={(e) => setAhorroInput(it.socioId, Number(e.target.value || 0))}
+                      value={valorInput === 0 ? "" : valorInput}
+                      onChange={(e) => setAhorroInput(it.socioId, e.target.value === "" ? 0 : Number(e.target.value))}
                       placeholder="0.00"
                     />
                   </td>
