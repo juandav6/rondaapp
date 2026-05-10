@@ -17,7 +17,7 @@ export async function POST(req: Request | NextRequest, { params }: any) {
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
-    select: { id: true },
+    select: { id: true, nombre: true },
   });
   if (!ronda) {
     return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
@@ -29,13 +29,25 @@ export async function POST(req: Request | NextRequest, { params }: any) {
     return NextResponse.json({ error: "Ya registraste un ahorro esta semana" }, { status: 400 });
   }
 
-  // Registrar ahorro Y actualizar saldoAhorros en una sola transacción
   const montoDecimal = new Prisma.Decimal(monto);
 
-  const [ahorro, socioActualizado] = await prisma.$transaction([
+  // Transacción: crear ahorro + movimiento + actualizar saldo
+  const [ahorro, , socioActualizado] = await prisma.$transaction([
+    // 1. Registrar en tabla ahorros
     prisma.ahorro.create({
       data: { rondaId, socioId, semana, monto: montoDecimal },
     }),
+    // 2. Crear movimiento visible en el detalle del socio
+    prisma.movimientoCuenta.create({
+      data: {
+        socioId,
+        rondaId,
+        tipo: "AHORRO",
+        monto: montoDecimal,
+        nota: `Ahorro semana ${semana} · ${ronda.nombre}`,
+      },
+    }),
+    // 3. Incrementar saldoAhorros del socio
     prisma.socio.update({
       where: { id: socioId },
       data: { saldoAhorros: { increment: montoDecimal } },
