@@ -230,3 +230,17 @@ model PrestamoCuota {
   @@index([prestamoId, pagada, fechaVenc])
   @@map("prestamo_cuotas")
 }
+
+model Usuario {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  nombre       String
+  rol          String   @default("ADMIN")  // ADMIN | VIEWER
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+ 
+  @@map("usuarios")
+}
+
