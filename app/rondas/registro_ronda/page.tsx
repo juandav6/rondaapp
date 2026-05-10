@@ -45,38 +45,40 @@ export default function RegistrarRondaPage() {
   const [paso, setPaso] = useState<Paso>(1);
   const [socios, setSocios] = useState<Socio[]>([]);
   const [q, setQ] = useState("");
-  const [seleccion, setSeleccion] = useState<number[]>([]);   // socios en la ronda
-  const [orden, setOrden] = useState<number[]>([]);           // orden de recepción
+  const [seleccion, setSeleccion] = useState<number[]>([]);
+  const [orden, setOrden] = useState<number[]>([]);
   const [aportesInversion, setAportesInversion] = useState<Record<number, number>>({});
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
   const [rondaCreada, setRondaCreada] = useState<{ id: number; nombre: string } | null>(null);
+  const [rondaActivaExistente, setRondaActivaExistente] = useState<{ id: number; nombre: string } | null>(null);
+  const [checkingRonda, setCheckingRonda] = useState(true);
 
   const [form, setForm] = useState<CrearRondaPayload>({
     montoAporte: 0, fechaInicio: "", ahorroObjetivo: 0, intervaloDiasCobro: 7,
   });
 
   const fechaRef = useRef<HTMLInputElement>(null);
-    const [rondaActivaExistente, setRondaActivaExistente] = useState<{ id: number; nombre: string } | null>(null);
-    const [checkingRonda, setCheckingRonda] = useState(true);
-    
-    useEffect(() => {
-      fetch("/api/socios").then(r => r.json()).then(l => setSocios(Array.isArray(l) ? l : [])).catch(() => setSocios([]));
-    }, []);
-    
-    useEffect(() => {
-      fetch("/api/rondas")
-        .then(r => r.status === 204 ? null : r.json())
-        .then(d => { if (d?.id) setRondaActivaExistente({ id: d.id, nombre: d.nombre }); })
-        .catch(() => {})
-        .finally(() => setCheckingRonda(false));
-    }, []);
-  // Socios con saldo > 0 (para el fondo de inversión)
+
+  useEffect(() => {
+    fetch("/api/socios")
+      .then(r => r.json())
+      .then(l => setSocios(Array.isArray(l) ? l : []))
+      .catch(() => setSocios([]));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/rondas")
+      .then(r => r.status === 204 ? null : r.json())
+      .then(d => { if (d?.id) setRondaActivaExistente({ id: d.id, nombre: d.nombre }); })
+      .catch(() => {})
+      .finally(() => setCheckingRonda(false));
+  }, []);
+
   const sociosConSaldo = useMemo(() => socios.filter(s => (s.saldoAhorros ?? 0) > 0), [socios]);
 
-  // Al pasar al paso 2, inicializar inversiones con el saldoAhorros de cada socio con saldo
   useEffect(() => {
     if (paso !== 2) return;
     setAportesInversion(prev => {
@@ -96,21 +98,15 @@ export default function RegistrarRondaPage() {
 
   const participantesOrdenados = orden.map(id => socios.find(s => s.id === id)).filter(Boolean) as Socio[];
   const totalFondo = sociosConSaldo.reduce((a, s) => a + Number(aportesInversion[s.id] ?? 0), 0);
-
-  // Set de socios que participan en la ronda (para etiquetas)
   const sociosEnRondaSet = useMemo(() => new Set(seleccion), [seleccion]);
 
   const toggleSocio = (id: number) => {
     setSeleccion(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     setOrden(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
-  const seleccionarTodos = () => {
-    const ids = sociosFiltrados.map(s => s.id);
-    setSeleccion(ids); setOrden(ids);
-  };
+  const seleccionarTodos = () => { const ids = sociosFiltrados.map(s => s.id); setSeleccion(ids); setOrden(ids); };
   const limpiarSeleccion = () => { setSeleccion([]); setOrden([]); };
 
-  // drag & drop
   function onDragStart(i: number) { setDragIndex(i); }
   function onDragOver(e: React.DragEvent) { e.preventDefault(); }
   function onDrop(i: number) {
@@ -137,7 +133,6 @@ export default function RegistrarRondaPage() {
     ? addDays(form.fechaInicio, Math.max(0, orden.length - 1) * form.intervaloDiasCobro)
     : null;
 
-  // ── CREAR RONDA ───────────────────────────────────────────────────────────
   async function crearRonda() {
     try {
       setCreando(true); setError(null);
@@ -162,7 +157,6 @@ export default function RegistrarRondaPage() {
       });
       if (!r3.ok) { const d = await r3.json(); throw new Error(d?.error || "Error al guardar el orden"); }
 
-      // Inversiones: todos los socios con aporte > 0
       const aportesConMonto = sociosConSaldo.filter(s => (aportesInversion[s.id] ?? 0) > 0);
       if (aportesConMonto.length > 0) {
         const r4 = await fetch(`/api/rondas/${ronda.id}/inversion`, {
@@ -183,7 +177,7 @@ export default function RegistrarRondaPage() {
     }
   }
 
-  // ── ÉXITO ─────────────────────────────────────────────────────────────────
+  // ── Ronda creada exitosamente ─────────────────────────────────────────────
   if (rondaCreada) {
     return (
       <div className="p-6">
@@ -204,50 +198,53 @@ export default function RegistrarRondaPage() {
     );
   }
 
-  return (
-    // Bloquear si ya hay ronda activa
-    if (checkingRonda) {
-      return (
-        <div className="p-6 space-y-4">
-          <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
-          <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
-        </div>
-      );
-    }
-    
-    if (rondaActivaExistente) {
-      return (
-        <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-10 max-w-md w-full shadow-sm">
-            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 mb-5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 text-amber-600">
-                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
+  // ── Verificando si hay ronda activa ───────────────────────────────────────
+  if (checkingRonda) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
+        <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
+      </div>
+    );
+  }
+
+  // ── Ya existe una ronda activa ────────────────────────────────────────────
+  if (rondaActivaExistente) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-10 max-w-md w-full shadow-sm">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 mb-5">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 text-amber-600">
+              <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-amber-900 mb-2">Ya existe una ronda activa</h2>
+          <p className="text-sm text-amber-700 mb-1">
+            La ronda <strong>{rondaActivaExistente.nombre}</strong> está actualmente en curso.
+          </p>
+          <p className="text-xs text-amber-600 mb-8">
+            Solo puede haber una ronda activa a la vez. Debes cerrarla antes de crear una nueva.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Link href="/rondas/actual"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-700">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm4.28 10.28a.75.75 0 0 0 0-1.06l-3-3a.75.75 0 1 0-1.06 1.06l1.72 1.72H8.25a.75.75 0 0 0 0 1.5h5.69l-1.72 1.72a.75.75 0 1 0 1.06 1.06l3-3Z" clipRule="evenodd" />
               </svg>
-            </div>
-            <h2 className="text-xl font-bold text-amber-900 mb-2">Ya existe una ronda activa</h2>
-            <p className="text-sm text-amber-700 mb-1">
-              La ronda <strong>{rondaActivaExistente.nombre}</strong> está actualmente en curso.
-            </p>
-            <p className="text-xs text-amber-600 mb-8">
-              Solo puede haber una ronda activa a la vez. Debes cerrarla antes de crear una nueva.
-            </p>
-            <div className="flex flex-col gap-3">
-              <Link href="/rondas/actual"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-700">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                  <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm4.28 10.28a.75.75 0 0 0 0-1.06l-3-3a.75.75 0 1 0-1.06 1.06l1.72 1.72H8.25a.75.75 0 0 0 0 1.5h5.69l-1.72 1.72a.75.75 0 1 0 1.06 1.06l3-3Z" clipRule="evenodd" />
-                </svg>
-                Ir a la ronda activa
-              </Link>
-              <Link href="/rondas/historial"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 px-5 py-2.5 text-sm text-amber-700 hover:bg-amber-100">
-                Ver historial de rondas
-              </Link>
-            </div>
+              Ir a la ronda activa
+            </Link>
+            <Link href="/rondas/historial"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 px-5 py-2.5 text-sm text-amber-700 hover:bg-amber-100">
+              Ver historial de rondas
+            </Link>
           </div>
         </div>
-      );
-    }
+      </div>
+    );
+  }
+
+  // ── Flujo normal ──────────────────────────────────────────────────────────
+  return (
     <div className="space-y-6 p-6">
       {/* Stepper */}
       <div className="rounded-xl border bg-white px-6 py-4 shadow-sm">
@@ -396,7 +393,7 @@ export default function RegistrarRondaPage() {
         </>
       )}
 
-      {/* ══ PASO 2: Fondo de inversión ══ */}
+      {/* ══ PASO 2 ══ */}
       {paso === 2 && (
         <>
           <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -432,16 +429,12 @@ export default function RegistrarRondaPage() {
                   const max: Record<number, number> = {};
                   sociosConSaldo.forEach(s => { max[s.id] = s.saldoAhorros ?? 0; });
                   setAportesInversion(max);
-                }} className="rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
-                  Máximo a todos
-                </button>
+                }} className="rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">Máximo a todos</button>
                 <button onClick={() => {
                   const c: Record<number, number> = {};
                   sociosConSaldo.forEach(s => { c[s.id] = 0; });
                   setAportesInversion(c);
-                }} className="rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
-                  Limpiar
-                </button>
+                }} className="rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">Limpiar</button>
               </div>
             </div>
 
@@ -464,28 +457,18 @@ export default function RegistrarRondaPage() {
                     const pct = totalFondo > 0 ? (aporte / totalFondo) * 100 : 0;
                     const excede = aporte > saldo;
                     const enRonda = sociosEnRondaSet.has(s.id);
-
                     return (
                       <tr key={s.id} className={cn("border-t", excede && "bg-red-50/50")}>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
-                                {enRonda ? (
-                                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                                    En ronda
-                                  </span>
-                                ) : (
-                                  <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                                    Solo fondo
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-400 font-mono">{s.numeroCuenta}</p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
+                              {enRonda
+                                ? <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" />En ronda</span>
+                                : <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />Solo fondo</span>
+                              }
                             </div>
+                            <p className="text-xs text-gray-400 font-mono">{s.numeroCuenta}</p>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-medium text-emerald-700">{fmt(saldo)}</td>
@@ -526,7 +509,6 @@ export default function RegistrarRondaPage() {
                 </tfoot>
               </table>
             </div>
-
             <div className="border-t bg-blue-50 px-5 py-3 flex items-start gap-6 text-xs text-blue-700">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-flex h-2 w-2 rounded-full bg-blue-500" />
@@ -551,7 +533,7 @@ export default function RegistrarRondaPage() {
         </>
       )}
 
-      {/* ══ PASO 3: Resumen ══ */}
+      {/* ══ PASO 3 ══ */}
       {paso === 3 && (
         <>
           <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -577,7 +559,6 @@ export default function RegistrarRondaPage() {
             ))}
           </div>
 
-          {/* Orden */}
           <div className="rounded-xl border bg-white p-5 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Orden de recepción ({seleccion.length} socios)</h3>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -593,7 +574,6 @@ export default function RegistrarRondaPage() {
             </div>
           </div>
 
-          {/* Fondo */}
           {totalFondo > 0 && (
             <div className="rounded-xl border bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">
