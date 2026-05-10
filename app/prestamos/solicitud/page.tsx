@@ -23,10 +23,10 @@ type RondaInfo = {
   id: number;
   nombre: string;
   fechaFin: string | null;
-  // Fondo de inversión
-  fondoTotal: number;       // suma de cuenta_inversion.monto_invertido
-  fondoPrestado: number;    // suma de prestamos activos
-  fondoDisponible: number;  // fondoTotal - fondoPrestado
+  totalParticipantes: number;  // ← nuevo
+  fondoTotal: number;
+  fondoPrestado: number;
+  fondoDisponible: number;
 };
 
 const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -151,26 +151,33 @@ export default function PrestamoSolicitudPage() {
   const [fechaInicio, setFechaInicio] = useState<string>(todayDateOnly());
   const [prestamoCreado, setPrestamoCreado] = useState<PrestamoCreado | null>(null);
 
-  useEffect(() => {
+  
     fetch("/api/socios").then(r => r.json()).then(d => setSocios(Array.isArray(d) ? d : [])).catch(() => setSocios([])).finally(() => setLoadingSocios(false));
   }, []);
 
-  useEffect(() => {
+  
     let alive = true;
     async function load() {
       try {
         setLoadingRonda(true);
-        // 1. Obtener ronda activa
         const rRes = await fetch("/api/rondas");
-        if (rRes.status === 204 || !rRes.ok) { if (alive) { setSinRonda(true); setLoadingRonda(false); } return; }
+        if (rRes.status === 204 || !rRes.ok) {
+          if (alive) { setSinRonda(true); setLoadingRonda(false); }
+          return;
+        }
         const rData = await rRes.json();
-        if (!alive || !rData?.id) { setSinRonda(true); setLoadingRonda(false); return; }
-
+        if (!alive || !rData?.id) {
+          setSinRonda(true); setLoadingRonda(false); return;
+        }
+    
         const rondaId = Number(rData.id);
         const fechaFin: string | null = rData.fechaFinISO ?? rData.fechaFinDate ?? null;
-
-        // 2. Fondo de inversión: suma de cuenta_inversion de esta ronda
-        // Lo obtenemos del endpoint de inversión que creamos antes
+    
+        // Máximo de semanas = número de participantes (semanas de la ronda)
+        const totalParticipantes = Array.isArray(rData.participaciones)
+          ? rData.participaciones.length
+          : 0;
+    
         let fondoTotal = 0;
         try {
           const invRes = await fetch(`/api/rondas/${rondaId}/inversion`);
@@ -178,9 +185,8 @@ export default function PrestamoSolicitudPage() {
             const invData = await invRes.json();
             fondoTotal = Number(invData?.totalFondo ?? 0);
           }
-        } catch { /* si no existe el endpoint, queda en 0 */ }
-
-        // 3. Total prestado (préstamos activos de esta ronda)
+        } catch { }
+    
         let fondoPrestado = 0;
         try {
           const presRes = await fetch("/api/prestamos");
@@ -191,13 +197,14 @@ export default function PrestamoSolicitudPage() {
               .filter((p: any) => p.ronda?.id === rondaId && p.estado === "ACTIVO")
               .reduce((acc: number, p: any) => acc + Number(p.monto ?? 0), 0);
           }
-        } catch { /* silencioso */ }
-
+        } catch { }
+    
         if (alive) {
           setRondaInfo({
             id: rondaId,
             nombre: String(rData.nombre ?? "Ronda activa"),
             fechaFin,
+            totalParticipantes,  // ← nuevo campo
             fondoTotal,
             fondoPrestado,
             fondoDisponible: Math.max(0, fondoTotal - fondoPrestado),
@@ -215,9 +222,9 @@ export default function PrestamoSolicitudPage() {
   }, []);
 
   const maxPlazoSemanas = useMemo(() => {
-    if (!rondaInfo?.fechaFin || !fechaInicio) return null;
-    return semanasHastaFin(fechaInicio, rondaInfo.fechaFin);
-  }, [rondaInfo, fechaInicio]);
+    if (!rondaInfo?.totalParticipantes) return null;
+    return rondaInfo.totalParticipantes;
+  }, [rondaInfo]);
 
   const excedeMaximo = useMemo(() => rondaInfo != null && !!monto && monto > rondaInfo.fondoDisponible, [monto, rondaInfo]);
   const excedePlazo  = useMemo(() => maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas, [plazoSemanas, maxPlazoSemanas]);
@@ -300,7 +307,10 @@ export default function PrestamoSolicitudPage() {
               <p className="text-sm text-gray-500">
                 Ronda: <strong className="text-gray-800">{rondaInfo?.nombre}</strong>
                 {rondaInfo?.fechaFin && <> · Fin: <strong className="text-gray-800">{fmtDate(rondaInfo.fechaFin)}</strong></>}
-                {maxPlazoSemanas != null && <> · Plazo máx: <strong className="text-orange-700">{maxPlazoSemanas} sem.</strong></>}
+                {maxPlazoSemanas != null && (
+                  <> · Plazo máx: <strong className="text-orange-700">{maxPlazoSemanas} sem.</strong>
+                  <span className="text-gray-400"> ({rondaInfo?.totalParticipantes} participantes)</span></>
+                )}
               </p>
             </div>
           </div>
