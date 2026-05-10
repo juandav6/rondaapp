@@ -14,7 +14,6 @@ export default function DefaultLayout({ children }: { children: React.ReactNode 
     [isExpanded, isHovered]
   );
 
-  // Rutas que NO deben mostrar sidebar/header
   const isAuthPage = pathname === "/login" || pathname?.startsWith("/login");
 
   if (isAuthPage) {
@@ -24,14 +23,16 @@ export default function DefaultLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       <AppSidebar />
+      {/* Móvil: sin padding (sidebar flota encima)
+          Desktop ≥lg: padding dinámico según ancho sidebar */}
       <div
-        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out"
-        style={{ paddingLeft: isMobileOpen ? 0 : sidebarWidth }}
+        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out lg:pl-[var(--sidebar-w)]"
+        style={{ ["--sidebar-w" as any]: `${sidebarWidth}px` }}
       >
         <div className="sticky top-0 z-40">
           <AppHeader />
         </div>
-        <main className="p-6">{children}</main>
+        <main className="p-3 sm:p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );
