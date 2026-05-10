@@ -59,11 +59,20 @@ export default function RegistrarRondaPage() {
   });
 
   const fechaRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    fetch("/api/socios").then(r => r.json()).then(l => setSocios(Array.isArray(l) ? l : [])).catch(() => setSocios([]));
-  }, []);
-
+    const [rondaActivaExistente, setRondaActivaExistente] = useState<{ id: number; nombre: string } | null>(null);
+    const [checkingRonda, setCheckingRonda] = useState(true);
+    
+    useEffect(() => {
+      fetch("/api/socios").then(r => r.json()).then(l => setSocios(Array.isArray(l) ? l : [])).catch(() => setSocios([]));
+    }, []);
+    
+    useEffect(() => {
+      fetch("/api/rondas")
+        .then(r => r.status === 204 ? null : r.json())
+        .then(d => { if (d?.id) setRondaActivaExistente({ id: d.id, nombre: d.nombre }); })
+        .catch(() => {})
+        .finally(() => setCheckingRonda(false));
+    }, []);
   // Socios con saldo > 0 (para el fondo de inversión)
   const sociosConSaldo = useMemo(() => socios.filter(s => (s.saldoAhorros ?? 0) > 0), [socios]);
 
@@ -196,6 +205,49 @@ export default function RegistrarRondaPage() {
   }
 
   return (
+    // Bloquear si ya hay ronda activa
+    if (checkingRonda) {
+      return (
+        <div className="p-6 space-y-4">
+          <div className="h-32 animate-pulse rounded-xl bg-gray-100" />
+          <div className="h-64 animate-pulse rounded-xl bg-gray-100" />
+        </div>
+      );
+    }
+    
+    if (rondaActivaExistente) {
+      return (
+        <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-10 max-w-md w-full shadow-sm">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 mb-5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8 text-amber-600">
+                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-amber-900 mb-2">Ya existe una ronda activa</h2>
+            <p className="text-sm text-amber-700 mb-1">
+              La ronda <strong>{rondaActivaExistente.nombre}</strong> está actualmente en curso.
+            </p>
+            <p className="text-xs text-amber-600 mb-8">
+              Solo puede haber una ronda activa a la vez. Debes cerrarla antes de crear una nueva.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Link href="/rondas/actual"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-3 text-sm font-semibold text-white hover:bg-amber-700">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                  <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm4.28 10.28a.75.75 0 0 0 0-1.06l-3-3a.75.75 0 1 0-1.06 1.06l1.72 1.72H8.25a.75.75 0 0 0 0 1.5h5.69l-1.72 1.72a.75.75 0 1 0 1.06 1.06l3-3Z" clipRule="evenodd" />
+                </svg>
+                Ir a la ronda activa
+              </Link>
+              <Link href="/rondas/historial"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 px-5 py-2.5 text-sm text-amber-700 hover:bg-amber-100">
+                Ver historial de rondas
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
     <div className="space-y-6 p-6">
       {/* Stepper */}
       <div className="rounded-xl border bg-white px-6 py-4 shadow-sm">
