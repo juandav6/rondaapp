@@ -23,7 +23,7 @@ type RondaInfo = {
   id: number;
   nombre: string;
   fechaFin: string | null;
-  totalParticipantes: number;  // ← nuevo
+  totalParticipantes: number;
   fondoTotal: number;
   fondoPrestado: number;
   fondoDisponible: number;
@@ -52,15 +52,6 @@ function round2(n: number) { return Math.round((n + Number.EPSILON) * 100) / 100
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date); d.setDate(d.getDate() + days); return d;
-}
-
-function semanasHastaFin(fechaInicioStr: string, fechaFinStr: string): number {
-  const inicio = new Date(`${fechaInicioStr}T12:00:00Z`);
-  const fin = new Date(fechaFinStr);
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) return 0;
-  const diffMs = fin.getTime() - inicio.getTime();
-  if (diffMs <= 0) return 0;
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
 }
 
 function buildPreviewSchedule(params: {
@@ -96,7 +87,6 @@ function buildPreviewSchedule(params: {
   return out;
 }
 
-// ── Estado vacío cuando no hay ronda activa ────────────────────────────────────
 function SinRondaActiva() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
@@ -107,20 +97,15 @@ function SinRondaActiva() {
           <path d="M2.25 18a.75.75 0 0 0 0 1.5c5.4 0 10.63.722 15.6 2.075 1.19.324 2.4-.558 2.4-1.82V18.75a.75.75 0 0 0-.75-.75H2.25Z" />
         </svg>
       </div>
-
       <h2 className="text-xl font-semibold text-gray-900 mb-2">No hay una ronda activa</h2>
       <p className="text-sm text-gray-500 max-w-sm leading-relaxed mb-8">
         Los préstamos se otorgan con el fondo de inversión de la ronda activa.
         Primero debes crear e iniciar una ronda para poder solicitar préstamos.
       </p>
-
       <div className="flex flex-col sm:flex-row gap-3">
         <Link href="/rondas/registro_ronda"
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-            <path fillRule="evenodd" d="M12 3.75a.75.75 0 0 1 .75.75v6.75h6.75a.75.75 0 0 1 0 1.5h-6.75v6.75a.75.75 0 0 1-1.5 0v-6.75H4.5a.75.75 0 0 1 0-1.5h6.75V4.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
-          </svg>
-          Crear nueva ronda
+          + Crear nueva ronda
         </Link>
         <Link href="/prestamos/pendientes"
           className="inline-flex items-center justify-center gap-2 rounded-lg border px-5 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
@@ -131,7 +116,6 @@ function SinRondaActiva() {
   );
 }
 
-// ── Page principal ─────────────────────────────────────────────────────────────
 export default function PrestamoSolicitudPage() {
   const [socios, setSocios] = useState<Socio[]>([]);
   const [loadingSocios, setLoadingSocios] = useState(true);
@@ -139,10 +123,8 @@ export default function PrestamoSolicitudPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
   const [rondaInfo, setRondaInfo] = useState<RondaInfo | null>(null);
   const [sinRonda, setSinRonda] = useState(false);
-
   const [qSocio, setQSocio] = useState("");
   const [socioId, setSocioId] = useState<number | null>(null);
   const [monto, setMonto] = useState<number>(0);
@@ -151,11 +133,17 @@ export default function PrestamoSolicitudPage() {
   const [fechaInicio, setFechaInicio] = useState<string>(todayDateOnly());
   const [prestamoCreado, setPrestamoCreado] = useState<PrestamoCreado | null>(null);
 
-  
-    fetch("/api/socios").then(r => r.json()).then(d => setSocios(Array.isArray(d) ? d : [])).catch(() => setSocios([])).finally(() => setLoadingSocios(false));
+  // Cargar socios
+  useEffect(() => {
+    fetch("/api/socios")
+      .then(r => r.json())
+      .then(d => setSocios(Array.isArray(d) ? d : []))
+      .catch(() => setSocios([]))
+      .finally(() => setLoadingSocios(false));
   }, []);
 
-  
+  // Cargar ronda activa y fondo
+  useEffect(() => {
     let alive = true;
     async function load() {
       try {
@@ -167,17 +155,19 @@ export default function PrestamoSolicitudPage() {
         }
         const rData = await rRes.json();
         if (!alive || !rData?.id) {
-          setSinRonda(true); setLoadingRonda(false); return;
+          if (alive) { setSinRonda(true); setLoadingRonda(false); }
+          return;
         }
-    
+
         const rondaId = Number(rData.id);
         const fechaFin: string | null = rData.fechaFinISO ?? rData.fechaFinDate ?? null;
-    
-        // Máximo de semanas = número de participantes (semanas de la ronda)
+
+        // Máximo de semanas = número de participantes
         const totalParticipantes = Array.isArray(rData.participaciones)
           ? rData.participaciones.length
           : 0;
-    
+
+        // Fondo de inversión
         let fondoTotal = 0;
         try {
           const invRes = await fetch(`/api/rondas/${rondaId}/inversion`);
@@ -186,7 +176,8 @@ export default function PrestamoSolicitudPage() {
             fondoTotal = Number(invData?.totalFondo ?? 0);
           }
         } catch { }
-    
+
+        // Total prestado
         let fondoPrestado = 0;
         try {
           const presRes = await fetch("/api/prestamos");
@@ -198,13 +189,13 @@ export default function PrestamoSolicitudPage() {
               .reduce((acc: number, p: any) => acc + Number(p.monto ?? 0), 0);
           }
         } catch { }
-    
+
         if (alive) {
           setRondaInfo({
             id: rondaId,
             nombre: String(rData.nombre ?? "Ronda activa"),
             fechaFin,
-            totalParticipantes,  // ← nuevo campo
+            totalParticipantes,
             fondoTotal,
             fondoPrestado,
             fondoDisponible: Math.max(0, fondoTotal - fondoPrestado),
@@ -221,23 +212,36 @@ export default function PrestamoSolicitudPage() {
     return () => { alive = false; };
   }, []);
 
+  // Máximo de semanas basado en participantes (no en fechas)
   const maxPlazoSemanas = useMemo(() => {
     if (!rondaInfo?.totalParticipantes) return null;
     return rondaInfo.totalParticipantes;
   }, [rondaInfo]);
 
-  const excedeMaximo = useMemo(() => rondaInfo != null && !!monto && monto > rondaInfo.fondoDisponible, [monto, rondaInfo]);
-  const excedePlazo  = useMemo(() => maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas, [plazoSemanas, maxPlazoSemanas]);
+  const excedeMaximo = useMemo(() =>
+    rondaInfo != null && !!monto && monto > rondaInfo.fondoDisponible,
+    [monto, rondaInfo]
+  );
+  const excedePlazo = useMemo(() =>
+    maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas,
+    [plazoSemanas, maxPlazoSemanas]
+  );
 
   const socioSeleccionado = useMemo(() => socios.find(s => s.id === socioId) ?? null, [socios, socioId]);
-  const sociosFiltrados   = useMemo(() => {
+  const sociosFiltrados = useMemo(() => {
     const s = qSocio.trim().toLowerCase();
     if (!s) return socios.slice(0, 30);
     return socios.filter(x => [x.nombres, x.apellidos, x.numeroCuenta].some(v => v.toLowerCase().includes(s))).slice(0, 30);
   }, [socios, qSocio]);
 
-  const preview = useMemo(() => buildPreviewSchedule({ principal: monto, tasaMensualPct: tasaAnual, plazoSemanas, fechaInicio }), [monto, tasaAnual, plazoSemanas, fechaInicio]);
-  const totals  = useMemo(() => ({ totalInteres: round2(preview.reduce((a, c) => a + c.interes, 0)), totalPagado: round2(preview.reduce((a, c) => a + c.cuota, 0)) }), [preview]);
+  const preview = useMemo(() =>
+    buildPreviewSchedule({ principal: monto, tasaMensualPct: tasaAnual, plazoSemanas, fechaInicio }),
+    [monto, tasaAnual, plazoSemanas, fechaInicio]
+  );
+  const totals = useMemo(() => ({
+    totalInteres: round2(preview.reduce((a, c) => a + c.interes, 0)),
+    totalPagado: round2(preview.reduce((a, c) => a + c.cuota, 0)),
+  }), [preview]);
 
   const plazoInfo = useMemo(() => {
     const m = Math.floor(plazoSemanas / 4), s = plazoSemanas % 4;
@@ -259,7 +263,7 @@ export default function PrestamoSolicitudPage() {
       if (rondaInfo && monto > rondaInfo.fondoDisponible)
         throw new Error(`El monto no puede exceder el fondo disponible (${fmtMoney(rondaInfo.fondoDisponible)}).`);
       if (maxPlazoSemanas != null && plazoSemanas > maxPlazoSemanas)
-        throw new Error(`El plazo no puede exceder ${maxPlazoSemanas} semanas (fin: ${fmtDate(rondaInfo?.fechaFin)}).`);
+        throw new Error(`El plazo no puede exceder ${maxPlazoSemanas} semanas (${maxPlazoSemanas} participantes).`);
       setSaving(true);
       const res = await fetch("/api/prestamos", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -269,14 +273,16 @@ export default function PrestamoSolicitudPage() {
       if (!res.ok) throw new Error(data?.error || "No se pudo crear el préstamo");
       setPrestamoCreado(data?.prestamo ?? null);
       setSuccess("Préstamo creado correctamente");
-      // Actualizar fondo disponible localmente
-      if (rondaInfo) setRondaInfo(prev => prev ? { ...prev, fondoPrestado: prev.fondoPrestado + monto, fondoDisponible: Math.max(0, prev.fondoDisponible - monto) } : prev);
+      if (rondaInfo) setRondaInfo(prev => prev ? {
+        ...prev,
+        fondoPrestado: prev.fondoPrestado + monto,
+        fondoDisponible: Math.max(0, prev.fondoDisponible - monto),
+      } : prev);
     } catch (e: any) {
       setError(e?.message ?? "Error");
     } finally { setSaving(false); }
   }
 
-  // ── Loading ──
   if (loadingRonda) {
     return (
       <div className="p-6 space-y-4">
@@ -286,7 +292,6 @@ export default function PrestamoSolicitudPage() {
     );
   }
 
-  // ── Sin ronda activa ──
   if (sinRonda) return <SinRondaActiva />;
 
   return (
@@ -319,7 +324,7 @@ export default function PrestamoSolicitudPage() {
           </Link>
         </div>
 
-        {/* ── Fondo de inversión ── */}
+        {/* Fondo de inversión */}
         {rondaInfo && (
           <div className="mt-5 grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-blue-50 border border-blue-100 p-4">
@@ -364,15 +369,14 @@ export default function PrestamoSolicitudPage() {
         </div>
       )}
 
-      {/* Sin fondos disponibles */}
       {rondaInfo && rondaInfo.fondoDisponible <= 0 && rondaInfo.fondoTotal > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-          ⚠️ El fondo de préstamos está completamente utilizado. Para otorgar más préstamos, espera a que los actuales sean pagados.
+          ⚠️ El fondo de préstamos está completamente utilizado.
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Form */}
+        {/* Formulario */}
         <section className="rounded-xl border bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Datos del préstamo</h2>
           <div className="grid gap-4">
@@ -382,19 +386,26 @@ export default function PrestamoSolicitudPage() {
               <input value={qSocio} onChange={e => setQSocio(e.target.value)} placeholder="Buscar…"
                 className="w-full rounded-md border px-3 py-2 text-sm outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-200" />
               <div className="mt-2 max-h-48 overflow-auto rounded-lg border">
-                {loadingSocios ? <div className="p-3 text-sm text-gray-500">Cargando...</div>
-                  : sociosFiltrados.length === 0 ? <div className="p-3 text-sm text-gray-500">Sin coincidencias.</div>
-                  : <ul className="divide-y">{sociosFiltrados.map(s => (
-                    <li key={s.id}>
-                      <button type="button" onClick={() => setSocioId(s.id)}
-                        className={cn("w-full text-left p-3 hover:bg-gray-50", s.id === socioId && "bg-orange-50")}>
-                        <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
-                        <p className="text-xs text-gray-500 truncate">Cuenta <span className="font-mono">{s.numeroCuenta}</span></p>
-                      </button>
-                    </li>
-                  ))}</ul>}
+                {loadingSocios
+                  ? <div className="p-3 text-sm text-gray-500">Cargando...</div>
+                  : sociosFiltrados.length === 0
+                    ? <div className="p-3 text-sm text-gray-500">Sin coincidencias.</div>
+                    : <ul className="divide-y">
+                        {sociosFiltrados.map(s => (
+                          <li key={s.id}>
+                            <button type="button" onClick={() => setSocioId(s.id)}
+                              className={cn("w-full text-left p-3 hover:bg-gray-50", s.id === socioId && "bg-orange-50")}>
+                              <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
+                              <p className="text-xs text-gray-500 truncate">Cuenta <span className="font-mono">{s.numeroCuenta}</span></p>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                }
               </div>
-              {socioSeleccionado && <p className="mt-1 text-xs text-gray-500">✓ <strong>{socioSeleccionado.nombres} {socioSeleccionado.apellidos}</strong></p>}
+              {socioSeleccionado && (
+                <p className="mt-1 text-xs text-gray-500">✓ <strong>{socioSeleccionado.nombres} {socioSeleccionado.apellidos}</strong></p>
+              )}
             </div>
 
             {/* Monto */}
@@ -425,8 +436,8 @@ export default function PrestamoSolicitudPage() {
                   className={cn("w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1",
                     excedePlazo ? "border-red-300 focus:ring-red-200" : "focus:border-orange-500 focus:ring-orange-200")} />
                 <p className={cn("mt-1 text-xs", excedePlazo ? "text-red-600 font-medium" : "text-gray-400")}>
-                  {excedePlazo ? "⚠️ Excede fin de ronda. " : ""}{plazoInfo}
-                  {maxPlazoSemanas != null && <> · Máx: <strong>{maxPlazoSemanas}</strong></>}
+                  {excedePlazo ? `⚠️ Máx. ${maxPlazoSemanas} sem. ` : ""}{plazoInfo}
+                  {maxPlazoSemanas != null && !excedePlazo && <> · Máx: <strong>{maxPlazoSemanas}</strong></>}
                 </p>
               </div>
             </div>
@@ -471,9 +482,12 @@ export default function PrestamoSolicitudPage() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
                 <tr>
-                  <th className="px-4 py-3">#</th><th className="px-4 py-3">Vence</th>
-                  <th className="px-4 py-3 text-right">Cuota</th><th className="px-4 py-3 text-right">Interés</th>
-                  <th className="px-4 py-3 text-right">Capital</th><th className="px-4 py-3 text-right">Saldo</th>
+                  <th className="px-4 py-3">#</th>
+                  <th className="px-4 py-3">Vence</th>
+                  <th className="px-4 py-3 text-right">Cuota</th>
+                  <th className="px-4 py-3 text-right">Interés</th>
+                  <th className="px-4 py-3 text-right">Capital</th>
+                  <th className="px-4 py-3 text-right">Saldo</th>
                 </tr>
               </thead>
               <tbody>
