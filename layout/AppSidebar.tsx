@@ -105,7 +105,7 @@ function LogoIcon() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const AppSidebar: React.FC = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
   const pathname = usePathname();
 
   const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
@@ -113,6 +113,7 @@ const AppSidebar: React.FC = () => {
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isActive = useCallback((path: string) => path === pathname, [pathname]);
+  const isWide = isExpanded || isHovered || isMobileOpen;
 
   // Auto-abrir submenu activo
   useEffect(() => {
@@ -121,6 +122,12 @@ const AppSidebar: React.FC = () => {
         setOpenSubmenu({ type: "main", index });
       }
     });
+  }, [pathname]);
+
+  // Cerrar sidebar móvil al cambiar de ruta
+  useEffect(() => {
+    if (isMobileOpen) toggleMobileSidebar();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   useEffect(() => {
@@ -136,9 +143,6 @@ const AppSidebar: React.FC = () => {
       prev && prev.type === menuType && prev.index === index ? null : { type: menuType, index }
     );
   };
-
-  // El sidebar es ancho cuando: expandido manualmente, hover en desktop, o abierto en móvil
-  const isWide = isExpanded || isHovered || isMobileOpen;
 
   const renderMenuItems = (items: NavItem[], menuType: "main" | "others") => (
     <ul className="flex flex-col gap-4">
@@ -204,43 +208,69 @@ const AppSidebar: React.FC = () => {
   );
 
   return (
-    <aside
-      className={[
-        "fixed left-0 top-0 z-50 h-screen",
-        "border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900",
-        "transition-all duration-300 ease-in-out",
-        "flex flex-col px-5",
-        // Ancho: wide cuando expandido/hover/mobile, angosto cuando colapsado
-        isWide ? "w-[290px]" : "w-[90px]",
-        // En móvil: oculto por defecto, visible cuando isMobileOpen
-        isMobileOpen ? "translate-x-0" : "-translate-x-full",
-        // En desktop: siempre visible
-        "lg:translate-x-0",
-      ].join(" ")}
-      onMouseEnter={() => !isExpanded && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Logo */}
-      <div className={`py-5 shrink-0 ${!isWide ? "lg:flex lg:justify-center" : ""}`}>
-        <Link href="/">
-          {isWide ? <LogoFull /> : <LogoIcon />}
-        </Link>
-      </div>
+    <>
+      {/* ── Overlay móvil — toca afuera para cerrar ── */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={toggleMobileSidebar}
+          aria-label="Cerrar menú"
+        />
+      )}
 
-      {/* Nav scrollable */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-        <nav className="mb-6">
-          <div className="flex flex-col gap-4">
-            <div>
-              <h2 className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${!isWide ? "lg:justify-center" : "justify-start"}`}>
-                {isWide ? "Menu" : <HorizontaLDots />}
-              </h2>
-              {renderMenuItems(navItems, "main")}
+      {/* ── Sidebar ── */}
+      <aside
+        className={[
+          "fixed left-0 top-0 z-50 h-screen",
+          "border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900",
+          "transition-all duration-300 ease-in-out",
+          "flex flex-col px-5",
+          isWide ? "w-[290px]" : "w-[90px]",
+          // Móvil: oculto por defecto, desliza cuando isMobileOpen
+          isMobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop: siempre visible
+          "lg:translate-x-0",
+        ].join(" ")}
+        onMouseEnter={() => !isExpanded && setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* Logo + botón cerrar en móvil */}
+        <div className={`py-5 shrink-0 flex items-center ${!isWide ? "lg:justify-center" : "justify-between"}`}>
+          <Link href="/" onClick={() => isMobileOpen && toggleMobileSidebar()}>
+            {isWide ? <LogoFull /> : <LogoIcon />}
+          </Link>
+
+          {/* Botón X solo visible en móvil cuando está abierto */}
+          {isMobileOpen && (
+            <button
+              onClick={toggleMobileSidebar}
+              className="lg:hidden flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              aria-label="Cerrar menú"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path fillRule="evenodd" clipRule="evenodd"
+                  d="M6.22 7.28a.75.75 0 1 1 1.06-1.06L12 10.94l4.72-4.72a.75.75 0 1 1 1.06 1.06L13.06 12l4.72 4.72a.75.75 0 0 1-1.06 1.06L12 13.06l-4.72 4.72a.75.75 0 0 1-1.06-1.06L10.94 12 6.22 7.28Z"
+                  fill="currentColor"/>
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Nav */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <nav className="mb-6">
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2 className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${!isWide ? "lg:justify-center" : "justify-start"}`}>
+                  {isWide ? "Menu" : <HorizontaLDots />}
+                </h2>
+                {renderMenuItems(navItems, "main")}
+              </div>
             </div>
-          </div>
-        </nav>
-      </div>
-    </aside>
+          </nav>
+        </div>
+      </aside>
+    </>
   );
 };
 
