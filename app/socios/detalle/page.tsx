@@ -164,6 +164,7 @@ async function getDetalleSocio(socioId: number) {
 
 // ─── Etiquetas de movimientos ─────────────────────────────────────────────────
 const TIPO_MOV: Record<string, { label: string; color: string; bg: string; signo: "+" | "-" }> = {
+  AHORRO:     { label: "Ahorro",      color: "text-emerald-700", bg: "bg-emerald-100", signo: "+" },
   INVERSION:  { label: "Inversión",   color: "text-blue-700",    bg: "bg-blue-100",    signo: "-" },
   RETIRO:     { label: "Retiro",      color: "text-rose-700",    bg: "bg-rose-100",    signo: "-" },
   DEVOLUCION: { label: "Devolución",  color: "text-emerald-700", bg: "bg-emerald-100", signo: "+" },
