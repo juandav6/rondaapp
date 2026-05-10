@@ -566,9 +566,10 @@ export default function RondaActualPage() {
               <th className="px-4 py-2 text-left">Orden</th>
               <th className="px-4 py-2 text-left">Socio</th>
               <th className="px-4 py-2 text-left">Cuenta</th>
-              <th className="px-4 py-2 text-left">Ahorro acumulado</th>
-              <th className="px-4 py-2 text-left">Restante objetivo</th>
-              <th className="px-4 py-2 text-right">Ahorro (semana)</th>
+              <th className="px-4 py-2 text-right">Objetivo</th>
+              <th className="px-4 py-2 text-right">Ahorrado</th>
+              <th className="px-4 py-2 text-right">Diferencia</th>
+              <th className="px-4 py-2 text-right">Ahorro semana</th>
               <th className="px-4 py-2 text-right">Acción</th>
             </tr>
           </thead>
@@ -581,7 +582,9 @@ export default function RondaActualPage() {
 
               const valorInput = ahorroInputs[it.socioId] ?? "";
               const ahorroYaRegistrado = (it as any).ahorroRegistradoSemana === true;
-              const disabledAhorro = ahorroYaRegistrado || restanteCalc <= 0 || saving === it.socioId;
+              // Sin bloqueo por meta — solo bloquear si ya registró ahorro esta semana
+              const disabledAhorro = ahorroYaRegistrado || saving === it.socioId;
+              const diferencia = acum - objetivo; // positivo = excedente, negativo = faltante
 
               return (
                 <tr key={it.socioId} className="border-t">
@@ -589,8 +592,20 @@ export default function RondaActualPage() {
                   <td className="px-4 py-2">{it.socio.nombres} {it.socio.apellidos}</td>
                   <td className="px-4 py-2">{it.socio.numeroCuenta}</td>
 
-                  <td className="px-4 py-2">${it.ahorroAcumulado}</td>
-                  <td className="px-4 py-2">${(Number(it.ahorroRestante ?? restanteCalc)).toFixed(2)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums font-medium text-gray-700">
+                    {fmtMoney(objetivo)}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-blue-700">
+                    {fmtMoney(acum)}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                    {diferencia === 0
+                      ? <span className="text-gray-400">$0.00</span>
+                      : diferencia > 0
+                        ? <span className="text-emerald-600">+{fmtMoney(diferencia)}</span>
+                        : <span className="text-red-500">{fmtMoney(diferencia)}</span>
+                    }
+                  </td>
 
                   <td className="px-4 py-2 text-right">
                     <input
@@ -640,11 +655,8 @@ export default function RondaActualPage() {
                       <button
                         disabled={
                           (it as any).ahorroRegistradoSemana === true ||
-                          Number(estado.ronda.ahorroObjetivoPorSocio ?? 0) - Number(it.ahorroAcumulado ?? 0) <= 0 ||
                           saving === it.socioId ||
-                          !(Number(ahorroInputs[it.socioId] ?? 0) > 0) ||
-                          Number(ahorroInputs[it.socioId] ?? 0) >
-                            Math.max(Number(estado.ronda.ahorroObjetivoPorSocio ?? 0) - Number(it.ahorroAcumulado ?? 0), 0)
+                          !(Number(ahorroInputs[it.socioId] ?? 0) > 0)
                         }
                         onClick={() => registrarAhorroParcial(it.socioId, Number(ahorroInputs[it.socioId] ?? 0))}
                         className="inline-flex rounded bg-blue-600 px-3 py-1.5 text-white hover:bg-blue-700 disabled:opacity-50"
