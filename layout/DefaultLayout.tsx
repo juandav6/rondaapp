@@ -1,16 +1,25 @@
 "use client";
-
 import React, { useMemo } from "react";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import { useSidebar } from "@/context/SidebarContext";
+import { usePathname } from "next/navigation";
 
 export default function DefaultLayout({ children }: { children: React.ReactNode }) {
   const { isExpanded, isMobileOpen, isHovered } = useSidebar();
-  const sidebarWidth = useMemo(() => (isExpanded || isHovered ? 290 : 90), [
-    isExpanded,
-    isHovered,
-  ]);
+  const pathname = usePathname();
+
+  const sidebarWidth = useMemo(
+    () => (isExpanded || isHovered ? 290 : 90),
+    [isExpanded, isHovered]
+  );
+
+  // Rutas que NO deben mostrar sidebar/header
+  const isAuthPage = pathname === "/login" || pathname?.startsWith("/login");
+
+  if (isAuthPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
