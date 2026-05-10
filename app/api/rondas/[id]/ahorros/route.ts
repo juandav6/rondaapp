@@ -38,13 +38,6 @@ export async function POST(
   const acum = Number(_sum.monto ?? 0);
   const restante = Math.max(objetivo - acum, 0);
 
-  if (Number(monto) > restante) {
-    return NextResponse.json(
-      { error: `No puedes ahorrar más de ${restante.toFixed(2)} esta ronda` },
-      { status: 400 }
-    );
-  }
-
   const ya = await prisma.ahorro.count({ where: { rondaId, socioId, semana } });
   if (ya > 0) {
     return NextResponse.json({ error: "Ya registraste un ahorro esta semana" }, { status: 400 });
