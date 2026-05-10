@@ -1,18 +1,12 @@
 // app/api/rondas/[id]/ahorros/route.ts
 import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
-export async function POST(
-  req: Request | NextRequest,
-  // ⚠️ sin tipo explícito para evitar la validación de Next
-  { params }: any
-) {
-  const rawId = params?.id;
-  const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
-  const rondaId = Number(idStr);
-
+export async function POST(req: Request | NextRequest, { params }: any) {
+  const rondaId = Number(Array.isArray(params?.id) ? params.id[0] : params?.id);
   const { socioId, semana, monto } = (await req.json()) as {
     socioId?: number; semana?: number; monto?: number;
   };
@@ -23,29 +17,35 @@ export async function POST(
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
-    select: { ahorroObjetivoPorSocio: true },
+    select: { id: true },
   });
   if (!ronda) {
     return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
   }
 
-  const objetivo = Number(ronda.ahorroObjetivoPorSocio ?? 0);
-
-  const { _sum } = await prisma.ahorro.aggregate({
-    where: { rondaId, socioId },
-    _sum: { monto: true },
-  });
-  const acum = Number(_sum.monto ?? 0);
-  const restante = Math.max(objetivo - acum, 0);
-
+  // Verificar que no haya registrado ahorro esta semana
   const ya = await prisma.ahorro.count({ where: { rondaId, socioId, semana } });
   if (ya > 0) {
     return NextResponse.json({ error: "Ya registraste un ahorro esta semana" }, { status: 400 });
   }
 
-  await prisma.ahorro.create({
-    data: { rondaId, socioId, semana, monto: Number(monto) },
-  });
+  // Registrar ahorro Y actualizar saldoAhorros en una sola transacción
+  const montoDecimal = new Prisma.Decimal(monto);
 
-  return NextResponse.json({ ok: true });
+  const [ahorro, socioActualizado] = await prisma.$transaction([
+    prisma.ahorro.create({
+      data: { rondaId, socioId, semana, monto: montoDecimal },
+    }),
+    prisma.socio.update({
+      where: { id: socioId },
+      data: { saldoAhorros: { increment: montoDecimal } },
+      select: { saldoAhorros: true },
+    }),
+  ]);
+
+  return NextResponse.json({
+    ok: true,
+    ahorro,
+    nuevoSaldo: Number(socioActualizado.saldoAhorros),
+  });
 }
