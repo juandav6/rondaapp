@@ -19,16 +19,17 @@ const handler = NextAuth({
           where: { email: credentials.email.toLowerCase().trim() },
         });
 
-        if (!user || !user.activo) return null;
+        if (!user) return null;
 
-        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
+        const valid = await bcrypt.compare(credentials.password, user.password);
         if (!valid) return null;
 
         return {
           id: String(user.id),
-          name: user.nombre,
+          name: user.nombre ?? user.email,
           email: user.email,
-          role: user.rol,
+          rol: user.rol,
+          socioId: user.socioId ?? null,
         };
       },
     }),
@@ -41,14 +42,16 @@ const handler = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
+        token.rol = (user as any).rol;
+        token.socioId = (user as any).socioId;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
+        (session.user as any).rol = token.rol;
+        (session.user as any).socioId = token.socioId;
       }
       return session;
     },
