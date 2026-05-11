@@ -1,21 +1,33 @@
 // app/login/page.tsx
 "use client";
 
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
-import Image from "next/image";
+import { Suspense, useState, useEffect } from "react";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const { data: session, status } = useSession();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+
+  // Si ya tiene sesión, redirigir según rol
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const rol = (session.user as any).rol;
+      const socioId = (session.user as any).socioId;
+      if (rol === "SOCIO" && socioId) {
+        router.replace(`/portal/${socioId}`);
+      } else {
+        router.replace("/");
+      }
+    }
+  }, [status, session, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,16 +39,30 @@ function LoginForm() {
         password,
         redirect: false,
       });
+
       if (res?.error) {
         setError("Correo o contraseña incorrectos.");
         return;
       }
-      router.replace(callbackUrl);
+
+      // res.ok = true → sesión creada, el useEffect de arriba se encargará de redirigir
     } catch {
       setError("Error al iniciar sesión.");
     } finally {
       setLoading(false);
     }
+  }
+
+  // Mientras carga la sesión no mostrar nada
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <svg className="h-8 w-8 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+          <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="4"/>
+        </svg>
+      </div>
+    );
   }
 
   return (
@@ -45,13 +71,19 @@ function LoginForm() {
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <div className="flex flex-col items-center gap-3">
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7">
-                <path d="M12 1.5a10.5 10.5 0 1 0 0 21 10.5 10.5 0 0 0 0-21ZM9 15.75h1.5V12H9v3.75Zm4.5 0H15V12h-1.5v3.75ZM12 6.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/>
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1a3a2a]">
+              <svg viewBox="0 0 32 32" width="40" height="40">
+                <circle cx="16" cy="16" r="14" fill="#22543d"/>
+                <circle cx="16" cy="14" r="7" fill="#f6c94e" stroke="#d4a72c" strokeWidth="1"/>
+                <text x="16" y="18" textAnchor="middle" fontFamily="Georgia,serif" fontSize="9" fontWeight="700" fill="#8a6200">$</text>
+                <circle cx="9" cy="21" r="4" fill="#f6c94e" stroke="#d4a72c" strokeWidth="0.8"/>
+                <circle cx="23" cy="21" r="4" fill="#f6c94e" stroke="#d4a72c" strokeWidth="0.8"/>
               </svg>
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-gray-900">MiRonda</h1>
+              <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "Georgia, serif" }}>
+                Mi<span className="text-emerald-600">Ronda</span>
+              </h1>
               <p className="text-sm text-gray-500">Inicia sesión para continuar</p>
             </div>
           </div>
@@ -102,7 +134,7 @@ function LoginForm() {
                   {showPass ? (
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
                       <path d="M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z"/>
-                      <path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM21.25 12a.75.75 0 0 0 0-1.5h-.007a.75.75 0 0 0 0 1.5h.007ZM12 21.75c-4.97 0-9.185-3.223-10.675-7.69a2.25 2.25 0 0 1 0-1.113 11.25 11.25 0 0 1 4.62-5.873l3.04 3.04a3.75 3.75 0 0 0 4.99 4.99l3.03 3.03A11.25 11.25 0 0 1 12 21.75Z"/>
+                      <path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12 21.75c-4.97 0-9.185-3.223-10.675-7.69a2.25 2.25 0 0 1 0-1.113 11.25 11.25 0 0 1 4.62-5.873l3.04 3.04a3.75 3.75 0 0 0 4.99 4.99l3.03 3.03A11.25 11.25 0 0 1 12 21.75Z"/>
                     </svg>
                   ) : (
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
