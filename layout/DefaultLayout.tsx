@@ -1,39 +1,43 @@
+// layout/DefaultLayout.tsx
 "use client";
-import React, { useMemo } from "react";
-import AppHeader from "@/layout/AppHeader";
-import AppSidebar from "@/layout/AppSidebar";
-import { useSidebar } from "@/context/SidebarContext";
+import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import React from "react";
+import AppHeader from "./AppHeader";
+import AppSidebar from "./AppSidebar";
 
-export default function DefaultLayout({ children }: { children: React.ReactNode }) {
-  const { isExpanded, isMobileOpen, isHovered } = useSidebar();
+const DefaultLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { data: session, status } = useSession();
   const pathname = usePathname();
 
-  const sidebarWidth = useMemo(
-    () => (isExpanded || isHovered ? 290 : 90),
-    [isExpanded, isHovered]
-  );
+  const isLogin = pathname === "/login";
+  const isPortal = pathname.startsWith("/portal");
 
-  const isAuthPage = pathname === "/login" || pathname?.startsWith("/login");
-
-  if (isAuthPage) {
+  // Login y portal → sin sidebar ni header de admin
+  if (isLogin || isPortal) {
     return <>{children}</>;
   }
 
+  // Sesión de SOCIO que por algún motivo llega aquí → sin sidebar
+  if (status === "authenticated") {
+    const rol = (session?.user as any)?.rol;
+    if (rol === "SOCIO") {
+      return <>{children}</>;
+    }
+  }
+
+  // ADMIN → layout completo
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen xl:flex">
       <AppSidebar />
-      {/* Móvil: sin padding (sidebar flota encima)
-          Desktop ≥lg: padding dinámico según ancho sidebar */}
-      <div
-        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out lg:pl-[var(--sidebar-w)]"
-        style={{ ["--sidebar-w" as any]: `${sidebarWidth}px` }}
-      >
-        <div className="sticky top-0 z-40">
-          <AppHeader />
-        </div>
-        <main className="p-3 sm:p-4 lg:p-6">{children}</main>
+      <div className="flex flex-1 flex-col lg:pl-[var(--sidebar-w,90px)]">
+        <AppHeader />
+        <main className="flex-1 p-4 sm:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );
-}
+};
+
+export default DefaultLayout;
