@@ -6,6 +6,7 @@ interface SocioRow {
   id: number; numeroCuenta: string; nombres: string;
   apellidos: string; cedula: string; edad: number;
   ahorros: number; multas: number;
+  usuario?: { email: string; rol: string } | null;
 }
 interface CreateSocioPayload {
   cedula: string; nombres: string; apellidos: string;
@@ -31,12 +32,18 @@ export default function SociosPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [q, setQ] = useState("");
 
+  // Reset password modal
+  const [resetSocio, setResetSocio] = useState<SocioRow | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+
   useEffect(() => { fetchSocios(); }, []);
 
   const fetchSocios = async () => {
     try {
       setLoading(true);
-      const r = await fetch("/api/socios");
+      const r = await fetch("/api/socios?includeUsuario=true");
       if (!r.ok) throw new Error("Error al obtener socios");
       setSocios(await r.json());
       setError(null);
@@ -99,14 +106,42 @@ export default function SociosPage() {
     finally { setSavingEdit(false); }
   };
 
+  // Reset contraseña
+  const handleResetPassword = async () => {
+    if (!resetSocio || !newPassword.trim()) return;
+    if (newPassword.trim().length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    try {
+      setResetting(true);
+      const res = await fetch(`/api/socios/${resetSocio.id}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Error al resetear");
+      setSuccess(`Contraseña actualizada para ${resetSocio.nombres.split(" ")[0]}`);
+      setTimeout(() => setSuccess(null), 3000);
+      setResetSocio(null);
+      setNewPassword("");
+    } catch (e: any) {
+      setError(e?.message);
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const sociosFiltrados = socios.filter(s => {
     const sq = q.trim().toLowerCase();
     if (!sq) return true;
-    return [s.nombres, s.apellidos, s.numeroCuenta, s.cedula].some(v => v.toLowerCase().includes(sq));
+    return [s.nombres, s.apellidos, s.numeroCuenta, s.cedula, s.usuario?.email ?? ""].some(v => v.toLowerCase().includes(sq));
   });
 
   const totalAhorros = socios.reduce((s, x) => s + x.ahorros, 0);
   const totalMultas = socios.reduce((s, x) => s + x.multas, 0);
+  const sociosConAcceso = socios.filter(s => s.usuario).length;
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[50vh]">
@@ -124,7 +159,7 @@ export default function SociosPage() {
         <div className="flex items-center gap-3">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-violet-100 text-violet-700 shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-              <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm-7 8a7 7 0 0 1 14 0"/>
+              <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd"/>
             </svg>
           </span>
           <div>
@@ -135,10 +170,14 @@ export default function SociosPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
         <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
-          <p className="text-xs text-gray-500">Socios</p>
+          <p className="text-xs text-gray-500">Total socios</p>
           <p className="mt-1 text-xl sm:text-3xl font-bold text-gray-900">{socios.length}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
+          <p className="text-xs text-gray-500">Con acceso portal</p>
+          <p className="mt-1 text-xl sm:text-3xl font-bold text-blue-600">{sociosConAcceso}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
           <p className="text-xs text-gray-500">Ahorros</p>
@@ -200,7 +239,7 @@ export default function SociosPage() {
           <div>
             <div className="px-4 py-3 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between border-b bg-gray-50">
               <div className="relative flex-1 sm:max-w-xs">
-                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar socio…"
+                <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, cuenta, email…"
                   className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none pl-8" />
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none">
@@ -227,8 +266,7 @@ export default function SociosPage() {
                       <tr>
                         <th className="px-4 py-3 text-left">Cuenta</th>
                         <th className="px-4 py-3 text-left">Nombre</th>
-                        <th className="px-4 py-3 text-left">Cédula</th>
-                        <th className="px-4 py-3 text-left">Edad</th>
+                        <th className="px-4 py-3 text-left">Correo / Acceso</th>
                         <th className="px-4 py-3 text-right">Ahorros</th>
                         <th className="px-4 py-3 text-right">Multas</th>
                         <th className="px-4 py-3 text-right">Acciones</th>
@@ -238,15 +276,43 @@ export default function SociosPage() {
                       {sociosFiltrados.map(s => (
                         <tr key={s.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.numeroCuenta}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900">{s.nombres} {s.apellidos}</td>
-                          <td className="px-4 py-3 text-gray-500">{s.cedula}</td>
-                          <td className="px-4 py-3 text-gray-500">{s.edad}</td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
+                            <p className="text-xs text-gray-400">CI: {s.cedula} · {s.edad} años</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            {s.usuario ? (
+                              <div>
+                                <p className="text-xs text-gray-700 font-mono">{s.usuario.email}</p>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 mt-0.5">
+                                  <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                                  Con acceso
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                                Sin acceso
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right font-medium text-emerald-600 tabular-nums">{fmt(s.ahorros)}</td>
                           <td className="px-4 py-3 text-right font-medium text-rose-600 tabular-nums">{fmt(s.multas)}</td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex justify-end gap-3">
-                              <button onClick={() => openEdit(s)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Editar</button>
-                              <button onClick={() => handleDelete(s.id)} className="text-red-600 hover:text-red-800 text-xs font-medium">Eliminar</button>
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => openEdit(s)}
+                                className="rounded-md border px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-50 font-medium">
+                                Editar
+                              </button>
+                              {s.usuario && (
+                                <button onClick={() => { setResetSocio(s); setNewPassword(""); setShowNewPass(false); }}
+                                  className="rounded-md border border-amber-200 px-2.5 py-1.5 text-xs text-amber-700 hover:bg-amber-50 font-medium">
+                                  Reset clave
+                                </button>
+                              )}
+                              <button onClick={() => handleDelete(s.id)}
+                                className="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-700 hover:bg-red-50 font-medium">
+                                Eliminar
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -258,16 +324,12 @@ export default function SociosPage() {
                 {/* Tarjetas — solo móvil */}
                 <ul className="sm:hidden divide-y">
                   {sociosFiltrados.map(s => (
-                    <li key={s.id} className="p-4">
+                    <li key={s.id} className="p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
                           <p className="text-xs text-gray-400 font-mono mt-0.5">{s.numeroCuenta}</p>
                           <p className="text-xs text-gray-400 mt-0.5">CI: {s.cedula} · {s.edad} años</p>
-                          <div className="flex gap-3 mt-2">
-                            <span className="text-xs font-semibold text-emerald-600">{fmt(s.ahorros)}</span>
-                            {s.multas > 0 && <span className="text-xs font-semibold text-rose-600">Multa: {fmt(s.multas)}</span>}
-                          </div>
                         </div>
                         <div className="flex flex-col gap-1.5 shrink-0">
                           <button onClick={() => openEdit(s)}
@@ -275,6 +337,29 @@ export default function SociosPage() {
                           <button onClick={() => handleDelete(s.id)}
                             className="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 font-medium">Eliminar</button>
                         </div>
+                      </div>
+
+                      {/* Acceso portal */}
+                      {s.usuario ? (
+                        <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-emerald-700">Portal activo</p>
+                            <p className="text-xs text-emerald-600 font-mono truncate">{s.usuario.email}</p>
+                          </div>
+                          <button onClick={() => { setResetSocio(s); setNewPassword(""); setShowNewPass(false); }}
+                            className="shrink-0 rounded-md border border-amber-200 bg-white px-2.5 py-1.5 text-xs text-amber-700 hover:bg-amber-50 font-medium">
+                            Reset clave
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg bg-gray-50 border px-3 py-2">
+                          <p className="text-xs text-gray-400">Sin acceso al portal</p>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <span className="text-xs font-semibold text-emerald-600">{fmt(s.ahorros)}</span>
+                        {s.multas > 0 && <span className="text-xs font-semibold text-rose-600">Multa: {fmt(s.multas)}</span>}
                       </div>
                     </li>
                   ))}
@@ -334,6 +419,58 @@ export default function SociosPage() {
               <button onClick={saveEdit} disabled={savingEdit}
                 className={`px-4 py-2 rounded-md text-sm font-medium text-white ${savingEdit ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}>
                 {savingEdit ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reset contraseña */}
+      {resetSocio && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center">
+          <div className="fixed inset-0 bg-black/30" onClick={() => !resetting && setResetSocio(null)} />
+          <div className="relative z-50 w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Resetear contraseña</h3>
+                <p className="text-sm text-gray-500 mt-0.5">{resetSocio.nombres} {resetSocio.apellidos}</p>
+                <p className="text-xs text-gray-400 font-mono">{resetSocio.usuario?.email}</p>
+              </div>
+              <button onClick={() => setResetSocio(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 mb-4">
+              ⚠️ El socio deberá usar la nueva contraseña en su próximo inicio de sesión.
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
+              <div className="relative">
+                <input
+                  type={showNewPass ? "text" : "password"}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full rounded-md border px-3 py-2 pr-10 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-200"
+                />
+                <button type="button" onClick={() => setShowNewPass(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                    {showNewPass
+                      ? <path d="M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z"/>
+                      : <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>}
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Sugerencia: usa el número de cuenta como contraseña inicial ({resetSocio.numeroCuenta})</p>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setResetSocio(null)} disabled={resetting}
+                className="px-4 py-2 rounded-md border text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button onClick={handleResetPassword} disabled={resetting || newPassword.trim().length < 6}
+                className={`px-4 py-2 rounded-md text-sm font-medium text-white ${resetting || newPassword.trim().length < 6 ? "bg-amber-300 cursor-not-allowed" : "bg-amber-600 hover:bg-amber-700"}`}>
+                {resetting ? "Actualizando…" : "Actualizar contraseña"}
               </button>
             </div>
           </div>
