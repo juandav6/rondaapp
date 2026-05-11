@@ -110,9 +110,48 @@ export default function PortalSocioPage() {
     .flatMap(p => p.cuotas.filter(c => !c.pagada))
     .sort((a, b) => new Date(a.fechaVenc).getTime() - new Date(b.fechaVenc).getTime());
   const totalIntereses = movimientos.filter(m => m.tipo === "INTERES").reduce((a, m) => a + m.monto, 0);
+  const esSemanaDecobro = ronda?.estaEnRonda && ronda?.semanasRestantes === 0;
 
   return (
     <div className="space-y-4 pb-6">
+
+      {/* ── Banner celebración semana de cobro ── */}
+      {esSemanaDecobro && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 shadow-lg">
+          {/* Círculos decorativos de fondo */}
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute -bottom-6 right-10 h-20 w-20 rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute bottom-2 right-28 h-10 w-10 rounded-full bg-white/10" />
+
+          <div className="relative flex items-start gap-4">
+            {/* Ícono moneda */}
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-3xl">
+              💰
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-emerald-100">
+                {ronda?.nombre}  ·  Semana #{ronda?.semanaToca}
+              </p>
+              <h2 className="mt-0.5 text-xl font-bold text-white leading-tight">
+                ¡Esta semana te toca cobrar!
+              </h2>
+              <p className="mt-1 text-sm text-emerald-100">
+                Recibirás los aportes de todos los socios. Contacta al responsable de cobro para coordinar.
+              </p>
+              <button
+                onClick={() => setTab("ronda")}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+              >
+                Ver detalles de la ronda
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bienvenida */}
       <div className="rounded-xl border bg-white p-4 shadow-sm flex items-center gap-3">
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-bold">
