@@ -52,6 +52,6 @@ export default withAuth(
 export const config = {
   matcher: [
     // Aplica a todas las rutas excepto archivos estáticos y api/auth
-    "/((?!_next/static|_next/image|favicon.ico|images|api/auth).*)",
+    "/((?!login|api/auth|_next/static|_next/image|favicon.ico|images).*)",
   ],
 };
