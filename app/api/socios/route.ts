@@ -5,8 +5,9 @@ import { getOrCreateRondaInicial } from "./_lib";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const rondaParam = url.searchParams.get("ronda");     // "actual" | null
-  const rondaIdParam = url.searchParams.get("rondaId"); // "123" | null
+  const rondaParam = url.searchParams.get("ronda");
+  const rondaIdParam = url.searchParams.get("rondaId");
+  const includeUsuario = url.searchParams.get("includeUsuario") === "true";
 
   // Socios base
   const socios = await prisma.socio.findMany({
@@ -17,8 +18,14 @@ export async function GET(req: Request) {
       apellidos: true,
       cedula: true,
       edad: true,
-      multas: true, // multas "extra" de Socio
+      multas: true,
       saldoAhorros: true,
+      // Incluir usuario solo si se solicita explícitamente
+      ...(includeUsuario ? {
+        usuario: {
+          select: { email: true, rol: true },
+        },
+      } : {}),
     },
     orderBy: { id: "asc" },
   });
@@ -41,7 +48,6 @@ export async function GET(req: Request) {
     where: whereAporte,
     _sum: { multa: true },
   });
-
   const ahorrosSum = await prisma.ahorro.groupBy({
     by: ["socioId"],
     where: whereAhorro,
@@ -51,7 +57,6 @@ export async function GET(req: Request) {
   const mapMultas = new Map(multasSum.map(m => [m.socioId, Number(m._sum.multa ?? 0)]));
   const mapAhorros = new Map(ahorrosSum.map(a => [a.socioId, Number(a._sum.monto ?? 0)]));
 
-  // Si quieres que 'multas' en la UI refleje todo, suma: aportes.multa + socio.multas (extra)
   const result = socios.map(s => ({
     ...s,
     ahorros: mapAhorros.get(s.id) ?? 0,
@@ -65,16 +70,15 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // === Generar número de cuenta automático ===
+    // Generar número de cuenta automático
     const next = await prisma.$queryRaw<{ nextval: bigint }[]>`
       SELECT nextval('numero_cuenta_seq') as nextval
     `;
     const sec = Number(next[0].nextval);
-    const numeroCuenta = `CTA${String(sec).padStart(4, "0")}`; // CTA0001, CTA0002, etc.
+    const numeroCuenta = `CTA${String(sec).padStart(4, "0")}`;
 
-    // Sanitiza payload
     const data = {
-      numeroCuenta, // 👈 ahora lo asignamos aquí
+      numeroCuenta,
       cedula: String(body.cedula ?? "").trim(),
       nombres: String(body.nombres ?? "").trim(),
       apellidos: String(body.apellidos ?? "").trim(),
@@ -88,11 +92,10 @@ export async function POST(req: Request) {
 
     const socio = await prisma.socio.create({ data });
 
-    // === Ahorro inicial (opcional) ===
+    // Ahorro inicial (opcional)
     const ahorroInicial = Number(body.ahorroInicial ?? 0);
     if (ahorroInicial > 0) {
       const rondaId = await getOrCreateRondaInicial();
-
       await prisma.ahorro.upsert({
         where: {
           rondaId_socioId_semana: { rondaId, socioId: socio.id, semana: 0 },
@@ -105,10 +108,7 @@ export async function POST(req: Request) {
     return NextResponse.json(socio, { status: 201 });
   } catch (err: any) {
     if (err?.code === "P2002") {
-      return NextResponse.json(
-        { error: "La cédula ya existe." },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "La cédula ya existe." }, { status: 409 });
     }
     console.error(err);
     return NextResponse.json({ error: "Error al crear socio" }, { status: 500 });
