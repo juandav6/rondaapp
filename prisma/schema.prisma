@@ -29,6 +29,8 @@ model Socio {
   cuentasInversion         CuentaInversion[]
   movimientos              MovimientoCuenta[]
 
+  usuario   Usuario?
+
   @@map("socios")
 }
 
@@ -231,16 +233,21 @@ model PrestamoCuota {
   @@map("prestamo_cuotas")
 }
 
+enum RolUsuario {
+  ADMIN
+  SOCIO
+}
+
 model Usuario {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  nombre       String
-  rol          String   @default("ADMIN")  // ADMIN | VIEWER
-  activo       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
- 
+  id        Int         @id @default(autoincrement())
+  email     String      @unique
+  password  String
+  nombre    String?
+  rol       RolUsuario  @default(SOCIO)
+  socioId   Int?        @unique @map("socio_id")
+  socio     Socio?      @relation(fields: [socioId], references: [id])
+  createdAt DateTime    @default(now())
+
   @@map("usuarios")
 }
 
