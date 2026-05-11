@@ -32,11 +32,18 @@ export default function SociosPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [q, setQ] = useState("");
 
-  // Reset password modal
+  // Modal reset contraseña
   const [resetSocio, setResetSocio] = useState<SocioRow | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
+
+  // Modal crear acceso
+  const [createAccesoSocio, setCreateAccesoSocio] = useState<SocioRow | null>(null);
+  const [accesoEmail, setAccesoEmail] = useState("");
+  const [accesoPassword, setAccesoPassword] = useState("");
+  const [showAccesoPass, setShowAccesoPass] = useState(false);
+  const [creatingAcceso, setCreatingAcceso] = useState(false);
 
   useEffect(() => { fetchSocios(); }, []);
 
@@ -106,13 +113,40 @@ export default function SociosPage() {
     finally { setSavingEdit(false); }
   };
 
+  // Crear acceso portal
+  const openCrearAcceso = (s: SocioRow) => {
+    setCreateAccesoSocio(s);
+    setAccesoEmail(`${s.numeroCuenta.toLowerCase()}@mironda.com`);
+    setAccesoPassword(s.numeroCuenta);
+    setShowAccesoPass(false);
+  };
+
+  const handleCrearAcceso = async () => {
+    if (!createAccesoSocio) return;
+    if (!accesoEmail.trim() || !accesoPassword.trim()) return;
+    if (accesoPassword.trim().length < 6) { setError("La contraseña debe tener al menos 6 caracteres"); return; }
+    try {
+      setCreatingAcceso(true);
+      setError(null);
+      const res = await fetch(`/api/socios/${createAccesoSocio.id}/crear-acceso`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: accesoEmail.trim().toLowerCase(), password: accesoPassword.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Error al crear acceso");
+      setSuccess(`Acceso creado para ${createAccesoSocio.nombres.split(" ")[0]} · ${accesoEmail.trim().toLowerCase()}`);
+      setTimeout(() => setSuccess(null), 4000);
+      setCreateAccesoSocio(null);
+      await fetchSocios();
+    } catch (e: any) { setError(e?.message); }
+    finally { setCreatingAcceso(false); }
+  };
+
   // Reset contraseña
   const handleResetPassword = async () => {
     if (!resetSocio || !newPassword.trim()) return;
-    if (newPassword.trim().length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
-      return;
-    }
+    if (newPassword.trim().length < 6) { setError("La contraseña debe tener al menos 6 caracteres."); return; }
     try {
       setResetting(true);
       const res = await fetch(`/api/socios/${resetSocio.id}/reset-password`, {
@@ -124,13 +158,9 @@ export default function SociosPage() {
       if (!res.ok) throw new Error(data?.error || "Error al resetear");
       setSuccess(`Contraseña actualizada para ${resetSocio.nombres.split(" ")[0]}`);
       setTimeout(() => setSuccess(null), 3000);
-      setResetSocio(null);
-      setNewPassword("");
-    } catch (e: any) {
-      setError(e?.message);
-    } finally {
-      setResetting(false);
-    }
+      setResetSocio(null); setNewPassword("");
+    } catch (e: any) { setError(e?.message); }
+    finally { setResetting(false); }
   };
 
   const sociosFiltrados = socios.filter(s => {
@@ -164,7 +194,7 @@ export default function SociosPage() {
           </span>
           <div>
             <h1 className="text-lg sm:text-2xl font-semibold tracking-tight">Gestión de Socios</h1>
-            <p className="text-xs sm:text-sm text-gray-500">Administra los socios de la cooperativa</p>
+            <p className="text-xs sm:text-sm text-gray-500">{sociosConAcceso} de {socios.length} socios con acceso al portal</p>
           </div>
         </div>
       </div>
@@ -176,7 +206,7 @@ export default function SociosPage() {
           <p className="mt-1 text-xl sm:text-3xl font-bold text-gray-900">{socios.length}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
-          <p className="text-xs text-gray-500">Con acceso portal</p>
+          <p className="text-xs text-gray-500">Con portal</p>
           <p className="mt-1 text-xl sm:text-3xl font-bold text-blue-600">{sociosConAcceso}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
@@ -259,14 +289,14 @@ export default function SociosPage() {
               <div className="p-10 text-center text-sm text-gray-500">No hay socios registrados.</div>
             ) : (
               <>
-                {/* Tabla — solo desktop */}
+                {/* Tabla desktop */}
                 <div className="hidden sm:block overflow-x-auto">
                   <table className="min-w-full text-sm divide-y divide-gray-100">
                     <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                       <tr>
                         <th className="px-4 py-3 text-left">Cuenta</th>
                         <th className="px-4 py-3 text-left">Nombre</th>
-                        <th className="px-4 py-3 text-left">Correo / Acceso</th>
+                        <th className="px-4 py-3 text-left">Correo / Acceso portal</th>
                         <th className="px-4 py-3 text-right">Ahorros</th>
                         <th className="px-4 py-3 text-right">Multas</th>
                         <th className="px-4 py-3 text-right">Acciones</th>
@@ -285,14 +315,17 @@ export default function SociosPage() {
                               <div>
                                 <p className="text-xs text-gray-700 font-mono">{s.usuario.email}</p>
                                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 mt-0.5">
-                                  <span className="h-1 w-1 rounded-full bg-emerald-500" />
-                                  Con acceso
+                                  <span className="h-1 w-1 rounded-full bg-emerald-500" />Con acceso
                                 </span>
                               </div>
                             ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                                Sin acceso
-                              </span>
+                              <button onClick={() => openCrearAcceso(s)}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-blue-300 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"/>
+                                </svg>
+                                Crear acceso
+                              </button>
                             )}
                           </td>
                           <td className="px-4 py-3 text-right font-medium text-emerald-600 tabular-nums">{fmt(s.ahorros)}</td>
@@ -300,9 +333,7 @@ export default function SociosPage() {
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">
                               <button onClick={() => openEdit(s)}
-                                className="rounded-md border px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-50 font-medium">
-                                Editar
-                              </button>
+                                className="rounded-md border px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-50 font-medium">Editar</button>
                               {s.usuario && (
                                 <button onClick={() => { setResetSocio(s); setNewPassword(""); setShowNewPass(false); }}
                                   className="rounded-md border border-amber-200 px-2.5 py-1.5 text-xs text-amber-700 hover:bg-amber-50 font-medium">
@@ -310,9 +341,7 @@ export default function SociosPage() {
                                 </button>
                               )}
                               <button onClick={() => handleDelete(s.id)}
-                                className="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-700 hover:bg-red-50 font-medium">
-                                Eliminar
-                              </button>
+                                className="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-700 hover:bg-red-50 font-medium">Eliminar</button>
                             </div>
                           </td>
                         </tr>
@@ -321,7 +350,7 @@ export default function SociosPage() {
                   </table>
                 </div>
 
-                {/* Tarjetas — solo móvil */}
+                {/* Tarjetas móvil */}
                 <ul className="sm:hidden divide-y">
                   {sociosFiltrados.map(s => (
                     <li key={s.id} className="p-4 space-y-2">
@@ -339,7 +368,6 @@ export default function SociosPage() {
                         </div>
                       </div>
 
-                      {/* Acceso portal */}
                       {s.usuario ? (
                         <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 flex items-center justify-between gap-2">
                           <div className="min-w-0">
@@ -352,9 +380,13 @@ export default function SociosPage() {
                           </button>
                         </div>
                       ) : (
-                        <div className="rounded-lg bg-gray-50 border px-3 py-2">
-                          <p className="text-xs text-gray-400">Sin acceso al portal</p>
-                        </div>
+                        <button onClick={() => openCrearAcceso(s)}
+                          className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 py-2 text-xs text-blue-600 hover:bg-blue-50">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                            <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z"/>
+                          </svg>
+                          Crear acceso al portal
+                        </button>
                       )}
 
                       <div className="flex gap-3">
@@ -425,6 +457,62 @@ export default function SociosPage() {
         </div>
       )}
 
+      {/* Modal crear acceso */}
+      {createAccesoSocio && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center">
+          <div className="fixed inset-0 bg-black/30" onClick={() => !creatingAcceso && setCreateAccesoSocio(null)} />
+          <div className="relative z-50 w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Crear acceso al portal</h3>
+                <p className="text-sm text-gray-500 mt-0.5">{createAccesoSocio.nombres} {createAccesoSocio.apellidos}</p>
+                <p className="text-xs text-gray-400 font-mono">{createAccesoSocio.numeroCuenta}</p>
+              </div>
+              <button onClick={() => setCreateAccesoSocio(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                <input type="email" value={accesoEmail}
+                  onChange={e => setAccesoEmail(e.target.value)}
+                  placeholder="socio@ejemplo.com"
+                  className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                <p className="mt-1 text-xs text-gray-400">El socio usará este correo para iniciar sesión</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña inicial</label>
+                <div className="relative">
+                  <input type={showAccesoPass ? "text" : "password"} value={accesoPassword}
+                    onChange={e => setAccesoPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    className="w-full rounded-md border px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                  <button type="button" onClick={() => setShowAccesoPass(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                      {showAccesoPass
+                        ? <path d="M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z"/>
+                        : <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>}
+                    </svg>
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-400">Comparte esta contraseña con el socio para su primer acceso</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setCreateAccesoSocio(null)} disabled={creatingAcceso}
+                className="px-4 py-2 rounded-md border text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button onClick={handleCrearAcceso}
+                disabled={creatingAcceso || !accesoEmail.trim() || accesoPassword.trim().length < 6}
+                className={`px-4 py-2 rounded-md text-sm font-medium text-white ${creatingAcceso || !accesoEmail.trim() || accesoPassword.trim().length < 6 ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}>
+                {creatingAcceso ? "Creando…" : "Crear acceso"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal reset contraseña */}
       {resetSocio && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center">
@@ -438,21 +526,16 @@ export default function SociosPage() {
               </div>
               <button onClick={() => setResetSocio(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
             </div>
-
             <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 mb-4">
               ⚠️ El socio deberá usar la nueva contraseña en su próximo inicio de sesión.
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
               <div className="relative">
-                <input
-                  type={showNewPass ? "text" : "password"}
-                  value={newPassword}
+                <input type={showNewPass ? "text" : "password"} value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
-                  className="w-full rounded-md border px-3 py-2 pr-10 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-200"
-                />
+                  className="w-full rounded-md border px-3 py-2 pr-10 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-200" />
                 <button type="button" onClick={() => setShowNewPass(v => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
@@ -462,9 +545,8 @@ export default function SociosPage() {
                   </svg>
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-400">Sugerencia: usa el número de cuenta como contraseña inicial ({resetSocio.numeroCuenta})</p>
+              <p className="mt-1 text-xs text-gray-400">Sugerencia: {resetSocio.numeroCuenta}</p>
             </div>
-
             <div className="mt-5 flex justify-end gap-3">
               <button onClick={() => setResetSocio(null)} disabled={resetting}
                 className="px-4 py-2 rounded-md border text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
