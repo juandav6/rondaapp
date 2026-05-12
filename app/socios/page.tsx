@@ -267,8 +267,8 @@ export default function SociosPage() {
         {/* LISTA */}
         {activeTab === "lista" && (
           <div>
-            <div className="px-4 py-3 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between border-b bg-gray-50">
-              <div className="relative flex-1 sm:max-w-xs">
+            <div className="px-4 py-3 flex gap-2 items-center border-b bg-gray-50">
+              <div className="relative flex-1">
                 <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por nombre, cuenta, email…"
                   className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none pl-8" />
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
@@ -281,7 +281,8 @@ export default function SociosPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                 </svg>
-                Nuevo
+                <span className="hidden sm:inline">Nuevo</span>
+                <span className="sm:hidden">+</span>
               </button>
             </div>
 
