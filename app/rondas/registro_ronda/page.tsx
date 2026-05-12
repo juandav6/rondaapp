@@ -30,12 +30,29 @@ export default function RegistrarRondaPage() {
   const [form, setForm] = useState({ montoAporte: 0, fechaInicio: "", ahorroObjetivo: 0, intervaloDiasCobro: 7, esHistorica: false });
   const fechaRef = useRef<HTMLInputElement>(null);
 
+  // Préstamos pendientes de la ronda activa
+  const [prestamosPendientes, setPrestamosPendientes] = useState<{ id: number; monto: number; saldoActual: number; socio: { nombres: string; apellidos: string; numeroCuenta: string } }[]>([]);
+  const [ignorarPrestamos, setIgnorarPrestamos] = useState(false);
+
   useEffect(() => {
     fetch("/api/socios").then(r => r.json()).then(l => setSocios(Array.isArray(l) ? l : [])).catch(() => setSocios([]));
   }, []);
 
   useEffect(() => {
-    fetch("/api/rondas").then(r => r.status === 204 ? null : r.json()).then(d => { if (d?.id) setRondaActivaExistente({ id: d.id, nombre: d.nombre }); }).catch(() => {}).finally(() => setCheckingRonda(false));
+    fetch("/api/rondas").then(r => r.status === 204 ? null : r.json()).then(async d => {
+      if (d?.id) {
+        setRondaActivaExistente({ id: d.id, nombre: d.nombre });
+        // Cargar préstamos activos de esa ronda
+        try {
+          const pRes = await fetch("/api/prestamos");
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            const activos = (pData?.prestamos ?? []).filter((p: any) => p.ronda?.id === d.id && p.estado === "ACTIVO");
+            setPrestamosPendientes(activos);
+          }
+        } catch { /* silencioso */ }
+      }
+    }).catch(() => {}).finally(() => setCheckingRonda(false));
   }, []);
 
   const sociosConSaldo = useMemo(() => socios.filter(s => (s.saldoAhorros ?? 0) > 0), [socios]);
@@ -67,7 +84,8 @@ export default function RegistrarRondaPage() {
   function moveUp(i: number) { if (i <= 0) return; setOrden(prev => { const n = [...prev]; [n[i-1], n[i]] = [n[i], n[i-1]]; return n; }); }
   function moveDown(i: number) { setOrden(prev => { if (i >= prev.length-1) return prev; const n = [...prev]; [n[i+1], n[i]] = [n[i], n[i+1]]; return n; }); }
 
-  const paso1Valido = form.fechaInicio && form.montoAporte > 0 && seleccion.length > 0;
+  const hayPrestamosPendientes = prestamosPendientes.length > 0 && !form.esHistorica;
+  const paso1Valido = form.fechaInicio && form.montoAporte > 0 && seleccion.length > 0 && (!hayPrestamosPendientes || ignorarPrestamos);
   const paso2Valido = sociosConSaldo.every(s => { const a = aportesInversion[s.id] ?? 0; return a >= 0 && a <= (s.saldoAhorros ?? 0); });
   const fechaFinEstimada = form.fechaInicio && orden.length > 0 ? addDays(form.fechaInicio, Math.max(0, orden.length - 1) * form.intervaloDiasCobro) : null;
 
@@ -171,6 +189,61 @@ export default function RegistrarRondaPage() {
       </div>
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      {/* ── Banner préstamos pendientes ── */}
+      {hayPrestamosPendientes && paso === 1 && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 shadow-sm overflow-hidden">
+          <div className="flex items-start gap-3 p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-rose-800">
+                Hay {prestamosPendientes.length} préstamo{prestamosPendientes.length !== 1 ? "s" : ""} activo{prestamosPendientes.length !== 1 ? "s" : ""} sin cancelar
+              </p>
+              <p className="text-xs text-rose-600 mt-0.5">
+                Se recomienda cancelar todos los préstamos antes de iniciar una nueva ronda.
+              </p>
+            </div>
+          </div>
+
+          {/* Lista de préstamos */}
+          <ul className="border-t border-rose-100 divide-y divide-rose-100">
+            {prestamosPendientes.map(p => (
+              <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-rose-900 truncate">
+                    {p.socio.nombres} {p.socio.apellidos}
+                  </p>
+                  <p className="text-xs text-rose-500 font-mono">{p.socio.numeroCuenta}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs text-rose-400">Saldo pendiente</p>
+                  <p className="text-sm font-bold text-rose-700 tabular-nums">
+                    {new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(p.saldoActual))}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Opción de continuar de todas maneras */}
+          <div className="border-t border-rose-200 bg-rose-100/50 px-4 py-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div
+                onClick={() => setIgnorarPrestamos(v => !v)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${ignorarPrestamos ? "bg-rose-600" : "bg-rose-300"}`}>
+                <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${ignorarPrestamos ? "translate-x-4" : "translate-x-0"}`} />
+              </div>
+              <span className="text-xs text-rose-800 font-medium">
+                Entiendo el riesgo — continuar de todas maneras
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* ══ PASO 1 ══ */}
       {paso === 1 && (
