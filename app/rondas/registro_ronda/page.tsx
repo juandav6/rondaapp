@@ -42,13 +42,22 @@ export default function RegistrarRondaPage() {
     fetch("/api/rondas").then(r => r.status === 204 ? null : r.json()).then(async d => {
       if (d?.id) {
         setRondaActivaExistente({ id: d.id, nombre: d.nombre });
-        // Cargar préstamos activos de esa ronda
         try {
-          const pRes = await fetch("/api/prestamos");
-          if (pRes.ok) {
+          // Intentar endpoint específico de la ronda primero
+          const pRes = await fetch(`/api/rondas/${d.id}/prestamos-activos`).catch(() => null);
+          if (pRes?.ok) {
             const pData = await pRes.json();
-            const activos = (pData?.prestamos ?? []).filter((p: any) => p.ronda?.id === d.id && p.estado === "ACTIVO");
-            setPrestamosPendientes(activos);
+            setPrestamosPendientes(Array.isArray(pData) ? pData : (pData?.prestamos ?? []));
+          } else {
+            // Fallback: endpoint general
+            const pRes2 = await fetch("/api/prestamos");
+            if (pRes2.ok) {
+              const pData2 = await pRes2.json();
+              const lista = Array.isArray(pData2) ? pData2 : (pData2?.prestamos ?? []);
+              setPrestamosPendientes(
+                lista.filter((p: any) => p.estado === "ACTIVO")
+              );
+            }
           }
         } catch { /* silencioso */ }
       }
