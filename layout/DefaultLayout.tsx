@@ -2,6 +2,7 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { useSidebar } from "@/context/SidebarContext";
 import React from "react";
 import AppHeader from "./AppHeader";
 import AppSidebar from "./AppSidebar";
@@ -27,10 +28,21 @@ const DefaultLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }
 
   // ADMIN → layout completo
+  return <AdminLayout>{children}</AdminLayout>;
+};
+
+// Componente interno que puede usar useSidebar (requiere estar dentro de SidebarProvider)
+function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { isExpanded, isHovered } = useSidebar();
+  const sidebarW = isExpanded || isHovered ? 290 : 90;
+
   return (
-    <div className="min-h-screen xl:flex">
+    <div className="min-h-screen">
       <AppSidebar />
-      <div className="flex flex-1 flex-col lg:pl-[var(--sidebar-w,90px)]">
+      <div
+        className="flex min-h-screen flex-col transition-[padding] duration-300"
+        style={{ paddingLeft: `${sidebarW}px` }}
+      >
         <AppHeader />
         <main className="flex-1 p-4 sm:p-6">
           {children}
@@ -38,6 +50,6 @@ const DefaultLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </div>
     </div>
   );
-};
+}
 
 export default DefaultLayout;
