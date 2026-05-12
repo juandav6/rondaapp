@@ -22,17 +22,14 @@ export async function GET() {
     },
   });
   if (!ronda) return new NextResponse(null, { status: 204 });
-
   return NextResponse.json({
     id: ronda.id,
     nombre: ronda.nombre,
     semanaActual: ronda.semanaActual,
     montoAporte: ronda.montoAporte.toString(),
     ahorroObjetivoPorSocio: ronda.ahorroObjetivoPorSocio.toString(),
-    // 👇 si quieres usarlo en UI tipo <input type="date">
     fechaInicioDate: ronda.fechaInicio.toISOString().slice(0, 10),
     fechaFinDate: ronda.fechaFin ? ronda.fechaFin.toISOString().slice(0, 10) : null,
-    // (si aún necesitas los ISO completos, puedes dejarlos también)
     fechaInicioISO: ronda.fechaInicio.toISOString(),
     fechaFinISO: ronda.fechaFin ? ronda.fechaFin.toISOString() : null,
     intervaloDiasCobro: ronda.intervaloDiasCobro,
@@ -51,24 +48,34 @@ export async function GET() {
 // POST → crear ronda con código secuencial RDxxxx
 export async function POST(req: Request) {
   const body = await req.json();
-  const { nombre, montoAporte, fechaInicio, ahorroObjetivo, intervaloDiasCobro } = body as {
-    nombre?: string;
+  const {
+    montoAporte,
+    fechaInicio,
+    ahorroObjetivo,
+    intervaloDiasCobro,
+    // activa: false → ronda histórica (cerrada), activa: true → ronda nueva activa (default)
+    activa: activaBody,
+  } = body as {
     montoAporte: number;
-    fechaInicio: string;             // viene como "YYYY-MM-DD"
+    fechaInicio: string;
     ahorroObjetivo: number;
     intervaloDiasCobro?: number;
+    activa?: boolean;
   };
 
-  // valida única ronda activa
-  const activa = await prisma.ronda.findFirst({ where: { activa: true } });
-  if (activa) {
-    return NextResponse.json(
-      { error: "Ya existe una ronda activa" },
-      { status: 400 }
-    );
+  // Si es ronda activa (no histórica), validar que no exista otra activa
+  const esActiva = activaBody !== false;
+  if (esActiva) {
+    const activa = await prisma.ronda.findFirst({ where: { activa: true } });
+    if (activa) {
+      return NextResponse.json(
+        { error: "Ya existe una ronda activa" },
+        { status: 400 }
+      );
+    }
   }
 
-  // genera código secuencial RD0001, RD0002, ...
+  // Genera código secuencial RD0001, RD0002, ...
   const row = await prisma.$queryRaw<{ nextval: bigint }[]>`
     SELECT nextval('ronda_codigo_seq') as nextval
   `;
@@ -79,15 +86,14 @@ export async function POST(req: Request) {
     ? Math.floor(Number(intervaloDiasCobro))
     : 7;
 
-  // ⚠️ CLAVE: usar dateOnlyToUTCNoon(fechaInicio)
   const fechaInicioUTC = dateOnlyToUTCNoon(fechaInicio);
 
   const ronda = await prisma.ronda.create({
     data: {
       nombre: codigo,
       montoAporte: new Prisma.Decimal(Number(montoAporte ?? 0)),
-      fechaInicio: fechaInicioUTC, // 👈 evita desfase por TZ
-      activa: true,
+      fechaInicio: fechaInicioUTC,
+      activa: esActiva,           // ← false para históricas, true para nuevas
       semanaActual: 1,
       ahorroObjetivoPorSocio: new Prisma.Decimal(Number(ahorroObjetivo ?? 0)),
       intervaloDiasCobro: intervalo,
