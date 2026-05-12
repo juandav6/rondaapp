@@ -27,7 +27,7 @@ export default function RegistrarRondaPage() {
   const [rondaCreada, setRondaCreada] = useState<{ id: number; nombre: string } | null>(null);
   const [rondaActivaExistente, setRondaActivaExistente] = useState<{ id: number; nombre: string } | null>(null);
   const [checkingRonda, setCheckingRonda] = useState(true);
-  const [form, setForm] = useState<CrearRondaPayload>({ montoAporte: 0, fechaInicio: "", ahorroObjetivo: 0, intervaloDiasCobro: 7 });
+  const [form, setForm] = useState({ montoAporte: 0, fechaInicio: "", ahorroObjetivo: 0, intervaloDiasCobro: 7, esHistorica: false });
   const fechaRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function RegistrarRondaPage() {
   async function crearRonda() {
     try {
       setCreando(true); setError(null);
-      const r1 = await fetch("/api/rondas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ montoAporte: form.montoAporte, fechaInicio: form.fechaInicio, ahorroObjetivo: form.ahorroObjetivo, intervaloDiasCobro: form.intervaloDiasCobro }) });
+      const r1 = await fetch("/api/rondas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ montoAporte: form.montoAporte, fechaInicio: form.fechaInicio, ahorroObjetivo: form.ahorroObjetivo, intervaloDiasCobro: form.intervaloDiasCobro, activa: !form.esHistorica }) });
       const ronda = await r1.json();
       if (!r1.ok) throw new Error(ronda?.error || "No se pudo crear la ronda");
       const r2 = await fetch(`/api/rondas/${ronda.id}/participantes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sociosIds: orden }) });
@@ -118,7 +118,7 @@ export default function RegistrarRondaPage() {
     return <div className="p-4 space-y-3"><div className="h-32 animate-pulse rounded-xl bg-gray-100" /><div className="h-64 animate-pulse rounded-xl bg-gray-100" /></div>;
   }
 
-  if (rondaActivaExistente) {
+  if (rondaActivaExistente && !form.esHistorica) {
     return (
       <div className="p-4 sm:p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-6 sm:p-10 max-w-md w-full shadow-sm">
@@ -203,7 +203,6 @@ export default function RegistrarRondaPage() {
                   <label className="mb-1 block text-xs sm:text-sm font-medium text-gray-700">Fecha de inicio</label>
                   <input ref={fechaRef} type="date" value={form.fechaInicio}
                     onChange={e => setForm(f => ({ ...f, fechaInicio: e.target.value }))}
-                    min={new Date().toISOString().slice(0, 10)}
                     className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
                     onClick={e => (e.target as HTMLInputElement).showPicker?.()}/>
                   {form.fechaInicio && <p className="mt-1 text-xs text-gray-400">{fmtDate(form.fechaInicio)}</p>}
@@ -223,6 +222,21 @@ export default function RegistrarRondaPage() {
                     onChange={e => setForm(f => ({ ...f, intervaloDiasCobro: Number(e.target.value) }))}
                     className="w-full rounded-md border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                   <p className="mt-1 text-xs text-gray-400">{form.intervaloDiasCobro} días entre cobros</p>
+                </div>
+
+                {/* Toggle ronda histórica */}
+                <div className="rounded-lg border p-3">
+                  <label className="flex items-center justify-between gap-3 cursor-pointer">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700">Ronda histórica (fecha pasada)</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Se creará como cerrada, sin bloquear nuevas rondas</p>
+                    </div>
+                    <div
+                      onClick={() => setForm(f => ({ ...f, esHistorica: !f.esHistorica }))}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${form.esHistorica ? "bg-blue-600" : "bg-gray-200"}`}>
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${form.esHistorica ? "translate-x-4" : "translate-x-0"}`} />
+                    </div>
+                  </label>
                 </div>
               </div>
 
