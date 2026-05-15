@@ -130,145 +130,148 @@ export default function PortalSocioPage() {
 
         {/* ══ TAB RESUMEN ══ */}
         {tab === "resumen" && (
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-4">
 
-            {/* Saldo ahorros libre */}
-            <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 text-white shadow-sm">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium text-emerald-100 uppercase tracking-wide">Cuenta de ahorros libre</p>
-                  <p className="mt-1 text-3xl font-bold tabular-nums">{fmt(socio?.saldoAhorros)}</p>
-                  <p className="text-xs text-emerald-100 mt-1">Disponible para retiro</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-xl">💵</div>
-              </div>
-              {totalIntereses > 0 && (
-                <div className="mt-3 pt-3 border-t border-white/20 flex items-center justify-between text-xs">
-                  <span className="text-emerald-100">Intereses ganados</span>
-                  <span className="font-semibold text-white">{fmt(totalIntereses)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Ronda activa — quién recibe esta semana */}
+            {/* ── Bienvenida / Estado general ── */}
             {ronda && (
-              <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-gray-800">Ronda activa · {ronda.nombre}</p>
-                  <span className="text-xs text-gray-400">Sem. {ronda.semanaActual}/{ronda.totalParticipantes}</span>
-                </div>
-
-                {/* Barra progreso */}
-                <div className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${(ronda.semanaActual / ronda.totalParticipantes) * 100}%` }} />
-                </div>
-
-                {/* Quién recibe esta semana */}
-                {ronda.receptorEstaSemana && (
-                  <div className={`rounded-lg p-3 text-sm flex items-center gap-3 ${ronda.receptorEstaSemana.esMiTurno ? "bg-emerald-50 border border-emerald-200" : "bg-gray-50 border"}`}>
-                    <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${ronda.receptorEstaSemana.esMiTurno ? "bg-emerald-600 text-white" : "bg-gray-300 text-gray-700"}`}>
-                      {ronda.receptorEstaSemana.nombres[0]}{ronda.receptorEstaSemana.apellidos[0]}
-                    </span>
-                    <div className="min-w-0">
-                      <p className={`text-xs font-semibold ${ronda.receptorEstaSemana.esMiTurno ? "text-emerald-800" : "text-gray-700"}`}>
-                        {ronda.receptorEstaSemana.esMiTurno ? "🎉 Esta semana te toca a ti" : `Recibe: ${ronda.receptorEstaSemana.nombres} ${ronda.receptorEstaSemana.apellidos}`}
-                      </p>
-                      <p className="text-xs text-gray-400 font-mono">{ronda.receptorEstaSemana.numeroCuenta}</p>
-                    </div>
-                  </div>
+              <div className="rounded-xl border border-gray-200 bg-white p-4 text-center space-y-1 shadow-sm">
+                <p className="text-base font-semibold text-gray-900">
+                  Hola {socio?.nombres} {socio?.apellidos}
+                </p>
+                {ronda.estaEnRonda ? (
+                  <p className="text-sm text-gray-600">
+                    Actualmente te encuentras en la <strong>{ronda.nombre}</strong> Semana {ronda.semanaActual}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500">No estás participando en la ronda activa</p>
                 )}
-
-                {/* Mi turno */}
-                {ronda.estaEnRonda && ronda.semanaToca != null && !esSemanaDecobro && (
-                  <div className={`rounded-lg px-3 py-2 text-xs ${ronda.semanasRestantes !== null && ronda.semanasRestantes < 0 ? "bg-gray-50 text-gray-500" : "bg-blue-50 text-blue-700"}`}>
-                    {ronda.semanasRestantes !== null && ronda.semanasRestantes < 0
-                      ? `✓ Ya recibí en la semana #${ronda.semanaToca}`
-                      : `⏳ Mi turno: semana #${ronda.semanaToca} · Faltan ${ronda.semanasRestantes} semana${ronda.semanasRestantes !== 1 ? "s" : ""}`}
-                  </div>
+                {ronda.receptorEstaSemana && (
+                  <p className="text-sm text-gray-600">
+                    Quien recibe el dinero esta semana:{" "}
+                    <strong className={ronda.receptorEstaSemana.esMiTurno ? "text-emerald-700" : "text-gray-800"}>
+                      {ronda.receptorEstaSemana.esMiTurno
+                        ? "¡Tú! 🎉"
+                        : `${ronda.receptorEstaSemana.nombres} ${ronda.receptorEstaSemana.apellidos}`}
+                    </strong>
+                  </p>
+                )}
+                {ronda.estaEnRonda && ronda.semanaToca != null && (
+                  <p className="text-sm text-gray-600">
+                    {esSemanaDecobro
+                      ? <span className="font-semibold text-emerald-700">🎉 ¡Esta semana te toca cobrar!</span>
+                      : ronda.semanasRestantes !== null && ronda.semanasRestantes < 0
+                        ? <span className="text-gray-500">Ya recibiste en la semana #{ronda.semanaToca}</span>
+                        : <>A ti te toca: <strong>{(() => {
+                            const inicio = new Date(ronda.fechaInicio);
+                            inicio.setDate(inicio.getDate() + (ronda.semanaToca - 1) * 7);
+                            return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(inicio);
+                          })()}</strong></>
+                    }
+                  </p>
                 )}
               </div>
             )}
 
-            {/* Grid de datos clave */}
-            {ronda && (
-              <div className="grid grid-cols-2 gap-2">
+            {/* ── Grid 2×2 ── */}
+            <div className="grid grid-cols-2 gap-3">
 
-                {/* Inversión */}
-                {ronda.inversion && (
-                  <div className="rounded-xl border bg-white p-3 shadow-sm col-span-2">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Fondo de inversión</p>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <p className="text-gray-400">Mi aporte</p>
-                        <p className="font-bold text-blue-700 tabular-nums mt-0.5">{fmt(ronda.inversion.montoInvertido)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">% participación</p>
-                        <p className="font-bold text-blue-700 mt-0.5">{Number(ronda.inversion.porcentajeParticipacion).toFixed(1)}%</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400">Fondo total</p>
-                        <p className="font-bold text-gray-700 tabular-nums mt-0.5">{fmt(ronda.inversion.fondoTotal)}</p>
-                      </div>
-                    </div>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
-                      <div className="h-full rounded-full bg-blue-500"
-                        style={{ width: `${ronda.inversion.fondoTotal > 0 ? (ronda.inversion.montoInvertido / ronda.inversion.fondoTotal) * 100 : 0}%` }} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Aportes */}
-                <div className="rounded-xl border bg-white p-3 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Aportes</p>
-                  <p className="text-lg font-bold text-gray-900 tabular-nums">{fmt(ronda.totalAportado)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{ronda.semanasPagadas} de {ronda.semanasEsperadas} sem.</p>
-                  <div className={`mt-2 text-xs font-medium ${ronda.diferencia >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {ronda.diferencia >= 0 ? `+${fmt(ronda.diferencia)} excedente` : `${fmt(Math.abs(ronda.diferencia))} pendiente`}
-                  </div>
+              {/* Valor de ahorros */}
+              <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                <div className="p-3 space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Saldo de ahorros</p>
+                  <p className="text-2xl font-bold text-emerald-700 tabular-nums">{fmt(socio?.saldoAhorros)}</p>
+                  <p className="text-xs text-gray-400">Disponible para retiro</p>
                 </div>
+                <div className="border-t bg-gray-50 px-3 py-1.5">
+                  <p className="text-[10px] text-gray-400">
+                    Fecha corte: {new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date())}
+                  </p>
+                </div>
+              </div>
 
-                {/* Ahorros ronda */}
-                <div className="rounded-xl border bg-white p-3 shadow-sm">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Ahorros ronda</p>
-                  <p className="text-lg font-bold text-emerald-700 tabular-nums">{fmt(ronda.totalAhorradoRonda)}</p>
-                  {ronda.ahorroObjetivo > 0 && (
+              {/* Fondo en inversión */}
+              <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                <div className="p-3 space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Fondo en inversión</p>
+                  {ronda?.inversion ? (
                     <>
-                      <p className="text-xs text-gray-400 mt-0.5">Meta: {fmt(ronda.ahorroObjetivo)}</p>
-                      <div className={`mt-2 text-xs font-medium ${ronda.pendienteAhorro === 0 ? "text-emerald-600" : "text-amber-600"}`}>
-                        {ronda.pendienteAhorro === 0 ? "✓ Meta alcanzada" : `${fmt(ronda.pendienteAhorro)} pendiente`}
-                      </div>
+                      <p className="text-2xl font-bold text-blue-700 tabular-nums">{fmt(ronda.inversion.montoInvertido)}</p>
+                      <p className="text-xs text-gray-400">{Number(ronda.inversion.porcentajeParticipacion).toFixed(1)}% del fondo · {fmt(ronda.inversion.fondoTotal)} total</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-gray-300">—</p>
+                      <p className="text-xs text-gray-400">Sin inversión activa</p>
                     </>
                   )}
                 </div>
+                <div className="border-t bg-gray-50 px-3 py-1.5">
+                  <p className="text-[10px] text-gray-400">{ronda?.nombre ?? "—"}</p>
+                </div>
               </div>
-            )}
 
-            {/* Préstamos pendientes */}
-            {ronda && ronda.prestamos.cantidadActivos > 0 && (
-              <div className="rounded-xl border bg-white p-4 shadow-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Préstamos activos</p>
-                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">{ronda.prestamos.cantidadActivos}</span>
+              {/* Ahorros en ronda */}
+              <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                <div className="p-3 space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Ahorros en ronda</p>
+                  {ronda ? (
+                    <>
+                      <p className="text-2xl font-bold text-emerald-700 tabular-nums">{fmt(ronda.totalAhorradoRonda)}</p>
+                      {ronda.ahorroObjetivo > 0 ? (
+                        <>
+                          <p className="text-xs text-gray-400">Meta: {fmt(ronda.ahorroObjetivo)}</p>
+                          <div className="h-1 w-full rounded-full bg-gray-200 overflow-hidden mt-1">
+                            <div className="h-full rounded-full bg-emerald-500"
+                              style={{ width: `${Math.min((ronda.totalAhorradoRonda / ronda.ahorroObjetivo) * 100, 100)}%` }} />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-400">Aportes acumulados</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-gray-300">—</p>
+                      <p className="text-xs text-gray-400">Sin ronda activa</p>
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Total pendiente</span>
-                  <span className="text-sm font-bold text-rose-700 tabular-nums">{fmt(ronda.prestamos.totalSaldo)}</span>
+                <div className="border-t bg-gray-50 px-3 py-1.5">
+                  <p className="text-[10px] text-gray-400">
+                    {ronda && ronda.pendienteAhorro > 0
+                      ? `Pendiente: ${fmt(ronda.pendienteAhorro)}`
+                      : ronda ? "Al día ✓" : "—"}
+                  </p>
                 </div>
-                {ronda.prestamos.proximaCuota && (
-                  <div className="rounded-lg bg-orange-50 border border-orange-100 px-3 py-2.5 flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-medium text-orange-800">Próximo pago</p>
-                      <p className="text-xs text-orange-600 mt-0.5">{fmtDate(ronda.prestamos.proximaCuota.fechaVenc)} · Cuota #{ronda.prestamos.proximaCuota.numero}</p>
-                    </div>
-                    <p className="text-base font-bold text-orange-700 tabular-nums shrink-0">{fmt(ronda.prestamos.proximaCuota.monto)}</p>
-                  </div>
-                )}
-                <button onClick={() => setTab("prestamos")} className="w-full text-center text-xs text-blue-600 hover:underline pt-1">
-                  Ver detalle de cuotas →
-                </button>
               </div>
-            )}
+
+              {/* Pendiente en préstamos */}
+              <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                <div className="p-3 space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pendiente préstamos</p>
+                  {ronda?.prestamos.cantidadActivos ? (
+                    <>
+                      <p className="text-2xl font-bold text-rose-700 tabular-nums">{fmt(ronda.prestamos.totalSaldo)}</p>
+                      <p className="text-xs text-gray-400">{ronda.prestamos.cantidadActivos} préstamo{ronda.prestamos.cantidadActivos !== 1 ? "s" : ""} activo{ronda.prestamos.cantidadActivos !== 1 ? "s" : ""}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold text-emerald-600">$0,00</p>
+                      <p className="text-xs text-gray-400">Sin deudas pendientes</p>
+                    </>
+                  )}
+                </div>
+                <div className="border-t bg-gray-50 px-3 py-1.5">
+                  {ronda?.prestamos.proximaCuota ? (
+                    <p className="text-[10px] text-gray-400">
+                      Siguiente pago: {new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(ronda.prestamos.proximaCuota.fechaVenc))} · {fmt(ronda.prestamos.proximaCuota.monto)}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-gray-400">Sin próximo pago</p>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* Sin ronda activa */}
             {!ronda && (
