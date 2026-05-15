@@ -51,18 +51,9 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <PlugInIcon />, name: "Multas",
-    subItems: [
-      { name: "Multas por socio", path: "/configuracion/reglas" },
-      { name: "Pago de multas", path: "/configuracion/socios" },
-    ],
-  },
-  {
     icon: <PieChartIcon />, name: "Reportes / Estadísticas",
     subItems: [
-      { name: "Resumen general", path: "/reportes/resumen" },
-      { name: "Exportar PDF / Excel", path: "/reportes/exportar" },
-      { name: "Comparativas entre rondas", path: "/reportes/comparativas" },
+      { name: "Configurar reportes", path: "/reportes/config" },
     ],
   },
 ];
