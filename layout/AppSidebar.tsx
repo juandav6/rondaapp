@@ -43,11 +43,9 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: <BoxCubeIcon />, name: "Ahorros",
+    icon: <BoxCubeIcon />, name: "Depositos",
     subItems: [
       { name: "Registro de ahorros", path: "/ahorros/registro" },
-      { name: "Resumen por socio", path: "/ahorros/resumen" },
-      { name: "Reportes de beneficios", path: "/ahorros/reportes" },
     ],
   },
   {
