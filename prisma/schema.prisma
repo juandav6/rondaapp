@@ -251,3 +251,13 @@ model Usuario {
   @@map("usuarios")
 }
 
+model ConfigReporte {
+  id          Int      @id @default(1)
+  emailAdmin  String   @default("")
+  emailsExtra String   @default("")
+  envioActivo Boolean  @default(true)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("config_reporte")
+}
+
