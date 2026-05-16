@@ -7,9 +7,26 @@ type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: str
 type CrearRondaPayload = { montoAporte: number; fechaInicio: string; ahorroObjetivo: number; intervaloDiasCobro: number };
 
 const fmt = (n: number | string) => new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n) || 0);
-const fmtDate = (iso: string | null | undefined) => { if (!iso) return "-"; const d = new Date(iso); if (Number.isNaN(d.getTime())) return "-"; return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d); };
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return "-";
+  // Si viene como YYYY-MM-DD, forzar UTC noon para evitar desfase de zona horaria
+  const normalized = iso.length === 10 ? `${iso}T12:00:00Z` : iso;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+};
 const fmtDateFull = (d: Date | null) => d ? new Intl.DateTimeFormat("es-EC", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(d) : "-";
-const addDays = (iso: string | Date, days: number) => { if (!iso) return null; const base = typeof iso === "string" ? (iso.includes("T") ? new Date(iso) : new Date(`${iso}T12:00:00Z`)) : new Date(iso); if (Number.isNaN(base.getTime())) return null; const noon = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0)); noon.setUTCDate(noon.getUTCDate() + days); return noon; };
+const addDays = (iso: string | Date, days: number) => {
+  if (!iso) return null;
+  // Forzar UTC noon para evitar desfase por zona horaria
+  const base = typeof iso === "string"
+    ? (iso.length === 10 ? new Date(`${iso}T12:00:00Z`) : new Date(iso))
+    : new Date(iso);
+  if (Number.isNaN(base.getTime())) return null;
+  const noon = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0));
+  noon.setUTCDate(noon.getUTCDate() + days);
+  return noon;
+};
 const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 type Paso = 1 | 2 | 3;
 
