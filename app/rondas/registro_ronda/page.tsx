@@ -475,8 +475,8 @@ export default function RegistrarRondaPage() {
                 </thead>
                 <tbody>
                   {sociosConSaldo.map(s => {
-                    const saldo = s.saldoAhorros ?? 0;
-                    const aporte = aportesInversion[s.id] ?? 0;
+                    const saldo = Number(s.saldoAhorros ?? 0);
+                    const aporte = Number(aportesInversion[s.id] ?? 0);
                     const resta = saldo - aporte;
                     const pct = totalFondo > 0 ? (aporte / totalFondo) * 100 : 0;
                     const excede = aporte > saldo;
@@ -513,9 +513,9 @@ export default function RegistrarRondaPage() {
                 <tfoot className="border-t bg-gray-50">
                   <tr>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + (s.saldoAhorros ?? 0), 0))}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + Number(s.saldoAhorros ?? 0), 0))}</td>
                     <td className="px-4 py-3 text-right font-bold text-blue-700 tabular-nums">{fmt(totalFondo)}</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + Math.max(0, (s.saldoAhorros ?? 0) - (aportesInversion[s.id] ?? 0)), 0))}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + Math.max(0, Number(s.saldoAhorros ?? 0) - Number(aportesInversion[s.id] ?? 0)), 0))}</td>
                     <td className="px-4 py-3 text-right font-bold text-blue-700">100%</td>
                   </tr>
                 </tfoot>
@@ -526,8 +526,8 @@ export default function RegistrarRondaPage() {
           {/* Tarjetas móvil fondo */}
           <div className="sm:hidden space-y-2">
             {sociosConSaldo.map(s => {
-              const saldo = s.saldoAhorros ?? 0;
-              const aporte = aportesInversion[s.id] ?? 0;
+              const saldo = Number(s.saldoAhorros ?? 0);
+              const aporte = Number(aportesInversion[s.id] ?? 0);
               const excede = aporte > saldo;
               const enRonda = sociosEnRondaSet.has(s.id);
               const pct = totalFondo > 0 ? (aporte / totalFondo) * 100 : 0;
