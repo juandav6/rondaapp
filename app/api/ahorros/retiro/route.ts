@@ -1,12 +1,8 @@
 // app/api/ahorros/retiro/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { Decimal } from "@prisma/client/runtime/library";
-
+import { Prisma } from "@prisma/client";
 export const runtime = "nodejs";
-
-// Ronda "técnica" para movimientos fuera de rondas activas
-const RONDA_LIBRE_NOMBRE = "AHORROS_LIBRES";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
     }
 
-    // 1) Bloquear si hay alguna ronda activa
+    // Bloquear si hay ronda activa
     const activas = await prisma.ronda.count({ where: { activa: true } });
     if (activas > 0) {
       return NextResponse.json(
@@ -31,61 +27,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2) Saldo actual del socio (ahorros - retiros)
-    const { _sum } = await prisma.ahorro.aggregate({
-      where: { socioId: sId },
-      _sum: { monto: true },
+    // Verificar saldo actual del socio
+    const socio = await prisma.socio.findUnique({
+      where: { id: sId },
+      select: { id: true, saldoAhorros: true },
     });
-    const saldoActual = Number(_sum.monto ?? 0);
+    if (!socio) return NextResponse.json({ error: "Socio no encontrado" }, { status: 404 });
 
+    const saldoActual = Number(socio.saldoAhorros);
     if (cant > saldoActual) {
       return NextResponse.json(
-        { error: `El monto excede el saldo disponible (${saldoActual.toFixed(2)})` },
+        { error: `El monto excede el saldo disponible ($${saldoActual.toFixed(2)})` },
         { status: 400 }
       );
     }
 
-    // 3) Buscar/crear la ronda "libre"
-    let rondaLibre = await prisma.ronda.findFirst({ where: { nombre: RONDA_LIBRE_NOMBRE } });
-    if (!rondaLibre) {
-      rondaLibre = await prisma.ronda.create({
+    const montoDecimal = new Prisma.Decimal(cant);
+
+    // Transacción: movimiento RETIRO + decrementar saldoAhorros
+    const [movimiento, socioActualizado] = await prisma.$transaction([
+      // 1. Crear movimiento de retiro
+      prisma.movimientoCuenta.create({
         data: {
-          nombre: RONDA_LIBRE_NOMBRE,
-          montoAporte: new Decimal(0),
-          activa: false,
-          fechaInicio: new Date("2000-01-01T00:00:00Z"),
-          // fechaFin: null (opcional)
-          semanaActual: 1,
-          ahorroObjetivoPorSocio: new Decimal(0),
+          socioId: sId,
+          rondaId: null,
+          tipo: "RETIRO",
+          monto: montoDecimal,
+          nota: `Retiro de ahorros · ${new Date().toLocaleDateString("es-EC")}`,
         },
-      });
-    }
+      }),
+      // 2. Decrementar saldoAhorros
+      prisma.socio.update({
+        where: { id: sId },
+        data: { saldoAhorros: { decrement: montoDecimal } },
+        select: { saldoAhorros: true },
+      }),
+    ]);
 
-    // 4) Asignar semana incremental para este socio en la ronda libre
-    const { _max } = await prisma.ahorro.aggregate({
-      where: { rondaId: rondaLibre.id, socioId: sId },
-      _max: { semana: true },
+    return NextResponse.json({
+      ok: true,
+      movimientoId: movimiento.id,
+      saldo: Number(socioActualizado.saldoAhorros),
     });
-    const siguienteSemana = Number(_max.semana ?? 0) + 1;
-
-    // 5) Crear registro con monto negativo
-    await prisma.ahorro.create({
-      data: {
-        rondaId: rondaLibre.id,
-        socioId: sId,
-        semana: siguienteSemana,
-        monto: -Math.abs(cant),
-      },
-    });
-
-    // 6) Recalcular saldo
-    const agg2 = await prisma.ahorro.aggregate({
-      where: { socioId: sId },
-      _sum: { monto: true },
-    });
-    const saldoNuevo = Number(agg2._sum.monto ?? 0);
-
-    return NextResponse.json({ ok: true, saldo: saldoNuevo });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Error inesperado" }, { status: 500 });
   }

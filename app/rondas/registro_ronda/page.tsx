@@ -7,9 +7,26 @@ type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: str
 type CrearRondaPayload = { montoAporte: number; fechaInicio: string; ahorroObjetivo: number; intervaloDiasCobro: number };
 
 const fmt = (n: number | string) => new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n) || 0);
-const fmtDate = (iso: string | null | undefined) => { if (!iso) return "-"; const d = new Date(iso); if (Number.isNaN(d.getTime())) return "-"; return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d); };
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return "-";
+  // Si viene como YYYY-MM-DD, forzar UTC noon para evitar desfase de zona horaria
+  const normalized = iso.length === 10 ? `${iso}T12:00:00Z` : iso;
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+};
 const fmtDateFull = (d: Date | null) => d ? new Intl.DateTimeFormat("es-EC", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(d) : "-";
-const addDays = (iso: string | Date, days: number) => { if (!iso) return null; const base = typeof iso === "string" ? (iso.includes("T") ? new Date(iso) : new Date(`${iso}T12:00:00Z`)) : new Date(iso); if (Number.isNaN(base.getTime())) return null; const noon = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0)); noon.setUTCDate(noon.getUTCDate() + days); return noon; };
+const addDays = (iso: string | Date, days: number) => {
+  if (!iso) return null;
+  // Forzar UTC noon para evitar desfase por zona horaria
+  const base = typeof iso === "string"
+    ? (iso.length === 10 ? new Date(`${iso}T12:00:00Z`) : new Date(iso))
+    : new Date(iso);
+  if (Number.isNaN(base.getTime())) return null;
+  const noon = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0));
+  noon.setUTCDate(noon.getUTCDate() + days);
+  return noon;
+};
 const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 type Paso = 1 | 2 | 3;
 
@@ -72,14 +89,20 @@ export default function RegistrarRondaPage() {
       const hasValues = sociosConSaldo.some(s => (prev[s.id] ?? 0) > 0);
       if (hasValues) return prev;
       const init: Record<number, number> = {};
-      sociosConSaldo.forEach(s => { init[s.id] = s.saldoAhorros ?? 0; });
+      sociosConSaldo.forEach(s => {
+        const v = Number(s.saldoAhorros ?? 0);
+        init[s.id] = Number.isFinite(v) ? v : 0;
+      });
       return init;
     });
   }, [paso, sociosConSaldo]);
 
   const sociosFiltrados = useMemo(() => { const s = q.trim().toLowerCase(); if (!s) return socios; return socios.filter(x => [x.nombres, x.apellidos, x.numeroCuenta].some(v => v.toLowerCase().includes(s))); }, [socios, q]);
   const participantesOrdenados = orden.map(id => socios.find(s => s.id === id)).filter(Boolean) as Socio[];
-  const totalFondo = sociosConSaldo.reduce((a, s) => a + Number(aportesInversion[s.id] ?? 0), 0);
+  const totalFondo = sociosConSaldo.reduce((a, s) => {
+    const v = Number(aportesInversion[s.id] ?? 0);
+    return a + (Number.isFinite(v) ? v : 0);
+  }, 0);
   const sociosEnRondaSet = useMemo(() => new Set(seleccion), [seleccion]);
 
   const toggleSocio = (id: number) => { setSeleccion(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); setOrden(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); };
@@ -452,8 +475,8 @@ export default function RegistrarRondaPage() {
                 </thead>
                 <tbody>
                   {sociosConSaldo.map(s => {
-                    const saldo = s.saldoAhorros ?? 0;
-                    const aporte = aportesInversion[s.id] ?? 0;
+                    const saldo = Number(s.saldoAhorros ?? 0);
+                    const aporte = Number(aportesInversion[s.id] ?? 0);
                     const resta = saldo - aporte;
                     const pct = totalFondo > 0 ? (aporte / totalFondo) * 100 : 0;
                     const excede = aporte > saldo;
@@ -472,7 +495,7 @@ export default function RegistrarRondaPage() {
                         <td className="px-4 py-3 text-right tabular-nums text-emerald-700 font-medium">{fmt(saldo)}</td>
                         <td className="px-4 py-3 text-right">
                           <input type="number" min={0} max={saldo} step="0.01" value={aporte || ""}
-                            onChange={e => { const v = Math.min(Number(e.target.value || 0), saldo); setAportesInversion(p => ({ ...p, [s.id]: v })); }}
+                            onChange={e => { const v = Math.min(Math.max(0, Number(e.target.value || 0)), saldo); if (Number.isFinite(v)) setAportesInversion(p => ({ ...p, [s.id]: v })); }}
                             className={cn("w-32 rounded-md border px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2", excede ? "border-red-300 focus:ring-red-200" : "focus:ring-blue-200")}
                             placeholder="0.00" />
                         </td>
@@ -490,9 +513,9 @@ export default function RegistrarRondaPage() {
                 <tfoot className="border-t bg-gray-50">
                   <tr>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + (s.saldoAhorros ?? 0), 0))}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + Number(s.saldoAhorros ?? 0), 0))}</td>
                     <td className="px-4 py-3 text-right font-bold text-blue-700 tabular-nums">{fmt(totalFondo)}</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + Math.max(0, (s.saldoAhorros ?? 0) - (aportesInversion[s.id] ?? 0)), 0))}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(sociosConSaldo.reduce((a, s) => a + Math.max(0, Number(s.saldoAhorros ?? 0) - Number(aportesInversion[s.id] ?? 0)), 0))}</td>
                     <td className="px-4 py-3 text-right font-bold text-blue-700">100%</td>
                   </tr>
                 </tfoot>
@@ -503,8 +526,8 @@ export default function RegistrarRondaPage() {
           {/* Tarjetas móvil fondo */}
           <div className="sm:hidden space-y-2">
             {sociosConSaldo.map(s => {
-              const saldo = s.saldoAhorros ?? 0;
-              const aporte = aportesInversion[s.id] ?? 0;
+              const saldo = Number(s.saldoAhorros ?? 0);
+              const aporte = Number(aportesInversion[s.id] ?? 0);
               const excede = aporte > saldo;
               const enRonda = sociosEnRondaSet.has(s.id);
               const pct = totalFondo > 0 ? (aporte / totalFondo) * 100 : 0;
@@ -533,7 +556,7 @@ export default function RegistrarRondaPage() {
                     <label className="text-xs text-gray-500 mb-1 block">Aporte al fondo de inversión {pct > 0 && <span className="text-blue-600 font-medium">({pct.toFixed(1)}%)</span>}</label>
                     <div className="flex items-center gap-2">
                       <input type="number" min={0} max={saldo} step="0.01" value={aporte || ""}
-                        onChange={e => { const v = Math.min(Number(e.target.value || 0), saldo); setAportesInversion(p => ({ ...p, [s.id]: v })); }}
+                        onChange={e => { const v = Math.min(Math.max(0, Number(e.target.value || 0)), saldo); if (Number.isFinite(v)) setAportesInversion(p => ({ ...p, [s.id]: v })); }}
                         className={cn("flex-1 rounded-md border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2", excede ? "border-red-300 focus:ring-red-200" : "focus:ring-blue-200")}
                         placeholder="0.00" />
                       <button onClick={() => setAportesInversion(p => ({ ...p, [s.id]: saldo }))}

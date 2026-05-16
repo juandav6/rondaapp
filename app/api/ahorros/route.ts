@@ -1,7 +1,6 @@
 // app/api/ahorros/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
@@ -10,51 +9,72 @@ export async function GET(req: NextRequest) {
     const socioIdStr = searchParams.get("socioId");
     const desde = searchParams.get("desde");
     const hasta = searchParams.get("hasta");
-
     const socioId = Number(socioIdStr);
+
     if (!Number.isFinite(socioId) || socioId <= 0) {
       return NextResponse.json({ error: "socioId inválido" }, { status: 400 });
     }
 
-    // Filtro de fechas opcional
-    const where: any = { socioId };
-    if (desde || hasta) {
-      where.fecha = {};
-      if (desde) {
-        // Desde 00:00:00
-        const d = new Date(desde);
-        d.setHours(0, 0, 0, 0);
-        where.fecha.gte = d;
-      }
-      if (hasta) {
-        // Hasta 23:59:59.999
-        const h = new Date(hasta);
-        h.setHours(23, 59, 59, 999);
-        where.fecha.lte = h;
-      }
-    }
+    // Filtro de fechas
+    const fechaFilter: any = {};
+    if (desde) fechaFilter.gte = new Date(`${desde}T00:00:00Z`);
+    if (hasta) fechaFilter.lte = new Date(`${hasta}T23:59:59Z`);
+    const hasFecha = Object.keys(fechaFilter).length > 0;
 
-    const list = await prisma.ahorro.findMany({
-      where,
+    // ── Ahorros de rondas ────────────────────────────────────────────────────
+    const ahorrosRonda = await prisma.ahorro.findMany({
+      where: {
+        socioId,
+        ...(hasFecha ? { fecha: fechaFilter } : {}),
+      },
       include: { ronda: { select: { id: true, nombre: true } } },
       orderBy: [{ fecha: "desc" }, { id: "desc" }],
     });
 
-    const items = list.map((a) => ({
-      id: a.id,
+    // ── Depósitos y retiros libres (movimientos sin ronda) ───────────────────
+    const movimientosLibres = await prisma.movimientoCuenta.findMany({
+      where: {
+        socioId,
+        tipo: { in: ["AHORRO", "RETIRO"] },
+        rondaId: null,
+        ...(hasFecha ? { createdAt: fechaFilter } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+
+    // ── Combinar ─────────────────────────────────────────────────────────────
+    const itemsRonda = ahorrosRonda.map((a) => ({
+      id: `r_${a.id}`,
+      tipo: "ronda",
       rondaId: a.rondaId,
       rondaNombre: a.ronda?.nombre ?? null,
       semana: a.semana,
       monto: Number(a.monto),
       fecha: a.fecha.toISOString(),
+      nota: null,
     }));
 
-    // Saldo total del socio (independiente de filtros)
-    const agg = await prisma.ahorro.aggregate({
-      where: { socioId },
-      _sum: { monto: true },
+    const itemsLibres = movimientosLibres.map((m) => ({
+      id: `m_${m.id}`,
+      tipo: m.tipo === "RETIRO" ? "retiro" : "deposito",
+      rondaId: null,
+      rondaNombre: m.tipo === "RETIRO" ? "Retiro" : "Depósito libre",
+      semana: null,
+      monto: m.tipo === "RETIRO" ? -Number(m.monto) : Number(m.monto),
+      fecha: m.createdAt.toISOString(),
+      nota: m.nota,
+    }));
+
+    const items = [...itemsRonda, ...itemsLibres].sort(
+      (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+
+    // Saldo real del socio (campo saldoAhorros en la tabla socios)
+    const socio = await prisma.socio.findUnique({
+      where: { id: socioId },
+      select: { saldoAhorros: true },
     });
-    const saldoTotal = Number(agg._sum.monto ?? 0);
+    const saldoTotal = Number(socio?.saldoAhorros ?? 0);
 
     return NextResponse.json({ items, saldo: saldoTotal, saldoTotal });
   } catch (err: any) {

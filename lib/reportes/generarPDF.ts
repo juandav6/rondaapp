@@ -1,212 +1,220 @@
 // lib/reportes/generarPDF.ts
-import React from "react";
-import ReactPDF, {
-  Document, Page, View, Text, StyleSheet,
-} from "@react-pdf/renderer";
-
-const verde = "#1a3a2a";
-const verdeClaro = "#e8f5e9";
-const azulClaro = "#eff6ff";
-const grisClaro = "#f9fafb";
-
-const s = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", backgroundColor: "#ffffff" },
-  // Header
-  header: { marginBottom: 20, borderBottomWidth: 2, borderBottomColor: verde, paddingBottom: 12 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
-  titulo: { fontSize: 22, fontFamily: "Helvetica-Bold", color: verde },
-  subtitulo: { fontSize: 11, color: "#555", marginTop: 3 },
-  headerRight: { alignItems: "flex-end" },
-  fechaLabel: { fontSize: 9, color: "#888" },
-  fechaVal: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#333" },
-  // KPIs
-  kpiRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  kpiCard: { flex: 1, backgroundColor: verdeClaro, borderRadius: 6, padding: 10, borderLeftWidth: 3, borderLeftColor: verde },
-  kpiLabel: { fontSize: 8, color: "#555", textTransform: "uppercase", marginBottom: 3 },
-  kpiValue: { fontSize: 15, fontFamily: "Helvetica-Bold", color: verde },
-  // Secciones
-  seccion: { marginTop: 16 },
-  seccionTitulo: { fontSize: 12, fontFamily: "Helvetica-Bold", color: verde, marginBottom: 6, paddingBottom: 3, borderBottomWidth: 1, borderBottomColor: verde },
-  // Tabla
-  tabla: { width: "100%" },
-  thead: { flexDirection: "row", backgroundColor: verde, paddingVertical: 5, paddingHorizontal: 4 },
-  theadText: { color: "#ffffff", fontFamily: "Helvetica-Bold", fontSize: 8, flex: 1 },
-  theadTextWide: { color: "#ffffff", fontFamily: "Helvetica-Bold", fontSize: 8, flex: 2 },
-  fila: { flexDirection: "row", paddingVertical: 4, paddingHorizontal: 4, borderBottomWidth: 0.5, borderBottomColor: "#e5e7eb" },
-  filaAlterna: { backgroundColor: grisClaro },
-  cell: { fontSize: 8, flex: 1, color: "#333" },
-  cellWide: { fontSize: 8, flex: 2, color: "#333" },
-  cellBold: { fontSize: 8, flex: 1, fontFamily: "Helvetica-Bold", color: "#333" },
-  // Footer
-  footer: { position: "absolute", bottom: 24, left: 40, right: 40, flexDirection: "row", justifyContent: "space-between", borderTopWidth: 0.5, borderTopColor: "#d1d5db", paddingTop: 5 },
-  footerText: { fontSize: 8, color: "#9ca3af" },
-  // Info ronda
-  infoBox: { backgroundColor: azulClaro, borderRadius: 6, padding: 10, marginBottom: 14, flexDirection: "row", gap: 16 },
-  infoItem: { flex: 1 },
-  infoLabel: { fontSize: 8, color: "#555", marginBottom: 2 },
-  infoVal: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1e40af" },
-});
+// Genera un PDF simple sin dependencias externas de fuentes
+// Compatible 100% con Vercel serverless
 
 const fmt = (n: number) =>
-  `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Genera un PDF mínimo válido con texto plano usando solo especificación PDF 1.4
 export async function generarPDF(ronda: any): Promise<Buffer> {
+  const mes = new Date().toLocaleDateString("es-EC", { month: "long", year: "numeric" });
+  const fechaGen = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
+
   const totalAportes = ronda.aportes.reduce((a: number, x: any) => a + Number(x.monto), 0);
   const totalAhorros = ronda.ahorros.reduce((a: number, x: any) => a + Number(x.monto), 0);
   const totalFondo = ronda.cuentasInversion.reduce((a: number, x: any) => a + Number(x.montoInvertido), 0);
   const totalIntereses = ronda.cuentasInversion.reduce((a: number, x: any) => a + Number(x.interesesAcumulados), 0);
   const prestamosActivos = ronda.prestamos.filter((p: any) => p.estado === "ACTIVO");
-  const totalSaldoPrestamos = prestamosActivos.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
+  const totalSaldo = prestamosActivos.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
 
-  const mes = new Date().toLocaleDateString("es-EC", { month: "long", year: "numeric" });
-  const fechaGeneracion = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
+  // Construir líneas de texto del reporte
+  const lines: { text: string; bold?: boolean; indent?: number; separator?: boolean; blank?: boolean }[] = [];
 
-  const doc = React.createElement(Document, {},
-    React.createElement(Page, { size: "A4", style: s.page },
+  const sep = () => lines.push({ text: "─".repeat(80), separator: true });
+  const blank = () => lines.push({ text: "", blank: true });
+  const title = (t: string) => lines.push({ text: t, bold: true });
+  const row = (label: string, value: string, indent = 0) =>
+    lines.push({ text: `${" ".repeat(indent)}${label.padEnd(40 - indent, ".")}${value}`, indent });
 
-      // Header
-      React.createElement(View, { style: s.header },
-        React.createElement(View, { style: s.headerRow },
-          React.createElement(View, {},
-            React.createElement(Text, { style: s.titulo }, "MiRonda"),
-            React.createElement(Text, { style: s.subtitulo }, `Reporte Mensual — ${ronda.nombre} — ${mes}`)
-          ),
-          React.createElement(View, { style: s.headerRight },
-            React.createElement(Text, { style: s.fechaLabel }, "Fecha de generación"),
-            React.createElement(Text, { style: s.fechaVal }, fechaGeneracion)
-          )
-        )
-      ),
+  // Encabezado
+  lines.push({ text: "MIRONDA - SISTEMA DE GESTION DE RONDAS DE AHORRO", bold: true });
+  lines.push({ text: `Reporte Mensual - ${ronda.nombre} - ${mes}` });
+  lines.push({ text: `Generado: ${fechaGen}` });
+  sep();
 
-      // Info ronda
-      React.createElement(View, { style: s.infoBox },
-        ...[
-          { label: "Semana actual", val: `${ronda.semanaActual} / ${ronda.participaciones.length}` },
-          { label: "Inicio de ronda", val: new Date(ronda.fechaInicio).toLocaleDateString("es-EC") },
-          { label: "Participantes", val: String(ronda.participaciones.length) },
-          { label: "Préstamos activos", val: String(prestamosActivos.length) },
-        ].map(item =>
-          React.createElement(View, { key: item.label, style: s.infoItem },
-            React.createElement(Text, { style: s.infoLabel }, item.label),
-            React.createElement(Text, { style: s.infoVal }, item.val)
-          )
-        )
-      ),
+  // Resumen general
+  blank();
+  title("RESUMEN GENERAL");
+  sep();
+  row("Total aportes", fmt(totalAportes));
+  row("Total ahorros", fmt(totalAhorros));
+  row("Fondo de inversion", fmt(totalFondo));
+  row("Intereses acumulados", fmt(totalIntereses));
+  row("Saldo prestamos activos", fmt(totalSaldo));
+  row("Participantes", String(ronda.participaciones.length));
+  row("Semana actual", `${ronda.semanaActual} / ${ronda.participaciones.length}`);
 
-      // KPIs
-      React.createElement(View, { style: s.kpiRow },
-        ...[
-          { label: "Total aportes", val: fmt(totalAportes) },
-          { label: "Total ahorros", val: fmt(totalAhorros) },
-          { label: "Fondo inversión", val: fmt(totalFondo) },
-          { label: "Intereses acum.", val: fmt(totalIntereses) },
-          { label: "Saldo préstamos", val: fmt(totalSaldoPrestamos) },
-        ].map(k =>
-          React.createElement(View, { key: k.label, style: s.kpiCard },
-            React.createElement(Text, { style: s.kpiLabel }, k.label),
-            React.createElement(Text, { style: s.kpiValue }, k.val)
-          )
-        )
-      ),
+  // Participantes
+  blank();
+  title(`PARTICIPANTES (${ronda.participaciones.length})`);
+  sep();
+  lines.push({ text: `${"#".padEnd(4)}${"Cuenta".padEnd(12)}${"Nombre".padEnd(35)}${"Aportes".padStart(12)}${"Ahorros".padStart(12)}`, bold: true });
+  sep();
+  ronda.participaciones.forEach((p: any) => {
+    const tA = ronda.aportes.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
+    const tAh = ronda.ahorros.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
+    const nombre = `${p.socio.nombres} ${p.socio.apellidos}`.substring(0, 33);
+    lines.push({ text: `${String(p.orden).padEnd(4)}${p.socio.numeroCuenta.padEnd(12)}${nombre.padEnd(35)}${fmt(tA).padStart(12)}${fmt(tAh).padStart(12)}` });
+  });
 
-      // Tabla participantes
-      React.createElement(View, { style: s.seccion },
-        React.createElement(Text, { style: s.seccionTitulo }, `Participantes (${ronda.participaciones.length})`),
-        React.createElement(View, { style: s.tabla },
-          // Header tabla
-          React.createElement(View, { style: s.thead },
-            React.createElement(Text, { style: s.theadText }, "#"),
-            React.createElement(Text, { style: s.theadText }, "Cuenta"),
-            React.createElement(Text, { style: s.theadTextWide }, "Nombre completo"),
-            React.createElement(Text, { style: s.theadText }, "Aportes"),
-            React.createElement(Text, { style: s.theadText }, "Ahorros"),
-          ),
-          // Filas
-          ...ronda.participaciones.map((p: any, i: number) => {
-            const totalA = ronda.aportes.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
-            const totalAh = ronda.ahorros.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
-            return React.createElement(View, { key: p.id, style: [s.fila, i % 2 === 1 ? s.filaAlterna : {}] },
-              React.createElement(Text, { style: s.cell }, String(p.orden)),
-              React.createElement(Text, { style: s.cell }, p.socio.numeroCuenta),
-              React.createElement(Text, { style: s.cellWide }, `${p.socio.nombres} ${p.socio.apellidos}`),
-              React.createElement(Text, { style: s.cell }, fmt(totalA)),
-              React.createElement(Text, { style: s.cell }, fmt(totalAh)),
-            );
-          })
-        )
-      ),
+  // Prestamos
+  if (ronda.prestamos.length > 0) {
+    blank();
+    title(`PRESTAMOS (${ronda.prestamos.length})`);
+    sep();
+    lines.push({ text: `${"Socio".padEnd(30)}${"Monto".padStart(12)}${"Saldo".padStart(12)}${"Estado".padEnd(12)}${"Cuotas".padStart(10)}`, bold: true });
+    sep();
+    ronda.prestamos.forEach((p: any) => {
+      const pag = p.cuotas.filter((c: any) => c.pagada).length;
+      const nombre = `${p.socio.nombres} ${p.socio.apellidos}`.substring(0, 28);
+      lines.push({ text: `${nombre.padEnd(30)}${fmt(Number(p.monto)).padStart(12)}${fmt(Number(p.saldoActual)).padStart(12)}${p.estado.padEnd(12)}${`${pag}/${p.cuotas.length}`.padStart(10)}` });
+    });
+  }
 
-      // Footer
-      React.createElement(View, { style: s.footer, fixed: true },
-        React.createElement(Text, { style: s.footerText }, "MiRonda — Sistema de gestión de rondas de ahorro"),
-        React.createElement(Text, { style: s.footerText, render: ({ pageNumber, totalPages }: any) => `Página ${pageNumber} de ${totalPages}` })
-      )
-    ),
+  // Fondo inversión
+  if (ronda.cuentasInversion.length > 0) {
+    blank();
+    title(`FONDO DE INVERSION`);
+    sep();
+    lines.push({ text: `${"Socio".padEnd(30)}${"Invertido".padStart(12)}${"% Part.".padStart(10)}${"Intereses".padStart(12)}${"Total".padStart(12)}`, bold: true });
+    sep();
+    ronda.cuentasInversion.forEach((ci: any) => {
+      const nombre = `${ci.socio.nombres} ${ci.socio.apellidos}`.substring(0, 28);
+      lines.push({ text: `${nombre.padEnd(30)}${fmt(Number(ci.montoInvertido)).padStart(12)}${`${Number(ci.porcentajeParticipacion).toFixed(2)}%`.padStart(10)}${fmt(Number(ci.interesesAcumulados)).padStart(12)}${fmt(Number(ci.montoInvertido) + Number(ci.interesesAcumulados)).padStart(12)}` });
+    });
+  }
 
-    // Página 2 — Préstamos
-    ronda.prestamos.length > 0 ? React.createElement(Page, { size: "A4", style: s.page },
-      React.createElement(View, { style: s.header },
-        React.createElement(Text, { style: s.titulo }, "Préstamos"),
-        React.createElement(Text, { style: s.subtitulo }, `${ronda.nombre} — ${mes}`)
-      ),
-      React.createElement(View, { style: s.tabla },
-        React.createElement(View, { style: s.thead },
-          React.createElement(Text, { style: s.theadTextWide }, "Socio"),
-          React.createElement(Text, { style: s.theadText }, "Monto"),
-          React.createElement(Text, { style: s.theadText }, "Tasa"),
-          React.createElement(Text, { style: s.theadText }, "Saldo"),
-          React.createElement(Text, { style: s.theadText }, "Estado"),
-          React.createElement(Text, { style: s.theadText }, "Cuotas"),
-        ),
-        ...ronda.prestamos.map((p: any, i: number) => {
-          const pagadas = p.cuotas.filter((c: any) => c.pagada).length;
-          return React.createElement(View, { key: p.id, style: [s.fila, i % 2 === 1 ? s.filaAlterna : {}] },
-            React.createElement(Text, { style: s.cellWide }, `${p.socio.nombres} ${p.socio.apellidos}`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(p.monto))),
-            React.createElement(Text, { style: s.cell }, `${Number(p.tasaAnual)}%`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(p.saldoActual))),
-            React.createElement(Text, { style: s.cell }, p.estado),
-            React.createElement(Text, { style: s.cell }, `${pagadas}/${p.cuotas.length}`),
-          );
-        })
-      ),
-      React.createElement(View, { style: s.footer, fixed: true },
-        React.createElement(Text, { style: s.footerText }, "MiRonda — Sistema de gestión de rondas de ahorro"),
-        React.createElement(Text, { style: s.footerText, render: ({ pageNumber, totalPages }: any) => `Página ${pageNumber} de ${totalPages}` })
-      )
-    ) : null,
+  blank();
+  sep();
+  lines.push({ text: "MiRonda - Sistema de gestion de rondas de ahorro" });
 
-    // Página 3 — Inversión
-    ronda.cuentasInversion.length > 0 ? React.createElement(Page, { size: "A4", style: s.page },
-      React.createElement(View, { style: s.header },
-        React.createElement(Text, { style: s.titulo }, "Fondo de Inversión"),
-        React.createElement(Text, { style: s.subtitulo }, `${ronda.nombre} — ${mes}`)
-      ),
-      React.createElement(View, { style: s.tabla },
-        React.createElement(View, { style: s.thead },
-          React.createElement(Text, { style: s.theadTextWide }, "Socio"),
-          React.createElement(Text, { style: s.theadText }, "Invertido"),
-          React.createElement(Text, { style: s.theadText }, "% Part."),
-          React.createElement(Text, { style: s.theadText }, "Intereses"),
-          React.createElement(Text, { style: s.theadText }, "Total"),
-        ),
-        ...ronda.cuentasInversion.map((ci: any, i: number) =>
-          React.createElement(View, { key: ci.id, style: [s.fila, i % 2 === 1 ? s.filaAlterna : {}] },
-            React.createElement(Text, { style: s.cellWide }, `${ci.socio.nombres} ${ci.socio.apellidos}`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(ci.montoInvertido))),
-            React.createElement(Text, { style: s.cell }, `${Number(ci.porcentajeParticipacion).toFixed(2)}%`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(ci.interesesAcumulados))),
-            React.createElement(Text, { style: s.cellBold }, fmt(Number(ci.montoInvertido) + Number(ci.interesesAcumulados))),
-          )
-        )
-      ),
-      React.createElement(View, { style: s.footer, fixed: true },
-        React.createElement(Text, { style: s.footerText }, "MiRonda — Sistema de gestión de rondas de ahorro"),
-        React.createElement(Text, { style: s.footerText, render: ({ pageNumber, totalPages }: any) => `Página ${pageNumber} de ${totalPages}` })
-      )
-    ) : null
-  );
+  // ── Construir PDF manualmente (PDF 1.4 estándar) ──────────────────────────
+  const objects: string[] = [];
+  const offsets: number[] = [];
+  let pos = 0;
 
-  const buf = await ReactPDF.renderToBuffer(doc);
-  return buf;
+  const addObj = (content: string): number => {
+    const id = objects.length + 1;
+    offsets.push(pos);
+    const obj = `${id} 0 obj\n${content}\nendobj\n`;
+    objects.push(obj);
+    pos += Buffer.byteLength(obj, "latin1");
+    return id;
+  };
+
+  // Objeto 1: Catálogo (se llenará después)
+  // Objeto 2: Páginas (se llenará después)
+  // Primero construimos el stream de contenido
+
+  const FONT_SIZE_TITLE = 11;
+  const FONT_SIZE_NORMAL = 8;
+  const LINE_HEIGHT = 12;
+  const MARGIN_LEFT = 40;
+  const MARGIN_TOP = 780;
+  const PAGE_MIN_Y = 40;
+  const PAGE_WIDTH = 595;
+  const PAGE_HEIGHT = 842;
+
+  // Escapar texto para PDF
+  const escapePDF = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+
+  // Generar streams de páginas
+  const pageStreams: string[] = [];
+  let currentStream = "";
+  let currentY = MARGIN_TOP;
+
+  const newPage = () => {
+    if (currentStream) pageStreams.push(currentStream);
+    currentStream = "";
+    currentY = MARGIN_TOP;
+  };
+
+  const addLine = (line: typeof lines[0]) => {
+    if (currentY < PAGE_MIN_Y + 30) newPage();
+
+    const fontSize = line.bold ? FONT_SIZE_TITLE : FONT_SIZE_NORMAL;
+    const font = line.bold ? "F2" : "F1";
+
+    if (line.blank) {
+      currentY -= LINE_HEIGHT * 0.5;
+      return;
+    }
+
+    if (line.separator) {
+      currentStream += `0.8 g\n${MARGIN_LEFT} ${currentY - 1} ${PAGE_WIDTH - 80} 0.5 re f\n0 g\n`;
+      currentY -= LINE_HEIGHT * 0.6;
+      return;
+    }
+
+    const text = escapePDF(line.text || "");
+    currentStream += `BT\n/${font} ${fontSize} Tf\n${MARGIN_LEFT} ${currentY} Td\n(${text}) Tj\nET\n`;
+    currentY -= LINE_HEIGHT;
+  };
+
+  // Iniciar primer stream
+  currentStream = "";
+
+  for (const line of lines) {
+    addLine(line);
+  }
+  if (currentStream) pageStreams.push(currentStream);
+
+  // Ahora construir el PDF
+  const header = "%PDF-1.4\n";
+  pos = Buffer.byteLength(header, "latin1");
+
+  // Reset objetos
+  const pdfParts: Buffer[] = [Buffer.from(header, "latin1")];
+  const xrefOffsets: number[] = [];
+  let objCount = 0;
+
+  const writeObj = (id: number, content: string) => {
+    xrefOffsets[id] = pdfParts.reduce((s, b) => s + b.length, 0);
+    const obj = `${id} 0 obj\n${content}\nendobj\n`;
+    pdfParts.push(Buffer.from(obj, "latin1"));
+  };
+
+  const totalObjs = 4 + pageStreams.length * 2; // catalog, pages, font1, font2, + pages
+  objCount = totalObjs;
+
+  // IDs fijos
+  const CATALOG_ID = 1;
+  const PAGES_ID = 2;
+  const FONT1_ID = 3;
+  const FONT2_ID = 4;
+  const FIRST_PAGE_ID = 5;
+
+  // Font Courier
+  writeObj(FONT1_ID, `<<\n/Type /Font\n/Subtype /Type1\n/BaseFont /Courier\n/Encoding /WinAnsiEncoding\n>>`);
+  writeObj(FONT2_ID, `<<\n/Type /Font\n/Subtype /Type1\n/BaseFont /Courier-Bold\n/Encoding /WinAnsiEncoding\n>>`);
+
+  // Páginas
+  const pageIds: number[] = [];
+  pageStreams.forEach((stream, i) => {
+    const streamBytes = Buffer.from(stream, "latin1");
+    const contentId = FIRST_PAGE_ID + i * 2;
+    const pageId = FIRST_PAGE_ID + i * 2 + 1;
+
+    writeObj(contentId, `<<\n/Length ${streamBytes.length}\n>>\nstream\n${stream}\nendstream`);
+    writeObj(pageId, `<<\n/Type /Page\n/Parent ${PAGES_ID} 0 R\n/MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}]\n/Contents ${contentId} 0 R\n/Resources <<\n/Font <<\n/F1 ${FONT1_ID} 0 R\n/F2 ${FONT2_ID} 0 R\n>>\n>>\n>>`);
+    pageIds.push(pageId);
+  });
+
+  const kidsStr = pageIds.map(id => `${id} 0 R`).join(" ");
+  writeObj(PAGES_ID, `<<\n/Type /Pages\n/Kids [${kidsStr}]\n/Count ${pageIds.length}\n>>`);
+  writeObj(CATALOG_ID, `<<\n/Type /Catalog\n/Pages ${PAGES_ID} 0 R\n>>`);
+
+  // xref
+  const xrefOffset = pdfParts.reduce((s, b) => s + b.length, 0);
+  const maxId = Math.max(...Object.keys(xrefOffsets).map(Number));
+  let xref = `xref\n0 ${maxId + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= maxId; i++) {
+    const off = xrefOffsets[i] ?? 0;
+    xref += `${String(off).padStart(10, "0")} 00000 n \n`;
+  }
+  xref += `trailer\n<<\n/Size ${maxId + 1}\n/Root ${CATALOG_ID} 0 R\n>>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  pdfParts.push(Buffer.from(xref, "latin1"));
+
+  return Buffer.concat(pdfParts);
 }
