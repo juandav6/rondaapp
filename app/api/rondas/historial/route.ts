@@ -5,18 +5,32 @@ export const runtime = "nodejs";
 
 // GET → todas las rondas (para historial)
 export async function GET() {
-  const rondas = await prisma.ronda.findMany({
-    orderBy: { fechaInicio: "desc" },
-    select: {
-      id: true,
-      nombre: true,
-      fechaInicio: true,
-      fechaFin: true,
-      activa: true,
-    },
-  });
-
-  return NextResponse.json(rondas);
+  try {
+    const rondas = await prisma.ronda.findMany({
+      orderBy: { fechaInicio: "desc" },
+      select: {
+        id: true,
+        nombre: true,
+        fechaInicio: true,
+        fechaFin: true,
+        activa: true,
+        reporteGeneradoAt: true,
+      },
+    });
+ 
+    return NextResponse.json(
+      rondas.map((r) => ({
+        id: r.id,
+        nombre: r.nombre,
+        fechaInicio: r.fechaInicio.toISOString(),
+        fechaFin: r.fechaFin?.toISOString() ?? null,
+        activa: r.activa,
+        reporteGeneradoAt: r.reporteGeneradoAt?.toISOString() ?? null,
+      }))
+    );
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || "Error" }, { status: 500 });
+  }
 }
 
 // POST → crear ronda
