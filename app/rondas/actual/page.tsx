@@ -48,7 +48,8 @@ export default function RondaActualPage() {
   const [obsInputs, setObsInputs] = useState<Record<number, string>>({});
   const [responsableId, setResponsableId] = useState<number | "">("");
   const [toast, setToast] = useState<Toast | null>(null);
-  const [loanOpen, setLoanOpen] = useState(false);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkMonto, setBulkMonto] = useState<number>(0);
   const [loanSaving, setLoanSaving] = useState(false);
   const [loanSocio, setLoanSocio] = useState<{ id: number; nombres: string; apellidos: string } | null>(null);
   const [loanPrincipal, setLoanPrincipal] = useState(0);
@@ -180,7 +181,28 @@ export default function RondaActualPage() {
     finally { setSaving(null); }
   }
 
-  async function guardarResponsable() {
+  async function guardarAhorroTodos() {
+    const pendientesAhorro = estado?.items.filter(it => !(it as any).ahorroRegistradoSemana) ?? [];
+    if (pendientesAhorro.length === 0) { showToast("Todos ya tienen ahorro registrado esta semana", "info"); setBulkConfirmOpen(false); return; }
+    try {
+      setCerrando(true);
+      setBulkConfirmOpen(false);
+      for (const it of pendientesAhorro) {
+        const monto = Number(ahorroInputs[it.socioId] ?? 0);
+        if (monto <= 0) continue;
+        await fetch(`/api/rondas/${estado!.ronda.id}/ahorros`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ socioId: it.socioId, semana: estado!.semana, monto }),
+        });
+      }
+      await cargar();
+      showToast("Ahorros registrados para todos");
+      setBulkMonto(0);
+      const inp = document.getElementById("bulk-ahorro-input") as HTMLInputElement;
+      if (inp) inp.value = "";
+    } catch (e: any) { showToast(e.message, "error", 4000); }
+    finally { setCerrando(false); }
+  }
     if (!estado || responsableId === "") { setError("Selecciona un responsable."); return; }
     try {
       const res = await fetch(`/api/rondas/${estado.ronda.id}/responsable`, {
@@ -329,6 +351,7 @@ export default function RondaActualPage() {
               className="w-20 rounded border px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
               onChange={e => {
                 const v = Number(e.target.value || 0);
+                setBulkMonto(v);
                 if (v > 0) {
                   const next: Record<number, number> = {};
                   estado.items.forEach(it => { next[it.socioId] = v; });
@@ -337,28 +360,13 @@ export default function RondaActualPage() {
               }}
             />
             <button
-              onClick={async () => {
-                const pendientesAhorro = estado.items.filter(it => !(it as any).ahorroRegistradoSemana);
-                if (pendientesAhorro.length === 0) { showToast("Todos ya tienen ahorro registrado esta semana", "info"); return; }
-                try {
-                  setCerrando(true);
-                  for (const it of pendientesAhorro) {
-                    const monto = Number(ahorroInputs[it.socioId] ?? 0);
-                    if (monto <= 0) continue;
-                    await fetch(`/api/rondas/${estado.ronda.id}/ahorros`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ socioId: it.socioId, semana: estado.semana, monto }),
-                    });
-                  }
-                  await cargar();
-                  showToast("Ahorros registrados para todos");
-                  (document.getElementById("bulk-ahorro-input") as HTMLInputElement).value = "";
-                } catch (e: any) { showToast(e.message, "error", 4000); }
-                finally { setCerrando(false); }
+              onClick={() => {
+                if (bulkMonto <= 0) { showToast("Ingresa un monto válido", "error"); return; }
+                setBulkConfirmOpen(true);
               }}
-              disabled={cerrando || Object.values(ahorroInputs).every(v => !v || v <= 0)}
+              disabled={cerrando || bulkMonto <= 0}
               className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white disabled:opacity-50 whitespace-nowrap">
-              {cerrando ? "…" : "Guardar todos"}
+              Guardar todos
             </button>
           </div>
           <button onClick={registrarAporteTodos} disabled={cerrando}
@@ -636,6 +644,45 @@ export default function RondaActualPage() {
               <button onClick={crearPrestamoExpress} disabled={loanSaving}
                 className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm text-white font-medium disabled:opacity-50">
                 {loanSaving ? "Guardando…" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal confirmación ahorro masivo */}
+      {bulkConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30">
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start gap-3 mb-4">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd"/>
+                </svg>
+              </span>
+              <div>
+                <h4 className="text-base font-semibold text-gray-900">Confirmar registro masivo</h4>
+                <p className="text-sm text-gray-500 mt-1">
+                  ¿Estás seguro de registrar un ahorro de{" "}
+                  <strong className="text-blue-700">{fmtMoney(bulkMonto)}</strong>{" "}
+                  para{" "}
+                  <strong>{estado?.items.filter(it => !(it as any).ahorroRegistradoSemana).length ?? 0} socios</strong>{" "}
+                  en la semana <strong>{estado?.semana}</strong>?
+                </p>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Total: <strong className="text-gray-700">{fmtMoney(bulkMonto * (estado?.items.filter(it => !(it as any).ahorroRegistradoSemana).length ?? 0))}</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setBulkConfirmOpen(false)}
+                className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                onClick={guardarAhorroTodos}
+                className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+                Sí, registrar
               </button>
             </div>
           </div>
