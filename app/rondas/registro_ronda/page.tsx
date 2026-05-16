@@ -89,14 +89,20 @@ export default function RegistrarRondaPage() {
       const hasValues = sociosConSaldo.some(s => (prev[s.id] ?? 0) > 0);
       if (hasValues) return prev;
       const init: Record<number, number> = {};
-      sociosConSaldo.forEach(s => { init[s.id] = s.saldoAhorros ?? 0; });
+      sociosConSaldo.forEach(s => {
+        const v = Number(s.saldoAhorros ?? 0);
+        init[s.id] = Number.isFinite(v) ? v : 0;
+      });
       return init;
     });
   }, [paso, sociosConSaldo]);
 
   const sociosFiltrados = useMemo(() => { const s = q.trim().toLowerCase(); if (!s) return socios; return socios.filter(x => [x.nombres, x.apellidos, x.numeroCuenta].some(v => v.toLowerCase().includes(s))); }, [socios, q]);
   const participantesOrdenados = orden.map(id => socios.find(s => s.id === id)).filter(Boolean) as Socio[];
-  const totalFondo = sociosConSaldo.reduce((a, s) => a + Number(aportesInversion[s.id] ?? 0), 0);
+  const totalFondo = sociosConSaldo.reduce((a, s) => {
+    const v = Number(aportesInversion[s.id] ?? 0);
+    return a + (Number.isFinite(v) ? v : 0);
+  }, 0);
   const sociosEnRondaSet = useMemo(() => new Set(seleccion), [seleccion]);
 
   const toggleSocio = (id: number) => { setSeleccion(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); setOrden(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); };
@@ -489,7 +495,7 @@ export default function RegistrarRondaPage() {
                         <td className="px-4 py-3 text-right tabular-nums text-emerald-700 font-medium">{fmt(saldo)}</td>
                         <td className="px-4 py-3 text-right">
                           <input type="number" min={0} max={saldo} step="0.01" value={aporte || ""}
-                            onChange={e => { const v = Math.min(Number(e.target.value || 0), saldo); setAportesInversion(p => ({ ...p, [s.id]: v })); }}
+                            onChange={e => { const v = Math.min(Math.max(0, Number(e.target.value || 0)), saldo); if (Number.isFinite(v)) setAportesInversion(p => ({ ...p, [s.id]: v })); }}
                             className={cn("w-32 rounded-md border px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2", excede ? "border-red-300 focus:ring-red-200" : "focus:ring-blue-200")}
                             placeholder="0.00" />
                         </td>
@@ -550,7 +556,7 @@ export default function RegistrarRondaPage() {
                     <label className="text-xs text-gray-500 mb-1 block">Aporte al fondo de inversión {pct > 0 && <span className="text-blue-600 font-medium">({pct.toFixed(1)}%)</span>}</label>
                     <div className="flex items-center gap-2">
                       <input type="number" min={0} max={saldo} step="0.01" value={aporte || ""}
-                        onChange={e => { const v = Math.min(Number(e.target.value || 0), saldo); setAportesInversion(p => ({ ...p, [s.id]: v })); }}
+                        onChange={e => { const v = Math.min(Math.max(0, Number(e.target.value || 0)), saldo); if (Number.isFinite(v)) setAportesInversion(p => ({ ...p, [s.id]: v })); }}
                         className={cn("flex-1 rounded-md border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2", excede ? "border-red-300 focus:ring-red-200" : "focus:ring-blue-200")}
                         placeholder="0.00" />
                       <button onClick={() => setAportesInversion(p => ({ ...p, [s.id]: saldo }))}
