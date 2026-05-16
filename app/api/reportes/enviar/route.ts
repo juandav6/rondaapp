@@ -8,6 +8,8 @@ import { generarExcel } from "@/lib/reportes/generarExcel";
 import { generarPDF } from "@/lib/reportes/generarPDF";
 import { emailHtml } from "@/lib/reportes/emailHtml";
 
+export const runtime = "nodejs"; // ← CRÍTICO para @react-pdf/renderer y nodemailer
+
 // Transporter Gmail
 const transporter = nodemailer.createTransport({
   service: "gmail",
