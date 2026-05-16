@@ -50,6 +50,7 @@ export default function RondaActualPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkMonto, setBulkMonto] = useState<number>(0);
+  const [loanOpen, setLoanOpen] = useState(false);
   const [loanSaving, setLoanSaving] = useState(false);
   const [loanSocio, setLoanSocio] = useState<{ id: number; nombres: string; apellidos: string } | null>(null);
   const [loanPrincipal, setLoanPrincipal] = useState(0);
