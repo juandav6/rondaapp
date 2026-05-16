@@ -173,15 +173,18 @@ export default function HomeDashboard() {
       </div>
 
       {/* ── Hero ── */}
-      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50 border border-emerald-100 shadow-sm min-h-[180px]">
-        {/* Imagen como fondo derecho */}
-        <div className="absolute right-0 top-0 h-full w-64 hidden sm:block pointer-events-none select-none">
-          <img
-            src="/banner-dashboard.png"
-            alt=""
-            className="h-full w-full object-cover object-left"
-          />
-        </div>
+      <div
+        className="relative rounded-2xl overflow-hidden border border-emerald-100 shadow-sm min-h-[180px]"
+        style={{
+          backgroundImage: "url('/banner-dashboard.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center right",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
+        {/* Overlay suave para legibilidad del texto */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/70 to-transparent" />
+
         <div className="relative flex flex-col sm:flex-row items-center gap-0 p-5 sm:p-6">
 
           {/* Izquierda */}
