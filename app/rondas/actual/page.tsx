@@ -203,6 +203,8 @@ export default function RondaActualPage() {
     } catch (e: any) { showToast(e.message, "error", 4000); }
     finally { setCerrando(false); }
   }
+
+  async function guardarResponsable() {
     if (!estado || responsableId === "") { setError("Selecciona un responsable."); return; }
     try {
       const res = await fetch(`/api/rondas/${estado.ronda.id}/responsable`, {
