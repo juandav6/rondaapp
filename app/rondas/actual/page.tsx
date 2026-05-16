@@ -89,7 +89,14 @@ export default function RondaActualPage() {
   }
 
   useEffect(() => { cargar(); }, []);
-  useEffect(() => { setAhorroInputs({}); setMultasInputs({}); setObsInputs({}); }, [estado?.semana, estado?.ronda?.id]);
+  useEffect(() => {
+    if (estado?.items) {
+      const defaults: Record<number, number> = {};
+      estado.items.forEach(it => { defaults[it.socioId] = 1; });
+      setAhorroInputs(defaults);
+    }
+    setMultasInputs({}); setObsInputs({});
+  }, [estado?.semana, estado?.ronda?.id]);
   useEffect(() => { if (estado) setResponsableId(estado.responsableId ?? estado.ronda?.responsableId ?? ""); }, [estado?.responsableId, estado?.ronda?.responsableId]);
 
   async function cargar() {
