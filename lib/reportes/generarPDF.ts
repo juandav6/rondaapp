@@ -1,212 +1,200 @@
 // lib/reportes/generarPDF.ts
-import React from "react";
-import ReactPDF, {
-  Document, Page, View, Text, StyleSheet,
-} from "@react-pdf/renderer";
+// Usa pdfkit — compatible con Node.js serverless en Vercel
+import PDFDocument from "pdfkit";
 
-const verde = "#1a3a2a";
-const verdeClaro = "#e8f5e9";
-const azulClaro = "#eff6ff";
-const grisClaro = "#f9fafb";
-
-const s = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", backgroundColor: "#ffffff" },
-  // Header
-  header: { marginBottom: 20, borderBottomWidth: 2, borderBottomColor: verde, paddingBottom: 12 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
-  titulo: { fontSize: 22, fontFamily: "Helvetica-Bold", color: verde },
-  subtitulo: { fontSize: 11, color: "#555", marginTop: 3 },
-  headerRight: { alignItems: "flex-end" },
-  fechaLabel: { fontSize: 9, color: "#888" },
-  fechaVal: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#333" },
-  // KPIs
-  kpiRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  kpiCard: { flex: 1, backgroundColor: verdeClaro, borderRadius: 6, padding: 10, borderLeftWidth: 3, borderLeftColor: verde },
-  kpiLabel: { fontSize: 8, color: "#555", textTransform: "uppercase", marginBottom: 3 },
-  kpiValue: { fontSize: 15, fontFamily: "Helvetica-Bold", color: verde },
-  // Secciones
-  seccion: { marginTop: 16 },
-  seccionTitulo: { fontSize: 12, fontFamily: "Helvetica-Bold", color: verde, marginBottom: 6, paddingBottom: 3, borderBottomWidth: 1, borderBottomColor: verde },
-  // Tabla
-  tabla: { width: "100%" },
-  thead: { flexDirection: "row", backgroundColor: verde, paddingVertical: 5, paddingHorizontal: 4 },
-  theadText: { color: "#ffffff", fontFamily: "Helvetica-Bold", fontSize: 8, flex: 1 },
-  theadTextWide: { color: "#ffffff", fontFamily: "Helvetica-Bold", fontSize: 8, flex: 2 },
-  fila: { flexDirection: "row", paddingVertical: 4, paddingHorizontal: 4, borderBottomWidth: 0.5, borderBottomColor: "#e5e7eb" },
-  filaAlterna: { backgroundColor: grisClaro },
-  cell: { fontSize: 8, flex: 1, color: "#333" },
-  cellWide: { fontSize: 8, flex: 2, color: "#333" },
-  cellBold: { fontSize: 8, flex: 1, fontFamily: "Helvetica-Bold", color: "#333" },
-  // Footer
-  footer: { position: "absolute", bottom: 24, left: 40, right: 40, flexDirection: "row", justifyContent: "space-between", borderTopWidth: 0.5, borderTopColor: "#d1d5db", paddingTop: 5 },
-  footerText: { fontSize: 8, color: "#9ca3af" },
-  // Info ronda
-  infoBox: { backgroundColor: azulClaro, borderRadius: 6, padding: 10, marginBottom: 14, flexDirection: "row", gap: 16 },
-  infoItem: { flex: 1 },
-  infoLabel: { fontSize: 8, color: "#555", marginBottom: 2 },
-  infoVal: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1e40af" },
-});
+const VERDE = "#1a3a2a";
+const VERDE_CLARO = "#e8f5e9";
+const GRIS = "#6b7280";
+const GRIS_CLARO = "#f9fafb";
+const AZUL = "#1d4ed8";
+const ROJO = "#dc2626";
+const AMBER = "#d97706";
 
 const fmt = (n: number) =>
-  `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(Number(n) || 0);
+
+const fmtDate = (iso: string | Date) => {
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+};
 
 export async function generarPDF(ronda: any): Promise<Buffer> {
-  const totalAportes = ronda.aportes.reduce((a: number, x: any) => a + Number(x.monto), 0);
-  const totalAhorros = ronda.ahorros.reduce((a: number, x: any) => a + Number(x.monto), 0);
-  const totalFondo = ronda.cuentasInversion.reduce((a: number, x: any) => a + Number(x.montoInvertido), 0);
-  const totalIntereses = ronda.cuentasInversion.reduce((a: number, x: any) => a + Number(x.interesesAcumulados), 0);
-  const prestamosActivos = ronda.prestamos.filter((p: any) => p.estado === "ACTIVO");
-  const totalSaldoPrestamos = prestamosActivos.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
 
-  const mes = new Date().toLocaleDateString("es-EC", { month: "long", year: "numeric" });
-  const fechaGeneracion = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
 
-  const doc = React.createElement(Document, {},
-    React.createElement(Page, { size: "A4", style: s.page },
+    const W = doc.page.width - 80; // ancho útil
+    const mes = new Date().toLocaleDateString("es-EC", { month: "long", year: "numeric" });
+    const fechaGen = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
 
-      // Header
-      React.createElement(View, { style: s.header },
-        React.createElement(View, { style: s.headerRow },
-          React.createElement(View, {},
-            React.createElement(Text, { style: s.titulo }, "MiRonda"),
-            React.createElement(Text, { style: s.subtitulo }, `Reporte Mensual — ${ronda.nombre} — ${mes}`)
-          ),
-          React.createElement(View, { style: s.headerRight },
-            React.createElement(Text, { style: s.fechaLabel }, "Fecha de generación"),
-            React.createElement(Text, { style: s.fechaVal }, fechaGeneracion)
-          )
-        )
-      ),
+    const totalAportes = ronda.aportes.reduce((a: number, x: any) => a + Number(x.monto), 0);
+    const totalAhorros = ronda.ahorros.reduce((a: number, x: any) => a + Number(x.monto), 0);
+    const totalFondo = ronda.cuentasInversion.reduce((a: number, x: any) => a + Number(x.montoInvertido), 0);
+    const totalIntereses = ronda.cuentasInversion.reduce((a: number, x: any) => a + Number(x.interesesAcumulados), 0);
+    const prestamosActivos = ronda.prestamos.filter((p: any) => p.estado === "ACTIVO");
+    const totalSaldo = prestamosActivos.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
 
-      // Info ronda
-      React.createElement(View, { style: s.infoBox },
-        ...[
-          { label: "Semana actual", val: `${ronda.semanaActual} / ${ronda.participaciones.length}` },
-          { label: "Inicio de ronda", val: new Date(ronda.fechaInicio).toLocaleDateString("es-EC") },
-          { label: "Participantes", val: String(ronda.participaciones.length) },
-          { label: "Préstamos activos", val: String(prestamosActivos.length) },
-        ].map(item =>
-          React.createElement(View, { key: item.label, style: s.infoItem },
-            React.createElement(Text, { style: s.infoLabel }, item.label),
-            React.createElement(Text, { style: s.infoVal }, item.val)
-          )
-        )
-      ),
+    // ── HEADER ──────────────────────────────────────────────────────────────
+    doc.rect(40, 40, W, 60).fill(VERDE);
+    doc.fillColor("white").fontSize(20).font("Helvetica-Bold").text("MiRonda", 56, 52);
+    doc.fontSize(10).font("Helvetica").text(`Reporte Mensual · ${ronda.nombre} · ${mes}`, 56, 76);
+    doc.fillColor(GRIS).fontSize(8).text(`Generado: ${fechaGen}`, 40 + W - 100, 76, { width: 90, align: "right" });
+    doc.y = 116;
 
-      // KPIs
-      React.createElement(View, { style: s.kpiRow },
-        ...[
-          { label: "Total aportes", val: fmt(totalAportes) },
-          { label: "Total ahorros", val: fmt(totalAhorros) },
-          { label: "Fondo inversión", val: fmt(totalFondo) },
-          { label: "Intereses acum.", val: fmt(totalIntereses) },
-          { label: "Saldo préstamos", val: fmt(totalSaldoPrestamos) },
-        ].map(k =>
-          React.createElement(View, { key: k.label, style: s.kpiCard },
-            React.createElement(Text, { style: s.kpiLabel }, k.label),
-            React.createElement(Text, { style: s.kpiValue }, k.val)
-          )
-        )
-      ),
+    // ── KPIs ────────────────────────────────────────────────────────────────
+    const kpis = [
+      { label: "Total aportes", value: fmt(totalAportes), color: VERDE },
+      { label: "Total ahorros", value: fmt(totalAhorros), color: VERDE },
+      { label: "Fondo inversión", value: fmt(totalFondo), color: AZUL },
+      { label: "Intereses acum.", value: fmt(totalIntereses), color: AMBER },
+      { label: "Saldo préstamos", value: fmt(totalSaldo), color: ROJO },
+      { label: "Participantes", value: String(ronda.participaciones.length), color: VERDE },
+    ];
+    const kpiW = W / 3;
+    const kpiH = 44;
+    kpis.forEach((k, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const x = 40 + col * kpiW;
+      const y = doc.y + row * (kpiH + 4);
+      doc.rect(x + 2, y, kpiW - 4, kpiH).fill(GRIS_CLARO);
+      doc.rect(x + 2, y, 3, kpiH).fill(k.color);
+      doc.fillColor(GRIS).fontSize(7.5).font("Helvetica").text(k.label.toUpperCase(), x + 10, y + 8, { width: kpiW - 14 });
+      doc.fillColor(k.color).fontSize(14).font("Helvetica-Bold").text(k.value, x + 10, y + 20, { width: kpiW - 14 });
+    });
+    doc.y += kpiH * 2 + 16;
 
-      // Tabla participantes
-      React.createElement(View, { style: s.seccion },
-        React.createElement(Text, { style: s.seccionTitulo }, `Participantes (${ronda.participaciones.length})`),
-        React.createElement(View, { style: s.tabla },
-          // Header tabla
-          React.createElement(View, { style: s.thead },
-            React.createElement(Text, { style: s.theadText }, "#"),
-            React.createElement(Text, { style: s.theadText }, "Cuenta"),
-            React.createElement(Text, { style: s.theadTextWide }, "Nombre completo"),
-            React.createElement(Text, { style: s.theadText }, "Aportes"),
-            React.createElement(Text, { style: s.theadText }, "Ahorros"),
-          ),
-          // Filas
-          ...ronda.participaciones.map((p: any, i: number) => {
-            const totalA = ronda.aportes.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
-            const totalAh = ronda.ahorros.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
-            return React.createElement(View, { key: p.id, style: [s.fila, i % 2 === 1 ? s.filaAlterna : {}] },
-              React.createElement(Text, { style: s.cell }, String(p.orden)),
-              React.createElement(Text, { style: s.cell }, p.socio.numeroCuenta),
-              React.createElement(Text, { style: s.cellWide }, `${p.socio.nombres} ${p.socio.apellidos}`),
-              React.createElement(Text, { style: s.cell }, fmt(totalA)),
-              React.createElement(Text, { style: s.cell }, fmt(totalAh)),
-            );
-          })
-        )
-      ),
+    // ── INFO RONDA ───────────────────────────────────────────────────────────
+    doc.rect(40, doc.y, W, 28).fill("#eff6ff");
+    const infoY = doc.y + 8;
+    const infoCols = [
+      { label: "Semana", value: `${ronda.semanaActual} / ${ronda.participaciones.length}` },
+      { label: "Inicio", value: fmtDate(ronda.fechaInicio) },
+      { label: "Participantes", value: String(ronda.participaciones.length) },
+      { label: "Préstamos activos", value: String(prestamosActivos.length) },
+    ];
+    infoCols.forEach((col, i) => {
+      const x = 40 + (i * W) / 4;
+      doc.fillColor(GRIS).fontSize(7).font("Helvetica").text(col.label, x + 6, infoY);
+      doc.fillColor(AZUL).fontSize(9).font("Helvetica-Bold").text(col.value, x + 6, infoY + 10);
+    });
+    doc.y += 36;
 
-      // Footer
-      React.createElement(View, { style: s.footer, fixed: true },
-        React.createElement(Text, { style: s.footerText }, "MiRonda — Sistema de gestión de rondas de ahorro"),
-        React.createElement(Text, { style: s.footerText, render: ({ pageNumber, totalPages }: any) => `Página ${pageNumber} de ${totalPages}` })
-      )
-    ),
+    // Función helper para tabla
+    function drawTable(headers: { label: string; width: number; align?: string }[], rows: string[][], title: string) {
+      const rowH = 18;
+      const headerH = 22;
 
-    // Página 2 — Préstamos
-    ronda.prestamos.length > 0 ? React.createElement(Page, { size: "A4", style: s.page },
-      React.createElement(View, { style: s.header },
-        React.createElement(Text, { style: s.titulo }, "Préstamos"),
-        React.createElement(Text, { style: s.subtitulo }, `${ronda.nombre} — ${mes}`)
-      ),
-      React.createElement(View, { style: s.tabla },
-        React.createElement(View, { style: s.thead },
-          React.createElement(Text, { style: s.theadTextWide }, "Socio"),
-          React.createElement(Text, { style: s.theadText }, "Monto"),
-          React.createElement(Text, { style: s.theadText }, "Tasa"),
-          React.createElement(Text, { style: s.theadText }, "Saldo"),
-          React.createElement(Text, { style: s.theadText }, "Estado"),
-          React.createElement(Text, { style: s.theadText }, "Cuotas"),
-        ),
-        ...ronda.prestamos.map((p: any, i: number) => {
-          const pagadas = p.cuotas.filter((c: any) => c.pagada).length;
-          return React.createElement(View, { key: p.id, style: [s.fila, i % 2 === 1 ? s.filaAlterna : {}] },
-            React.createElement(Text, { style: s.cellWide }, `${p.socio.nombres} ${p.socio.apellidos}`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(p.monto))),
-            React.createElement(Text, { style: s.cell }, `${Number(p.tasaAnual)}%`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(p.saldoActual))),
-            React.createElement(Text, { style: s.cell }, p.estado),
-            React.createElement(Text, { style: s.cell }, `${pagadas}/${p.cuotas.length}`),
-          );
-        })
-      ),
-      React.createElement(View, { style: s.footer, fixed: true },
-        React.createElement(Text, { style: s.footerText }, "MiRonda — Sistema de gestión de rondas de ahorro"),
-        React.createElement(Text, { style: s.footerText, render: ({ pageNumber, totalPages }: any) => `Página ${pageNumber} de ${totalPages}` })
-      )
-    ) : null,
+      // Título sección
+      doc.moveDown(0.5);
+      doc.fillColor(VERDE).fontSize(11).font("Helvetica-Bold").text(title, 40, doc.y);
+      doc.moveTo(40, doc.y + 2).lineTo(40 + W, doc.y + 2).strokeColor(VERDE).lineWidth(0.5).stroke();
+      doc.moveDown(0.4);
 
-    // Página 3 — Inversión
-    ronda.cuentasInversion.length > 0 ? React.createElement(Page, { size: "A4", style: s.page },
-      React.createElement(View, { style: s.header },
-        React.createElement(Text, { style: s.titulo }, "Fondo de Inversión"),
-        React.createElement(Text, { style: s.subtitulo }, `${ronda.nombre} — ${mes}`)
-      ),
-      React.createElement(View, { style: s.tabla },
-        React.createElement(View, { style: s.thead },
-          React.createElement(Text, { style: s.theadTextWide }, "Socio"),
-          React.createElement(Text, { style: s.theadText }, "Invertido"),
-          React.createElement(Text, { style: s.theadText }, "% Part."),
-          React.createElement(Text, { style: s.theadText }, "Intereses"),
-          React.createElement(Text, { style: s.theadText }, "Total"),
-        ),
-        ...ronda.cuentasInversion.map((ci: any, i: number) =>
-          React.createElement(View, { key: ci.id, style: [s.fila, i % 2 === 1 ? s.filaAlterna : {}] },
-            React.createElement(Text, { style: s.cellWide }, `${ci.socio.nombres} ${ci.socio.apellidos}`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(ci.montoInvertido))),
-            React.createElement(Text, { style: s.cell }, `${Number(ci.porcentajeParticipacion).toFixed(2)}%`),
-            React.createElement(Text, { style: s.cell }, fmt(Number(ci.interesesAcumulados))),
-            React.createElement(Text, { style: s.cellBold }, fmt(Number(ci.montoInvertido) + Number(ci.interesesAcumulados))),
-          )
-        )
-      ),
-      React.createElement(View, { style: s.footer, fixed: true },
-        React.createElement(Text, { style: s.footerText }, "MiRonda — Sistema de gestión de rondas de ahorro"),
-        React.createElement(Text, { style: s.footerText, render: ({ pageNumber, totalPages }: any) => `Página ${pageNumber} de ${totalPages}` })
-      )
-    ) : null
-  );
+      // Header tabla
+      const headerY = doc.y;
+      doc.rect(40, headerY, W, headerH).fill(VERDE);
+      let x = 40;
+      headers.forEach(h => {
+        doc.fillColor("white").fontSize(8).font("Helvetica-Bold")
+          .text(h.label, x + 4, headerY + 7, { width: h.width - 8, align: (h.align as any) || "left" });
+        x += h.width;
+      });
+      doc.y = headerY + headerH;
 
-  const buf = await ReactPDF.renderToBuffer(doc);
-  return buf;
+      // Filas
+      rows.forEach((row, ri) => {
+        if (doc.y + rowH > doc.page.height - 60) {
+          doc.addPage();
+          doc.y = 40;
+        }
+        const rowY = doc.y;
+        if (ri % 2 === 1) doc.rect(40, rowY, W, rowH).fill(GRIS_CLARO);
+        let cx = 40;
+        row.forEach((cell, ci) => {
+          doc.fillColor("#1f2937").fontSize(8).font("Helvetica")
+            .text(cell, cx + 4, rowY + 5, { width: headers[ci].width - 8, align: (headers[ci].align as any) || "left" });
+          cx += headers[ci].width;
+        });
+        doc.y = rowY + rowH;
+      });
+    }
+
+    // ── TABLA PARTICIPANTES ──────────────────────────────────────────────────
+    const partHeaders = [
+      { label: "#", width: 28 },
+      { label: "Cuenta", width: 65 },
+      { label: "Nombre completo", width: W - 28 - 65 - 80 - 80 },
+      { label: "Aportes", width: 80, align: "right" },
+      { label: "Ahorros", width: 80, align: "right" },
+    ];
+    const partRows = ronda.participaciones.map((p: any) => {
+      const totalA = ronda.aportes.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
+      const totalAh = ronda.ahorros.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
+      return [String(p.orden), p.socio.numeroCuenta, `${p.socio.nombres} ${p.socio.apellidos}`, fmt(totalA), fmt(totalAh)];
+    });
+    drawTable(partHeaders, partRows, `Participantes (${ronda.participaciones.length})`);
+
+    // ── TABLA PRÉSTAMOS ──────────────────────────────────────────────────────
+    if (ronda.prestamos.length > 0) {
+      doc.addPage();
+      const prestHeaders = [
+        { label: "Socio", width: W - 70 - 70 - 70 - 55 - 55 },
+        { label: "Monto", width: 70, align: "right" },
+        { label: "Tasa", width: 55, align: "right" },
+        { label: "Saldo", width: 70, align: "right" },
+        { label: "Estado", width: 55 },
+        { label: "Cuotas", width: 70, align: "right" },
+      ];
+      const prestRows = ronda.prestamos.map((p: any) => {
+        const pagadas = p.cuotas.filter((c: any) => c.pagada).length;
+        return [
+          `${p.socio.nombres} ${p.socio.apellidos}`,
+          fmt(Number(p.monto)),
+          `${Number(p.tasaAnual)}%`,
+          fmt(Number(p.saldoActual)),
+          p.estado,
+          `${pagadas}/${p.cuotas.length}`,
+        ];
+      });
+      drawTable(prestHeaders, prestRows, "Préstamos");
+    }
+
+    // ── TABLA INVERSIÓN ──────────────────────────────────────────────────────
+    if (ronda.cuentasInversion.length > 0) {
+      if (ronda.prestamos.length === 0) doc.addPage();
+      const invHeaders = [
+        { label: "Socio", width: W - 90 - 70 - 80 - 80 },
+        { label: "Invertido", width: 90, align: "right" },
+        { label: "% Part.", width: 70, align: "right" },
+        { label: "Intereses", width: 80, align: "right" },
+        { label: "Total", width: 80, align: "right" },
+      ];
+      const invRows = ronda.cuentasInversion.map((ci: any) => [
+        `${ci.socio.nombres} ${ci.socio.apellidos}`,
+        fmt(Number(ci.montoInvertido)),
+        `${Number(ci.porcentajeParticipacion).toFixed(2)}%`,
+        fmt(Number(ci.interesesAcumulados)),
+        fmt(Number(ci.montoInvertido) + Number(ci.interesesAcumulados)),
+      ]);
+      drawTable(invHeaders, invRows, "Fondo de Inversión");
+    }
+
+    // ── FOOTER ───────────────────────────────────────────────────────────────
+    const pages = doc.bufferedPageRange();
+    for (let i = 0; i < pages.count; i++) {
+      doc.switchToPage(pages.start + i);
+      doc.fillColor(GRIS).fontSize(7.5).font("Helvetica")
+        .text(
+          `MiRonda · Sistema de gestión de rondas de ahorro · Página ${i + 1} de ${pages.count}`,
+          40, doc.page.height - 30, { width: W, align: "center" }
+        );
+    }
+
+    doc.end();
+  });
 }
