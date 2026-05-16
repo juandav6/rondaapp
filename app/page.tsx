@@ -173,11 +173,19 @@ export default function HomeDashboard() {
       </div>
 
       {/* ── Hero ── */}
-      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50 border border-emerald-100 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-center gap-0 p-5 sm:p-6">
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50 border border-emerald-100 shadow-sm min-h-[180px]">
+        {/* Imagen como fondo derecho */}
+        <div className="absolute right-0 top-0 h-full w-64 hidden sm:block pointer-events-none select-none">
+          <img
+            src="/banner-dashboard.png"
+            alt=""
+            className="h-full w-full object-cover object-left"
+          />
+        </div>
+        <div className="relative flex flex-col sm:flex-row items-center gap-0 p-5 sm:p-6">
 
           {/* Izquierda */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 sm:pr-60">
             {ronda ? (
               <>
                 <div className="flex items-center gap-2 mb-2">
@@ -311,15 +319,6 @@ export default function HomeDashboard() {
                 )}
               </>
             )}
-          </div>
-
-          {/* Ilustración */}
-          <div className="hidden sm:block shrink-0 w-64 h-52">
-            <img
-              src="/banner-dashboard.png"
-              alt="Dashboard MiRonda"
-              className="w-full h-full object-contain drop-shadow-sm"
-            />
           </div>
         </div>
       </div>
