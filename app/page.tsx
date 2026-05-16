@@ -1,293 +1,257 @@
+// app/page.tsx
 "use client";
-import React from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import DefaultLayout from "@/layout/DefaultLayout";
-import {
-  UserCircle2 as UserCircleIcon,
-  CalendarDays as CalendarIcon,
-  ListChecks as ListIcon,
-  Table as TableIcon,
-  Boxes as BoxCubeIcon,
-  PlugZap as PlugInIcon,
-  PieChart as PieChartIcon,
-  ArrowRight,
-} from "lucide-react";
 
-// ===============================
-// Datos del Menú Principal
-// ===============================
-const MENUS: Array<{
-  name: string;
-  icon: React.ReactNode;
-  basePath: string;
-  description: string;
-  colorFrom: string; // tailwind from-
-  colorTo: string; // tailwind to-
-  subItems: Array<{ name: string; path: string }>;
-}> = [
-  {
-    icon: <UserCircleIcon className="h-12 w-12" aria-hidden />,
-    name: "Socios",
-    basePath: "/socios",
-    description: "Gestión de miembros, perfiles y estado de aportes.",
-    colorFrom: "from-indigo-500",
-    colorTo: "to-sky-500",
-    subItems: [
-      { name: "Lista de socios", path: "/socios" },
-      { name: "Detalle por socio", path: "/socios/detalle" },
-    ],
-  },
-  {
-    icon: <CalendarIcon className="h-12 w-12" aria-hidden />,
-    name: "Rondas",
-    basePath: "/rondas/actual",
-    description: "Registro, seguimiento e historial de rondas.",
-    colorFrom: "from-emerald-500",
-    colorTo: "to-teal-500",
-    subItems: [
-      { name: "Registrar ronda", path: "/rondas/registro_ronda" },
-      { name: "Ronda actual", path: "/rondas/actual" },
-      { name: "Historial de rondas", path: "/historial" },
-      { name: "Resultados ronda", path: "/rondas/resumen" },
-    ],
-  },
-  {
-    icon: <ListIcon className="h-12 w-12" aria-hidden />,
-    name: "Aportes / Pagos",
-    basePath: "/aportes",
-    description: "Registrar aportes, multas y estados pendientes.",
-    colorFrom: "from-fuchsia-500",
-    colorTo: "to-pink-500",
-    subItems: [
-      { name: "Registrar aporte", path: "/aportes/registrar" },
-      { name: "Registrar multa", path: "/aportes/multa" },
-      { name: "Aportes pendientes", path: "/aportes/pendientes" },
-    ],
-  },
-  {
-    icon: <TableIcon className="h-12 w-12" aria-hidden />,
-    name: "Préstamos",
-    basePath: "/prestamos",
-    description: "Solicitudes, aprobaciones, pagos e historial.",
-    colorFrom: "from-orange-500",
-    colorTo: "to-amber-500",
-    subItems: [
-      { name: "Solicitud de préstamo", path: "/prestamos/solicitud" },
-      { name: "Aprobación y pagos", path: "/prestamos/gestion" },
-      { name: "Prestamos pendientes", path: "/prestamos/pendientes" },
-      { name: "Historial por socio", path: "/prestamos/historial" },
-      { name: "Reportes prestamos", path: "/prestamos/resumen" },
-    ],
-  },
-  {
-    icon: <BoxCubeIcon className="h-12 w-12" aria-hidden />,
-    name: "Ahorros",
-    basePath: "/ahorros",
-    description: "Registro y reportes de ahorro por socio.",
-    colorFrom: "from-cyan-500",
-    colorTo: "to-blue-500",
-    subItems: [
-      { name: "Registro de ahorros", path: "/ahorros/registro" },
-      { name: "Resumen por socio", path: "/ahorros/resumen" },
-      { name: "Reportes de beneficios", path: "/ahorros/reportes" },
-    ],
-  },
-  {
-    icon: <PlugInIcon className="h-12 w-12" aria-hidden />,
-    name: "Multas",
-    basePath: "/multas",
-    description: "Cálculo, reglas y pagos de multas.",
-    colorFrom: "from-rose-500",
-    colorTo: "to-red-500",
-    subItems: [
-      { name: "Multas por socio", path: "/configuracion/reglas" },
-      { name: "Pago de multas", path: "/configuracion/socios" },
-    ],
-  },
-  {
-    icon: <PieChartIcon className="h-12 w-12" aria-hidden />,
-    name: "Reportes / Estadísticas",
-    basePath: "/reportes",
-    description: "Paneles, exportaciones y comparativas.",
-    colorFrom: "from-violet-500",
-    colorTo: "to-purple-500",
-    subItems: [
-      { name: "Resumen general", path: "/reportes/resumen" },
-      { name: "Exportar PDF / Excel", path: "/reportes/exportar" },
-      { name: "Comparativas entre rondas", path: "/reportes/comparativas" },
-    ],
-  },
+type RondaInfo = {
+  id: number; nombre: string; semanaActual: number;
+  montoAporte: string; fechaInicio: string; intervaloDiasCobro: number;
+  participaciones: { orden: number; socio: { nombres: string; apellidos: string } }[];
+};
+type Stats = { totalSocios: number; totalAhorros: number };
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n || 0));
+
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? "—" :
+    new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+};
+
+const addDaysISO = (iso: string, days: number) => {
+  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString();
+};
+
+const MODULES = [
+  { name: "Socios", desc: "Gestiona los miembros", path: "/socios", color: "bg-indigo-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M8.25 6.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0ZM15.75 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0ZM2.25 9.75a3 3 0 1 1 6 0 3 3 0 0 1-6 0ZM6.31 15.117A6.745 6.745 0 0 1 12 12a6.745 6.745 0 0 1 6.709 7.498.75.75 0 0 1-.372.568A12.696 12.696 0 0 1 12 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 0 1-.372-.568 6.787 6.787 0 0 1 1.019-4.38Z" clipRule="evenodd"/></svg> },
+  { name: "Ronda actual", desc: "Cobros y ahorros", path: "/rondas/actual", color: "bg-emerald-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Zm13.5 9a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5Z" clipRule="evenodd"/></svg> },
+  { name: "Nueva ronda", desc: "Crear nueva ronda", path: "/rondas/registro_ronda", color: "bg-teal-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M12 3.75a.75.75 0 0 1 .75.75v6.75h6.75a.75.75 0 0 1 0 1.5h-6.75v6.75a.75.75 0 0 1-1.5 0v-6.75H4.5a.75.75 0 0 1 0-1.5h6.75V4.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/></svg> },
+  { name: "Préstamos", desc: "Solicitudes y pagos", path: "/prestamos/solicitud", color: "bg-orange-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path d="M12 7.5a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z"/><path fillRule="evenodd" d="M1.5 4.875C1.5 3.839 2.34 3 3.375 3h17.25c1.035 0 1.875.84 1.875 1.875v9.75c0 1.036-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 14.625v-9.75ZM8.25 9.75a3.75 3.75 0 1 1 7.5 0 3.75 3.75 0 0 1-7.5 0Z" clipRule="evenodd"/></svg> },
+  { name: "Depósitos", desc: "Ahorros libres", path: "/ahorros/registro", color: "bg-blue-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path d="M2.273 5.625A4.483 4.483 0 0 1 5.25 4.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 3H5.25a3 3 0 0 0-2.977 2.625ZM2.273 8.625A4.483 4.483 0 0 1 5.25 7.5h13.5c1.141 0 2.183.425 2.977 1.125A3 3 0 0 0 18.75 6H5.25a3 3 0 0 0-2.977 2.625ZM5.25 9a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h13.5a3 3 0 0 0 3-3v-6a3 3 0 0 0-3-3H15a.75.75 0 0 0-.75.75 2.25 2.25 0 0 1-4.5 0A.75.75 0 0 0 9 9H5.25Z"/></svg> },
+  { name: "Retiros", desc: "Retirar saldo", path: "/socios/retiros", color: "bg-rose-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-.53 14.03a.75.75 0 0 0 1.06 0l3-3a.75.75 0 1 0-1.06-1.06l-1.72 1.72V8.25a.75.75 0 0 0-1.5 0v5.69l-1.72-1.72a.75.75 0 0 0-1.06 1.06l3 3Z" clipRule="evenodd"/></svg> },
+  { name: "Historial", desc: "Rondas anteriores", path: "/rondas/historial", color: "bg-slate-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M1.5 5.625c0-1.036.84-1.875 1.875-1.875h17.25c1.035 0 1.875.84 1.875 1.875v12.75c0 1.035-.84 1.875-1.875 1.875H3.375A1.875 1.875 0 0 1 1.5 18.375V5.625ZM21 9.375A.375.375 0 0 0 20.625 9h-7.5a.375.375 0 0 0-.375.375v1.5c0 .207.168.375.375.375h7.5A.375.375 0 0 0 21 10.875v-1.5Z" clipRule="evenodd"/></svg> },
+  { name: "Reportes", desc: "Configurar reportes", path: "/reportes/config", color: "bg-violet-500",
+    icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5"><path fillRule="evenodd" d="M2.25 13.5a8.25 8.25 0 0 1 8.25-8.25.75.75 0 0 1 .75.75v6.75H18a.75.75 0 0 1 .75.75 8.25 8.25 0 0 1-16.5 0Z" clipRule="evenodd"/><path fillRule="evenodd" d="M12.75 3a.75.75 0 0 1 .75-.75 8.25 8.25 0 0 1 8.25 8.25.75.75 0 0 1-.75.75h-7.5a.75.75 0 0 1-.75-.75V3Z" clipRule="evenodd"/></svg> },
 ];
 
-// ===============================
-// Tarjeta de Menú (alto fijo + lista completa de submenús con scroll)
-// ===============================
-function MenuCard({
-  name,
-  icon,
-  description,
-  colorFrom,
-  colorTo,
-  href,
-  subItems,
-}: {
-  name: string;
-  icon: React.ReactNode;
-  description: string;
-  colorFrom: string;
-  colorTo: string;
-  href: string;
-  subItems: Array<{ name: string; path: string }>;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4 }}
-      className="group"
-    >
-      <Link
-        href={href}
-        className="relative block rounded-2xl p-5 sm:p-6 bg-white/70 dark:bg-gray-800/60 backdrop-blur-sm shadow-sm ring-1 ring-black/5 dark:ring-white/10 hover:shadow-xl transition-shadow h-56 overflow-hidden"
-      >
-        {/* Glow */}
-        <div
-          className={`pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br ${colorFrom} ${colorTo} opacity-0 group-hover:opacity-10 transition-opacity`}
-        />
-
-        <div className="flex h-full items-start gap-3 sm:gap-4">
-          <div
-            className={`flex h-12 w-12 md:h-16 md:w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${colorFrom} ${colorTo} text-white shadow-md`}
-          >
-            {icon}
-          </div>
-
-          {/* CONTENEDOR DE TEXTO: no dejar que se salga */}
-          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {name}
-                </h3>
-                <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
-                  {description}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs px-2 py-0.5">
-                  {subItems.length}
-                </span>
-                <ArrowRight className="h-5 w-5 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </div>
-
-            {/* Lista completa de submenús: wrap + scroll si no caben */}
-            <div className="mt-3 sm:mt-4 flex-1 overflow-y-auto pr-1">
-              <div className="flex flex-wrap gap-2 content-start">
-                {subItems.map((s) => (
-                  <Link
-                    key={s.path}
-                    href={s.path}
-                    className="max-w-full truncate whitespace-nowrap rounded-full border border-gray-200/70 dark:border-white/10 px-3 py-1 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/60"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {s.name}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Link>
-    </motion.div>
-  );
-}
-
-
-// ===============================
-// Página Principal (Dashboard)
-// ===============================
 export default function HomeDashboard() {
+  const [ronda, setRonda] = useState<RondaInfo | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const now = new Date();
+  const hora = now.getHours();
+  const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
+
+  useEffect(() => {
+    async function cargar() {
+      try {
+        const [rRes, sRes] = await Promise.all([
+          fetch("/api/rondas", { cache: "no-store" }),
+          fetch("/api/socios", { cache: "no-store" }),
+        ]);
+
+        if (rRes.status !== 204) setRonda(await rRes.json());
+
+        const socios = await sRes.json();
+        if (Array.isArray(socios)) {
+          setStats({
+            totalSocios: socios.length,
+            totalAhorros: socios.reduce((a: number, s: any) => a + Number(s.saldoAhorros ?? 0), 0),
+          });
+        }
+      } catch { /* silencioso */ }
+      finally { setLoading(false); }
+    }
+    cargar();
+  }, []);
+
+  const participantes = ronda?.participaciones
+    ? [...ronda.participaciones].sort((a, b) => a.orden - b.orden)
+    : [];
+  const totalPart = participantes.length;
+  const semActual = ronda?.semanaActual ?? 1;
+  const idx = totalPart > 0 ? ((semActual - 1) % totalPart + totalPart) % totalPart : 0;
+  const cobraAhora = participantes[idx];
+  const cobraSig = totalPart > 0 ? participantes[(idx + 1) % totalPart] : null;
+  const intervalo = ronda?.intervaloDiasCobro ?? 7;
+  const fechaSem = ronda?.fechaInicio ? fmtDate(addDaysISO(ronda.fechaInicio, (semActual - 1) * intervalo)) : null;
+  const fechaFin = ronda?.fechaInicio && totalPart > 0 ? fmtDate(addDaysISO(ronda.fechaInicio, (totalPart - 1) * intervalo)) : null;
+  const progreso = totalPart > 0 ? Math.min(100, ((semActual - 1) / totalPart) * 100) : 0;
+
   return (
-    <>
-      {/* Encabezado de la página */}
-      <section className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-              Panel principal
-            </h1>
-            <p className="mt-1 text-gray-600 dark:text-gray-300">
-              Accede rápidamente a los módulos principales del sistema.
-            </p>
+    <div className="space-y-5">
+
+      {/* Saludo */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{saludo} 👋</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {new Intl.DateTimeFormat("es-EC", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now)}
+          </p>
+        </div>
+        {ronda && (
+          <Link href="/rondas/actual"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700">
+            Ir a ronda actual →
+          </Link>
+        )}
+      </div>
+
+      {/* Ronda activa */}
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-100" />)}
+        </div>
+      ) : ronda ? (
+        <>
+          {/* Hero de la ronda */}
+          <div className="rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 p-5 sm:p-6 text-white shadow-lg overflow-hidden relative">
+            <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-white/5 -translate-y-10 translate-x-10" />
+            <div className="absolute bottom-0 left-0 h-24 w-24 rounded-full bg-white/5 translate-y-8 -translate-x-6" />
+            <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-medium">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-300 animate-pulse" />
+                    Ronda activa
+                  </span>
+                  <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">
+                    Semana {semActual}/{totalPart}
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold">{ronda.nombre}</h2>
+                {fechaSem && <p className="text-emerald-100 text-sm mt-0.5">{fechaSem}</p>}
+
+                {/* Progreso */}
+                <div className="mt-4 w-full sm:w-80">
+                  <div className="flex justify-between text-xs text-emerald-200 mb-1.5">
+                    <span>Progreso</span>
+                    <span>{Math.round(progreso)}% completado</span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-white/20 overflow-hidden">
+                    <div className="h-full rounded-full bg-white transition-all duration-700" style={{ width: `${progreso}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quién cobra */}
+              <div className="flex flex-row sm:flex-col gap-2 sm:min-w-[160px]">
+                {cobraAhora && (
+                  <div className="flex-1 sm:flex-none rounded-xl bg-white/15 backdrop-blur-sm px-3 py-2.5 border border-white/20">
+                    <p className="text-[10px] font-medium text-emerald-200 uppercase tracking-wide">Cobra esta semana</p>
+                    <p className="text-sm font-bold mt-0.5 leading-tight">
+                      {cobraAhora.socio.nombres}<br/>{cobraAhora.socio.apellidos}
+                    </p>
+                  </div>
+                )}
+                {cobraSig && (
+                  <div className="flex-1 sm:flex-none rounded-xl bg-white/10 px-3 py-2.5 border border-white/10">
+                    <p className="text-[10px] font-medium text-emerald-300 uppercase tracking-wide">Siguiente</p>
+                    <p className="text-xs font-semibold mt-0.5 text-emerald-100 leading-tight">
+                      {cobraSig.socio.nombres} {cobraSig.socio.apellidos}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Buscador simple (opcional) */}
-          <div className="relative w-full sm:w-80">
-            <input
-              type="text"
-              placeholder="Buscar menú o acción…"
-              className="w-full rounded-xl border border-gray-200/70 dark:border-white/10 bg-white/70 dark:bg-gray-800/60 backdrop-blur-sm px-4 py-2 pr-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500/30"
-              onChange={(e) => {
-                const q = e.currentTarget.value.toLowerCase();
-                const cards = document.querySelectorAll("[data-card]");
-                cards.forEach((el) => {
-                  const t =
-                    (el.getAttribute("data-name") || "") +
-                    (el.getAttribute("data-desc") || "");
-                  (el as HTMLElement).style.display = t
-                    .toLowerCase()
-                    .includes(q)
-                    ? "block"
-                    : "none";
-                });
-              }}
-            />
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-            >
-              <path d="M21 21l-4.35-4.35m1.1-4.4a7.5 7.5 0 11-15 0 7.5 7.5 0 0115 0z" />
+          {/* KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "Socios en ronda", value: String(totalPart), sub: "participantes activos", color: "text-indigo-600", bg: "bg-indigo-50", emoji: "👥" },
+              { label: "Aporte semanal", value: fmt(Number(ronda.montoAporte)), sub: "por participante", color: "text-emerald-700", bg: "bg-emerald-50", emoji: "💵" },
+              { label: "Total socios", value: String(stats?.totalSocios ?? "—"), sub: "en el sistema", color: "text-blue-600", bg: "bg-blue-50", emoji: "🏦" },
+              { label: "Total ahorros", value: fmt(stats?.totalAhorros ?? 0), sub: "saldo acumulado", color: "text-amber-700", bg: "bg-amber-50", emoji: "💰" },
+            ].map(k => (
+              <div key={k.label} className={`rounded-xl border bg-white p-4 shadow-sm`}>
+                <div className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${k.bg} text-lg mb-2`}>{k.emoji}</div>
+                <p className="text-xs text-gray-500">{k.label}</p>
+                <p className={`text-xl font-bold tabular-nums mt-0.5 ${k.color}`}>{k.value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{k.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Fechas info */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Inicio de ronda", value: fmtDate(ronda.fechaInicio) },
+              { label: "Semana actual", value: fechaSem ?? "—" },
+              { label: "Fin estimado", value: fechaFin ?? "—" },
+            ].map(f => (
+              <div key={f.label} className="rounded-xl border bg-white p-3.5 shadow-sm text-center">
+                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">{f.label}</p>
+                <p className="text-sm font-semibold text-gray-800 mt-1">{f.value}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-10 text-center shadow-sm">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7 text-gray-300">
+              <path fillRule="evenodd" d="M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
             </svg>
           </div>
-        </div>
-      </section>
-
-      {/* Grid de Módulos */}
-      <section
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5"
-        aria-label="Menú principal"
-      >
-        {MENUS.map((m) => (
-          <div
-            key={m.name}
-            data-card
-            data-name={m.name}
-            data-desc={m.description}
-          >
-            <MenuCard
-              name={m.name}
-              icon={m.icon}
-              description={m.description}
-              colorFrom={m.colorFrom}
-              colorTo={m.colorTo}
-              href={m.basePath || m.subItems[0]?.path}
-              subItems={m.subItems}
-            />
+          <p className="text-gray-500 text-sm mb-1 font-medium">No hay ronda activa</p>
+          <p className="text-gray-400 text-xs mb-5">Crea una nueva ronda para comenzar a gestionar los cobros.</p>
+          <div className="flex justify-center gap-3">
+            <Link href="/rondas/registro_ronda"
+              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700">
+              + Crear nueva ronda
+            </Link>
+            <Link href="/rondas/historial"
+              className="rounded-xl border px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
+              Ver historial
+            </Link>
           </div>
-        ))}
-      </section>
+          {/* KPIs socios aunque no haya ronda */}
+          {stats && (
+            <div className="mt-6 grid grid-cols-2 gap-3 max-w-xs mx-auto">
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs text-gray-400">Total socios</p>
+                <p className="text-lg font-bold text-gray-700">{stats.totalSocios}</p>
+              </div>
+              <div className="rounded-xl bg-gray-50 p-3">
+                <p className="text-xs text-gray-400">Total ahorros</p>
+                <p className="text-lg font-bold text-emerald-700">{fmt(stats.totalAhorros)}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Pie de página con info */}
-      <footer className="mt-10 text-xs text-gray-500 dark:text-gray-400">
-        Consejo: puedes usar <kbd className="rounded border border-gray-300 px-1">Tab</kbd> y
-        <kbd className="rounded border border-gray-300 px-1 ml-1">Enter</kbd> para navegar las tarjetas.
-      </footer>
-    </>
+      {/* Accesos rápidos */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Accesos rápidos</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          {MODULES.map(m => (
+            <Link key={m.path} href={m.path}
+              className="group flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+              <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${m.color} text-white`}>
+                {m.icon}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-900 truncate leading-tight">{m.name}</p>
+                <p className="text-[10px] text-gray-400 truncate mt-0.5">{m.desc}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
   );
-
 }
