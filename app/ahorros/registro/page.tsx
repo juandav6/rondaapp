@@ -207,8 +207,12 @@ export default function AhorrosRegistroPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-600">Fecha (opcional)</label>
-                    <input type="date" value={nuevaFecha} onChange={e => setNuevaFecha(e.target.value)}
-                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                    <input
+                      type="date"
+                      value={nuevaFecha}
+                      onChange={e => setNuevaFecha(e.target.value)}
+                      onClick={e => (e.target as HTMLInputElement).showPicker?.()}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer" />
                     <p className="mt-0.5 text-[10px] text-gray-400">Si no se indica, se usa la fecha de hoy</p>
                   </div>
                   <div>
@@ -227,31 +231,6 @@ export default function AhorrosRegistroPage() {
                 </div>
                 {okMsg && <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">✓ {okMsg}</div>}
                 {error && <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
-              </div>
-
-              {/* Filtros */}
-              <div className="rounded-xl border bg-white p-4 shadow-sm">
-                <div className="flex flex-col sm:flex-row gap-3 items-end justify-between">
-                  <div className="flex gap-3 flex-wrap">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-600">Desde</label>
-                      <input type="date" value={desde} onChange={e => setDesde(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-gray-600">Hasta</label>
-                      <input type="date" value={hasta} onChange={e => setHasta(e.target.value)}
-                        className="rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-                    </div>
-                    <div className="flex items-end">
-                      <button onClick={() => { setDesde(""); setHasta(""); }}
-                        className="rounded-lg border px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                        Limpiar filtros
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-400 shrink-0">{items.length} registros</p>
-                </div>
               </div>
 
               {/* Historial */}
