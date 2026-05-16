@@ -1,33 +1,37 @@
 // lib/reportes/generarPDF.ts
-// Usa pdfkit — compatible con Node.js serverless en Vercel
-import PDFDocument from "pdfkit";
+// pdfkit en Vercel requiere deshabilitar las fuentes del sistema
+// y usar solo las fuentes embebidas del paquete
 
-const VERDE = "#1a3a2a";
-const VERDE_CLARO = "#e8f5e9";
-const GRIS = "#6b7280";
-const GRIS_CLARO = "#f9fafb";
-const AZUL = "#1d4ed8";
-const ROJO = "#dc2626";
-const AMBER = "#d97706";
+import PDFDocument from "pdfkit";
+import path from "path";
+import fs from "fs";
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(Number(n) || 0);
+  `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const fmtDate = (iso: string | Date) => {
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+  try {
+    return new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
+  } catch { return "-"; }
 };
 
 export async function generarPDF(ronda: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    const doc = new PDFDocument({ margin: 40, size: "A4" });
+
+    // Opciones que evitan buscar fuentes en el sistema de archivos
+    const doc = new PDFDocument({
+      margin: 40,
+      size: "A4",
+      font: "Courier", // fuente built-in de pdfkit, no requiere archivos externos
+      bufferPages: true,
+    });
 
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const W = doc.page.width - 80; // ancho útil
+    const W = doc.page.width - 80;
     const mes = new Date().toLocaleDateString("es-EC", { month: "long", year: "numeric" });
     const fechaGen = new Date().toLocaleDateString("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -38,160 +42,128 @@ export async function generarPDF(ronda: any): Promise<Buffer> {
     const prestamosActivos = ronda.prestamos.filter((p: any) => p.estado === "ACTIVO");
     const totalSaldo = prestamosActivos.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
 
-    // ── HEADER ──────────────────────────────────────────────────────────────
-    doc.rect(40, 40, W, 60).fill(VERDE);
-    doc.fillColor("white").fontSize(20).font("Helvetica-Bold").text("MiRonda", 56, 52);
-    doc.fontSize(10).font("Helvetica").text(`Reporte Mensual · ${ronda.nombre} · ${mes}`, 56, 76);
-    doc.fillColor(GRIS).fontSize(8).text(`Generado: ${fechaGen}`, 40 + W - 100, 76, { width: 90, align: "right" });
-    doc.y = 116;
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    doc.rect(40, 40, W, 55).fill("#1a3a2a");
+    doc.fillColor("white").fontSize(18).font("Courier-Bold").text("MiRonda", 56, 50);
+    doc.fontSize(9).font("Courier").text(`Reporte Mensual - ${ronda.nombre} - ${mes}`, 56, 72);
+    doc.fillColor("#86efac").fontSize(7.5).text(`Generado: ${fechaGen}`, 56, 84);
+    doc.y = 108;
 
-    // ── KPIs ────────────────────────────────────────────────────────────────
+    // ── KPIs ──────────────────────────────────────────────────────────────────
     const kpis = [
-      { label: "Total aportes", value: fmt(totalAportes), color: VERDE },
-      { label: "Total ahorros", value: fmt(totalAhorros), color: VERDE },
-      { label: "Fondo inversión", value: fmt(totalFondo), color: AZUL },
-      { label: "Intereses acum.", value: fmt(totalIntereses), color: AMBER },
-      { label: "Saldo préstamos", value: fmt(totalSaldo), color: ROJO },
-      { label: "Participantes", value: String(ronda.participaciones.length), color: VERDE },
+      { l: "Total aportes", v: fmt(totalAportes) },
+      { l: "Total ahorros", v: fmt(totalAhorros) },
+      { l: "Fondo inversion", v: fmt(totalFondo) },
+      { l: "Intereses acum.", v: fmt(totalIntereses) },
+      { l: "Saldo prestamos", v: fmt(totalSaldo) },
+      { l: "Participantes", v: String(ronda.participaciones.length) },
     ];
-    const kpiW = W / 3;
-    const kpiH = 44;
+    const kpiW = Math.floor(W / 3);
     kpis.forEach((k, i) => {
       const col = i % 3;
       const row = Math.floor(i / 3);
       const x = 40 + col * kpiW;
-      const y = doc.y + row * (kpiH + 4);
-      doc.rect(x + 2, y, kpiW - 4, kpiH).fill(GRIS_CLARO);
-      doc.rect(x + 2, y, 3, kpiH).fill(k.color);
-      doc.fillColor(GRIS).fontSize(7.5).font("Helvetica").text(k.label.toUpperCase(), x + 10, y + 8, { width: kpiW - 14 });
-      doc.fillColor(k.color).fontSize(14).font("Helvetica-Bold").text(k.value, x + 10, y + 20, { width: kpiW - 14 });
+      const y = doc.y + row * 36;
+      doc.rect(x + 2, y, kpiW - 4, 32).fill("#f3f4f6");
+      doc.fillColor("#6b7280").fontSize(7).font("Courier").text(k.l.toUpperCase(), x + 6, y + 5, { width: kpiW - 12 });
+      doc.fillColor("#1a3a2a").fontSize(11).font("Courier-Bold").text(k.v, x + 6, y + 16, { width: kpiW - 12 });
     });
-    doc.y += kpiH * 2 + 16;
+    doc.y += 36 * 2 + 12;
 
-    // ── INFO RONDA ───────────────────────────────────────────────────────────
-    doc.rect(40, doc.y, W, 28).fill("#eff6ff");
-    const infoY = doc.y + 8;
-    const infoCols = [
-      { label: "Semana", value: `${ronda.semanaActual} / ${ronda.participaciones.length}` },
-      { label: "Inicio", value: fmtDate(ronda.fechaInicio) },
-      { label: "Participantes", value: String(ronda.participaciones.length) },
-      { label: "Préstamos activos", value: String(prestamosActivos.length) },
-    ];
-    infoCols.forEach((col, i) => {
-      const x = 40 + (i * W) / 4;
-      doc.fillColor(GRIS).fontSize(7).font("Helvetica").text(col.label, x + 6, infoY);
-      doc.fillColor(AZUL).fontSize(9).font("Helvetica-Bold").text(col.value, x + 6, infoY + 10);
-    });
-    doc.y += 36;
+    // ── SEPARADOR ─────────────────────────────────────────────────────────────
+    const line = () => {
+      doc.moveTo(40, doc.y).lineTo(40 + W, doc.y).strokeColor("#d1d5db").lineWidth(0.5).stroke();
+      doc.y += 4;
+    };
 
-    // Función helper para tabla
-    function drawTable(headers: { label: string; width: number; align?: string }[], rows: string[][], title: string) {
-      const rowH = 18;
-      const headerH = 22;
+    // ── FUNCIÓN TABLA ─────────────────────────────────────────────────────────
+    const drawTable = (
+      cols: { h: string; w: number; right?: boolean }[],
+      rows: string[][],
+      title: string
+    ) => {
+      doc.moveDown(0.6);
+      if (doc.y > doc.page.height - 120) { doc.addPage(); doc.y = 40; }
 
-      // Título sección
-      doc.moveDown(0.5);
-      doc.fillColor(VERDE).fontSize(11).font("Helvetica-Bold").text(title, 40, doc.y);
-      doc.moveTo(40, doc.y + 2).lineTo(40 + W, doc.y + 2).strokeColor(VERDE).lineWidth(0.5).stroke();
-      doc.moveDown(0.4);
+      doc.fillColor("#1a3a2a").fontSize(10).font("Courier-Bold").text(title, 40, doc.y);
+      doc.y += 4; line();
 
-      // Header tabla
+      // Cabecera
       const headerY = doc.y;
-      doc.rect(40, headerY, W, headerH).fill(VERDE);
-      let x = 40;
-      headers.forEach(h => {
-        doc.fillColor("white").fontSize(8).font("Helvetica-Bold")
-          .text(h.label, x + 4, headerY + 7, { width: h.width - 8, align: (h.align as any) || "left" });
-        x += h.width;
+      doc.rect(40, headerY, W, 18).fill("#1a3a2a");
+      let cx = 40;
+      cols.forEach(c => {
+        doc.fillColor("white").fontSize(7.5).font("Courier-Bold")
+          .text(c.h, cx + 3, headerY + 5, { width: c.w - 6, align: c.right ? "right" : "left" });
+        cx += c.w;
       });
-      doc.y = headerY + headerH;
+      doc.y = headerY + 18;
 
       // Filas
       rows.forEach((row, ri) => {
-        if (doc.y + rowH > doc.page.height - 60) {
-          doc.addPage();
-          doc.y = 40;
-        }
+        const rH = 16;
+        if (doc.y + rH > doc.page.height - 50) { doc.addPage(); doc.y = 40; }
         const rowY = doc.y;
-        if (ri % 2 === 1) doc.rect(40, rowY, W, rowH).fill(GRIS_CLARO);
-        let cx = 40;
+        if (ri % 2 === 1) doc.rect(40, rowY, W, rH).fill("#f9fafb");
+        let rx = 40;
         row.forEach((cell, ci) => {
-          doc.fillColor("#1f2937").fontSize(8).font("Helvetica")
-            .text(cell, cx + 4, rowY + 5, { width: headers[ci].width - 8, align: (headers[ci].align as any) || "left" });
-          cx += headers[ci].width;
+          doc.fillColor("#1f2937").fontSize(7.5).font("Courier")
+            .text(cell, rx + 3, rowY + 4, { width: cols[ci].w - 6, align: cols[ci].right ? "right" : "left" });
+          rx += cols[ci].w;
         });
-        doc.y = rowY + rowH;
+        doc.y = rowY + rH;
       });
-    }
+    };
 
-    // ── TABLA PARTICIPANTES ──────────────────────────────────────────────────
-    const partHeaders = [
-      { label: "#", width: 28 },
-      { label: "Cuenta", width: 65 },
-      { label: "Nombre completo", width: W - 28 - 65 - 80 - 80 },
-      { label: "Aportes", width: 80, align: "right" },
-      { label: "Ahorros", width: 80, align: "right" },
-    ];
-    const partRows = ronda.participaciones.map((p: any) => {
-      const totalA = ronda.aportes.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
-      const totalAh = ronda.ahorros.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
-      return [String(p.orden), p.socio.numeroCuenta, `${p.socio.nombres} ${p.socio.apellidos}`, fmt(totalA), fmt(totalAh)];
-    });
-    drawTable(partHeaders, partRows, `Participantes (${ronda.participaciones.length})`);
+    // ── PARTICIPANTES ─────────────────────────────────────────────────────────
+    const nameW = W - 60 - 75 - 75;
+    drawTable(
+      [{ h: "#", w: 30 }, { h: "CUENTA", w: 75 }, { h: "NOMBRE", w: nameW }, { h: "APORTES", w: 75, right: true }, { h: "AHORROS", w: 75, right: true }],
+      ronda.participaciones.map((p: any) => {
+        const tA = ronda.aportes.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
+        const tAh = ronda.ahorros.filter((a: any) => a.socioId === p.socioId).reduce((s: number, x: any) => s + Number(x.monto), 0);
+        return [String(p.orden), p.socio.numeroCuenta, `${p.socio.nombres} ${p.socio.apellidos}`, fmt(tA), fmt(tAh)];
+      }),
+      `Participantes (${ronda.participaciones.length})`
+    );
 
-    // ── TABLA PRÉSTAMOS ──────────────────────────────────────────────────────
+    // ── PRÉSTAMOS ─────────────────────────────────────────────────────────────
     if (ronda.prestamos.length > 0) {
-      doc.addPage();
-      const prestHeaders = [
-        { label: "Socio", width: W - 70 - 70 - 70 - 55 - 55 },
-        { label: "Monto", width: 70, align: "right" },
-        { label: "Tasa", width: 55, align: "right" },
-        { label: "Saldo", width: 70, align: "right" },
-        { label: "Estado", width: 55 },
-        { label: "Cuotas", width: 70, align: "right" },
-      ];
-      const prestRows = ronda.prestamos.map((p: any) => {
-        const pagadas = p.cuotas.filter((c: any) => c.pagada).length;
-        return [
-          `${p.socio.nombres} ${p.socio.apellidos}`,
-          fmt(Number(p.monto)),
-          `${Number(p.tasaAnual)}%`,
-          fmt(Number(p.saldoActual)),
-          p.estado,
-          `${pagadas}/${p.cuotas.length}`,
-        ];
-      });
-      drawTable(prestHeaders, prestRows, "Préstamos");
+      const socioW2 = W - 70 - 55 - 70 - 55 - 65;
+      drawTable(
+        [{ h: "SOCIO", w: socioW2 }, { h: "MONTO", w: 70, right: true }, { h: "TASA", w: 55, right: true }, { h: "SALDO", w: 70, right: true }, { h: "ESTADO", w: 55 }, { h: "CUOTAS", w: 65, right: true }],
+        ronda.prestamos.map((p: any) => {
+          const pag = p.cuotas.filter((c: any) => c.pagada).length;
+          return [`${p.socio.nombres} ${p.socio.apellidos}`, fmt(Number(p.monto)), `${Number(p.tasaAnual)}%`, fmt(Number(p.saldoActual)), p.estado, `${pag}/${p.cuotas.length}`];
+        }),
+        "Prestamos"
+      );
     }
 
-    // ── TABLA INVERSIÓN ──────────────────────────────────────────────────────
+    // ── INVERSIÓN ─────────────────────────────────────────────────────────────
     if (ronda.cuentasInversion.length > 0) {
-      if (ronda.prestamos.length === 0) doc.addPage();
-      const invHeaders = [
-        { label: "Socio", width: W - 90 - 70 - 80 - 80 },
-        { label: "Invertido", width: 90, align: "right" },
-        { label: "% Part.", width: 70, align: "right" },
-        { label: "Intereses", width: 80, align: "right" },
-        { label: "Total", width: 80, align: "right" },
-      ];
-      const invRows = ronda.cuentasInversion.map((ci: any) => [
-        `${ci.socio.nombres} ${ci.socio.apellidos}`,
-        fmt(Number(ci.montoInvertido)),
-        `${Number(ci.porcentajeParticipacion).toFixed(2)}%`,
-        fmt(Number(ci.interesesAcumulados)),
-        fmt(Number(ci.montoInvertido) + Number(ci.interesesAcumulados)),
-      ]);
-      drawTable(invHeaders, invRows, "Fondo de Inversión");
+      const socioW3 = W - 80 - 65 - 80 - 80;
+      drawTable(
+        [{ h: "SOCIO", w: socioW3 }, { h: "INVERTIDO", w: 80, right: true }, { h: "% PART.", w: 65, right: true }, { h: "INTERESES", w: 80, right: true }, { h: "TOTAL", w: 80, right: true }],
+        ronda.cuentasInversion.map((ci: any) => [
+          `${ci.socio.nombres} ${ci.socio.apellidos}`,
+          fmt(Number(ci.montoInvertido)),
+          `${Number(ci.porcentajeParticipacion).toFixed(2)}%`,
+          fmt(Number(ci.interesesAcumulados)),
+          fmt(Number(ci.montoInvertido) + Number(ci.interesesAcumulados)),
+        ]),
+        "Fondo de Inversion"
+      );
     }
 
-    // ── FOOTER ───────────────────────────────────────────────────────────────
-    const pages = doc.bufferedPageRange();
-    for (let i = 0; i < pages.count; i++) {
-      doc.switchToPage(pages.start + i);
-      doc.fillColor(GRIS).fontSize(7.5).font("Helvetica")
+    // ── FOOTER en todas las páginas ───────────────────────────────────────────
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      doc.fillColor("#9ca3af").fontSize(7).font("Courier")
         .text(
-          `MiRonda · Sistema de gestión de rondas de ahorro · Página ${i + 1} de ${pages.count}`,
-          40, doc.page.height - 30, { width: W, align: "center" }
+          `MiRonda - Sistema de gestion de rondas de ahorro - Pagina ${i + 1} de ${range.count}`,
+          40, doc.page.height - 28, { width: W, align: "center" }
         );
     }
 
