@@ -9,6 +9,7 @@ export type Ronda = {
   fechaInicio: string;
   fechaFin: string | null;
   activa: boolean;
+  reporteGeneradoAt?: string | null;
 };
 
 function classNames(...classes: (string | false | null | undefined)[]) {
@@ -192,6 +193,17 @@ export default function HistorialRondasPage() {
                   <td className="px-4 py-3"><StatusBadge activa={r.activa} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
+                      <a
+                        href={`/api/rondas/${r.id}/reporte`}
+                        download
+                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                        title={r.reporteGeneradoAt ? `Reporte generado al cierre` : "Generar reporte ahora"}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                          <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
+                        </svg>
+                        {r.reporteGeneradoAt ? "Excel cierre" : "Excel"}
+                      </a>
                       <Link href={`/rondas/${r.id}/resultados`}
                         className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
                         Ver resultados
@@ -240,6 +252,13 @@ export default function HistorialRondasPage() {
               <StatusBadge activa={r.activa} />
             </div>
             <div className="flex gap-2 pt-1">
+              <a href={`/api/rondas/${r.id}/reporte`} download
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-medium text-emerald-700 hover:bg-emerald-100 flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                  <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
+                </svg>
+                {r.reporteGeneradoAt ? "Excel cierre" : "Excel"}
+              </a>
               <Link href={`/rondas/${r.id}/resultados`}
                 className="flex-1 rounded-lg bg-blue-600 py-2 text-center text-xs font-medium text-white hover:bg-blue-700">
                 Ver resultados
