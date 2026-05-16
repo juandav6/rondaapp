@@ -234,7 +234,7 @@ export default function RondaActualPage() {
   const siguiente = itemsOrdenados.length ? itemsOrdenados[(idx + 1) % itemsOrdenados.length] : undefined;
   const montoAporteNum = Number(estado.ronda.montoAporte || 0);
   const totalAportesSemana = estado.totalAportesSemana != null ? Number(estado.totalAportesSemana) : estado.items.reduce((s, it) => s + (it.pagado ? montoAporteNum : 0), 0);
-  const totalAhorrosSemana = estado.totalAhorrosSemana != null ? Number(estado.totalAhorrosSemana) : estado.items.reduce((s, it) => s + Number(it.ahorroSemana ?? 0), 0);
+  const totalAhorrosSemana = estado.items.reduce((s, it) => s + Number(it.ahorroSemana ?? 0), 0);
   const opcionesResponsable = itemsOrdenados.map(it => ({ value: it.socioId, label: `${it.socio.nombres} ${it.socio.apellidos}` }));
   const baseInicio = estado.ronda.fechaInicio || estado.ronda.fechaInicioISO || (estado.ronda.fechaInicioDate ? `${estado.ronda.fechaInicioDate}T12:00:00Z` : undefined);
   const intervalo = Number(estado.ronda.intervaloDiasCobro ?? 7);
@@ -317,12 +317,55 @@ export default function RondaActualPage() {
 
       {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <p className="text-sm font-medium text-gray-700">Participantes</p>
-        <button onClick={registrarAporteTodos} disabled={cerrando}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
-          {cerrando ? "Registrando…" : "Aporte a todos"}
-        </button>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {/* Cajón ahorro masivo */}
+          <div className="flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1.5 shadow-sm">
+            <span className="text-xs text-gray-500 whitespace-nowrap">Ahorro a todos:</span>
+            <input
+              type="number" min="0.01" step="0.01" placeholder="0.00"
+              id="bulk-ahorro-input"
+              className="w-20 rounded border px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
+              onChange={e => {
+                const v = Number(e.target.value || 0);
+                if (v > 0) {
+                  const next: Record<number, number> = {};
+                  estado.items.forEach(it => { next[it.socioId] = v; });
+                  setAhorroInputs(next);
+                }
+              }}
+            />
+            <button
+              onClick={async () => {
+                const pendientesAhorro = estado.items.filter(it => !(it as any).ahorroRegistradoSemana);
+                if (pendientesAhorro.length === 0) { showToast("Todos ya tienen ahorro registrado esta semana", "info"); return; }
+                try {
+                  setCerrando(true);
+                  for (const it of pendientesAhorro) {
+                    const monto = Number(ahorroInputs[it.socioId] ?? 0);
+                    if (monto <= 0) continue;
+                    await fetch(`/api/rondas/${estado.ronda.id}/ahorros`, {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ socioId: it.socioId, semana: estado.semana, monto }),
+                    });
+                  }
+                  await cargar();
+                  showToast("Ahorros registrados para todos");
+                  (document.getElementById("bulk-ahorro-input") as HTMLInputElement).value = "";
+                } catch (e: any) { showToast(e.message, "error", 4000); }
+                finally { setCerrando(false); }
+              }}
+              disabled={cerrando || Object.values(ahorroInputs).every(v => !v || v <= 0)}
+              className="rounded bg-blue-600 px-2.5 py-1 text-xs text-white disabled:opacity-50 whitespace-nowrap">
+              {cerrando ? "…" : "Guardar todos"}
+            </button>
+          </div>
+          <button onClick={registrarAporteTodos} disabled={cerrando}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+            {cerrando ? "Registrando…" : "Aporte a todos"}
+          </button>
+        </div>
       </div>
 
       {/* Tabla — desktop */}
