@@ -428,6 +428,311 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   totalRow5.getCell(5).numFmt = '"$"#,##0.00';
   totalRow5.getCell(6).numFmt = '"$"#,##0.00';
 
+  // ── HOJA 6: Cuentas por cobrar ──────────────────────────────────────────────
+  const ws6 = wb.addWorksheet("Cuentas por Cobrar");
+
+  // Título
+  ws6.mergeCells("A1:H1");
+  const titleCxC = ws6.getCell("A1");
+  titleCxC.value = `Cuentas por Cobrar · ${ronda.nombre} · Semana ${ronda.semanaActual}`;
+  titleCxC.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ROJO } };
+  titleCxC.font = { bold: true, size: 13, color: { argb: BLANCO } };
+  titleCxC.alignment = { horizontal: "center", vertical: "middle" };
+  ws6.getRow(1).height = 26;
+
+  ws6.addRow([]);
+
+  // ── Sección 1: Aportes pendientes (socios que no pagaron alguna semana) ───
+  // Construir mapa de quién pagó cada semana
+  const pagadosMap = new Map<string, boolean>(); // key: `${socioId}_${semana}`
+  ronda.aportes.forEach((a: any) => pagadosMap.set(`${a.socioId}_${a.semana}`, true));
+
+  type PendienteAporte = { socio: string; cuenta: string; semana: number; fecha: string; monto: number };
+  const pendientesAporte: PendienteAporte[] = [];
+
+  for (let sem = 1; sem <= ronda.semanaActual; sem++) {
+    const fecha = fmtDate(fechaSemana(sem));
+    for (const p of ronda.participaciones) {
+      if (!pagadosMap.has(`${p.socioId}_${sem}`)) {
+        pendientesAporte.push({
+          socio: `${p.socio.nombres} ${p.socio.apellidos}`,
+          cuenta: p.socio.numeroCuenta,
+          semana: sem,
+          fecha,
+          monto: Number(ronda.montoAporte),
+        });
+      }
+    }
+  }
+
+  // Header sección aportes
+  ws6.mergeCells(`A3:H3`);
+  const secAp = ws6.getCell("A3");
+  secAp.value = `APORTES PENDIENTES (${pendientesAporte.length} registro${pendientesAporte.length !== 1 ? "s" : ""})`;
+  secAp.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ROJO_CLARO } };
+  secAp.font = { bold: true, size: 10, color: { argb: ROJO } };
+  secAp.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+  ws6.getRow(3).height = 18;
+
+  ws6.columns = [
+    { key: "socio", width: 28 },
+    { key: "cuenta", width: 12 },
+    { key: "tipo", width: 20 },
+    { key: "semana", width: 10 },
+    { key: "fecha", width: 14 },
+    { key: "monto", width: 14 },
+    { key: "estado", width: 14 },
+    { key: "obs", width: 22 },
+  ];
+
+  const apHeader = ws6.addRow(["Socio", "Cuenta", "Tipo", "Semana", "Fecha", "Monto ($)", "Estado", "Observaciones"]);
+  styleHeader(apHeader, 8, ROJO);
+
+  if (pendientesAporte.length === 0) {
+    const emptyRow = ws6.addRow({ socio: "✓ Todos los aportes al día", tipo: "", semana: "", fecha: "", monto: "", estado: "", obs: "" });
+    for (let c = 1; c <= 8; c++) {
+      emptyRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
+      emptyRow.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
+    }
+    emptyRow.height = 16;
+  } else {
+    let totalPendAporte = 0;
+    pendientesAporte.forEach((p, i) => {
+      totalPendAporte += p.monto;
+      const row = ws6.addRow({
+        socio: p.socio, cuenta: p.cuenta, tipo: "Aporte semanal",
+        semana: p.semana, fecha: p.fecha, monto: p.monto,
+        estado: "PENDIENTE", obs: "",
+      });
+      styleAlternate(row, 8, i % 2 === 0);
+      row.getCell(6).numFmt = '"$"#,##0.00';
+      // Colorear estado
+      row.getCell(7).font = { color: { argb: ROJO }, bold: true };
+      row.getCell(7).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ROJO_CLARO } };
+    });
+    const totApRow = ws6.addRow({ socio: "SUBTOTAL APORTES", cuenta: "", tipo: "", semana: "", fecha: "", monto: totalPendAporte, estado: "", obs: "" });
+    styleTotalRow(totApRow, 8, ROJO_CLARO);
+    totApRow.getCell(6).numFmt = '"$"#,##0.00';
+  }
+
+  ws6.addRow([]);
+
+  // ── Sección 2: Ahorros pendientes (objetivo no alcanzado) ─────────────────
+  type PendienteAhorro = { socio: string; cuenta: string; objetivo: number; acumulado: number; pendiente: number };
+  const pendientesAhorro: PendienteAhorro[] = [];
+  const objetivoAhorro = Number(ronda.ahorroObjetivoPorSocio ?? 0);
+
+  if (objetivoAhorro > 0) {
+    // Ahorros acumulados por socio
+    const ahorrosPorSocio = new Map<number, number>();
+    ronda.ahorros.forEach((a: any) => {
+      ahorrosPorSocio.set(a.socioId, (ahorrosPorSocio.get(a.socioId) ?? 0) + Number(a.monto));
+    });
+
+    for (const p of ronda.participaciones) {
+      const acum = ahorrosPorSocio.get(p.socioId) ?? 0;
+      if (acum < objetivoAhorro) {
+        pendientesAhorro.push({
+          socio: `${p.socio.nombres} ${p.socio.apellidos}`,
+          cuenta: p.socio.numeroCuenta,
+          objetivo: objetivoAhorro,
+          acumulado: acum,
+          pendiente: objetivoAhorro - acum,
+        });
+      }
+    }
+  }
+
+  const rowNumAh = ws6.rowCount + 1;
+  ws6.mergeCells(`A${rowNumAh}:H${rowNumAh}`);
+  const secAh = ws6.getCell(`A${rowNumAh}`);
+  secAh.value = `AHORROS PENDIENTES (${pendientesAhorro.length} socio${pendientesAhorro.length !== 1 ? "s" : ""} bajo objetivo)`;
+  secAh.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AMBER_CLARO } };
+  secAh.font = { bold: true, size: 10, color: { argb: AMBER } };
+  secAh.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+  ws6.getRow(rowNumAh).height = 18;
+
+  const ahHeader = ws6.addRow(["Socio", "Cuenta", "Objetivo ($)", "Ahorrado ($)", "Pendiente ($)", "% Completado", "Estado", ""]);
+  styleHeader(ahHeader, 8, AMBER);
+  // Ajustar color de fuente para fondo amarillo
+  for (let c = 1; c <= 8; c++) {
+    ahHeader.getCell(c).font = { bold: true, color: { argb: "FF78350f" }, size: 10 };
+  }
+
+  if (pendientesAhorro.length === 0) {
+    const emptyRow2 = ws6.addRow({ socio: objetivoAhorro === 0 ? "Sin objetivo de ahorro configurado" : "✓ Todos los socios alcanzaron su objetivo", cuenta: "" });
+    for (let c = 1; c <= 8; c++) {
+      emptyRow2.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
+      emptyRow2.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
+    }
+    emptyRow2.height = 16;
+  } else {
+    let totPendAh = 0;
+    pendientesAhorro.forEach((p, i) => {
+      totPendAh += p.pendiente;
+      const pct = p.objetivo > 0 ? (p.acumulado / p.objetivo) * 100 : 0;
+      const row = ws6.addRow({
+        socio: p.socio, cuenta: p.cuenta,
+        objetivo: p.objetivo, acumulado: p.acumulado, pendiente: p.pendiente,
+        pct: `${pct.toFixed(1)}%`, estado: "INCOMPLETO", obs: "",
+      });
+      styleAlternate(row, 8, i % 2 === 0);
+      row.getCell(3).numFmt = '"$"#,##0.00';
+      row.getCell(4).numFmt = '"$"#,##0.00';
+      row.getCell(5).numFmt = '"$"#,##0.00';
+      row.getCell(7).font = { color: { argb: AMBER }, bold: true };
+    });
+    const totAhRow = ws6.addRow({ socio: "SUBTOTAL AHORROS PENDIENTES", cuenta: "", objetivo: "", acumulado: "", pendiente: totPendAh });
+    styleTotalRow(totAhRow, 8, AMBER_CLARO);
+    totAhRow.getCell(5).numFmt = '"$"#,##0.00';
+  }
+
+  ws6.addRow([]);
+
+  // ── Sección 3: Préstamos activos (saldo pendiente) ────────────────────────
+  const prestamosConSaldo = ronda.prestamos.filter((p: any) => p.estado === "ACTIVO" && Number(p.saldoActual) > 0);
+
+  const rowNumPr = ws6.rowCount + 1;
+  ws6.mergeCells(`A${rowNumPr}:H${rowNumPr}`);
+  const secPr = ws6.getCell(`A${rowNumPr}`);
+  secPr.value = `PRÉSTAMOS ACTIVOS (${prestamosConSaldo.length} préstamo${prestamosConSaldo.length !== 1 ? "s" : ""} con saldo)`;
+  secPr.fill = { type: "pattern", pattern: "solid", fgColor: { argb: AZUL_CLARO } };
+  secPr.font = { bold: true, size: 10, color: { argb: AZUL } };
+  secPr.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+  ws6.getRow(rowNumPr).height = 18;
+
+  const prHeader = ws6.addRow(["Socio", "Cuenta", "Monto original ($)", "Saldo pendiente ($)", "Tasa (%)", "Cuotas pend.", "Estado", "Fecha inicio"]);
+  styleHeader(prHeader, 8, AZUL);
+  for (let c = 1; c <= 8; c++) {
+    prHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
+  }
+
+  if (prestamosConSaldo.length === 0) {
+    const emptyRow3 = ws6.addRow({ socio: "✓ Sin préstamos activos con saldo pendiente" });
+    for (let c = 1; c <= 8; c++) {
+      emptyRow3.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
+      emptyRow3.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
+    }
+    emptyRow3.height = 16;
+  } else {
+    let totSaldoPr = 0;
+    prestamosConSaldo.forEach((p: any, i: number) => {
+      const cuotasPend = p.cuotas.filter((c: any) => !c.pagada).length;
+      totSaldoPr += Number(p.saldoActual);
+      const row = ws6.addRow({
+        socio: `${p.socio.nombres} ${p.socio.apellidos}`,
+        cuenta: p.socio.numeroCuenta,
+        monto: Number(p.monto),
+        saldo: Number(p.saldoActual),
+        tasa: Number(p.tasaAnual),
+        cuotasPend,
+        estado: p.estado,
+        fechaInicio: new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(p.fechaInicio)),
+      });
+      styleAlternate(row, 8, i % 2 === 0);
+      row.getCell(3).numFmt = '"$"#,##0.00';
+      row.getCell(4).numFmt = '"$"#,##0.00';
+      row.getCell(5).numFmt = '0.00"%"';
+      row.getCell(7).font = { color: { argb: AZUL }, bold: true };
+    });
+    const totPrRow = ws6.addRow({ socio: "SUBTOTAL SALDO PRÉSTAMOS", saldo: totSaldoPr });
+    styleTotalRow(totPrRow, 8, AZUL_CLARO);
+    totPrRow.getCell(4).numFmt = '"$"#,##0.00';
+  }
+
+  ws6.addRow([]);
+
+  // ── Sección 4: Préstamos Express pendientes ───────────────────────────────
+  const expressActivos = (ronda.prestamosExpress ?? []).filter((pe: any) => pe.estado === "PENDIENTE");
+
+  const rowNumEx = ws6.rowCount + 1;
+  ws6.mergeCells(`A${rowNumEx}:H${rowNumEx}`);
+  const secEx = ws6.getCell(`A${rowNumEx}`);
+  secEx.value = `PRÉSTAMOS EXPRESS PENDIENTES (${expressActivos.length} pendiente${expressActivos.length !== 1 ? "s" : ""})`;
+  secEx.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFf3e8ff" } };
+  secEx.font = { bold: true, size: 10, color: { argb: "FF7c3aed" } };
+  secEx.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+  ws6.getRow(rowNumEx).height = 18;
+
+  const exHeader = ws6.addRow(["Socio", "Cuenta", "Semana", "Principal ($)", "Interés ($)", "Total ($)", "Estado", "Observaciones"]);
+  styleHeader(exHeader, 8, "FF7c3aed");
+  for (let c = 1; c <= 8; c++) {
+    exHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
+  }
+
+  if (expressActivos.length === 0) {
+    const emptyRow4 = ws6.addRow({ socio: "✓ Sin préstamos express pendientes" });
+    for (let c = 1; c <= 8; c++) {
+      emptyRow4.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
+      emptyRow4.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
+    }
+    emptyRow4.height = 16;
+  } else {
+    let totEx = 0;
+    expressActivos.forEach((pe: any, i: number) => {
+      totEx += Number(pe.total);
+      const row = ws6.addRow({
+        socio: `${pe.socio.nombres} ${pe.socio.apellidos}`,
+        cuenta: pe.socio.numeroCuenta,
+        semana: pe.semana,
+        principal: Number(pe.principal),
+        interes: Number(pe.interes),
+        total: Number(pe.total),
+        estado: pe.estado,
+        obs: pe.observaciones ?? "",
+      });
+      styleAlternate(row, 8, i % 2 === 0);
+      row.getCell(4).numFmt = '"$"#,##0.00';
+      row.getCell(5).numFmt = '"$"#,##0.00';
+      row.getCell(6).numFmt = '"$"#,##0.00';
+      row.getCell(7).font = { color: { argb: "FF7c3aed" }, bold: true };
+    });
+    const totExRow = ws6.addRow({ socio: "SUBTOTAL EXPRESS", total: totEx });
+    styleTotalRow(totExRow, 8, "FFf3e8ff");
+    totExRow.getCell(6).numFmt = '"$"#,##0.00';
+  }
+
+  ws6.addRow([]);
+
+  // ── Resumen total CxC ─────────────────────────────────────────────────────
+  const totalAportesPend = pendientesAporte.reduce((a, p) => a + p.monto, 0);
+  const totalAhorrosPend = pendientesAhorro.reduce((a, p) => a + p.pendiente, 0);
+  const totalPrestPend = prestamosConSaldo.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
+  const totalExpressPend = expressActivos.reduce((a: number, pe: any) => a + Number(pe.total), 0);
+  const grandTotal = totalAportesPend + totalAhorrosPend + totalPrestPend + totalExpressPend;
+
+  const rowNumRes = ws6.rowCount + 1;
+  ws6.mergeCells(`A${rowNumRes}:H${rowNumRes}`);
+  const secRes = ws6.getCell(`A${rowNumRes}`);
+  secRes.value = "RESUMEN TOTAL CUENTAS POR COBRAR";
+  secRes.fill = { type: "pattern", pattern: "solid", fgColor: { argb: VERDE } };
+  secRes.font = { bold: true, size: 11, color: { argb: BLANCO } };
+  secRes.alignment = { horizontal: "center", vertical: "middle" };
+  ws6.getRow(rowNumRes).height = 22;
+
+  const resRows = [
+    ["Aportes pendientes", totalAportesPend],
+    ["Ahorros pendientes (bajo objetivo)", totalAhorrosPend],
+    ["Saldo préstamos activos", totalPrestPend],
+    ["Préstamos express pendientes", totalExpressPend],
+  ];
+  resRows.forEach(([label, val], i) => {
+    const row = ws6.addRow({ socio: label, principal: val });
+    styleAlternate(row, 8, i % 2 === 0);
+    row.getCell(1).font = { bold: false, size: 10 };
+    row.getCell(4).numFmt = '"$"#,##0.00';
+    row.getCell(4).value = val;
+    row.getCell(4).font = { bold: true };
+  });
+
+  const grandTotRow = ws6.addRow({ socio: "TOTAL GENERAL POR COBRAR", principal: grandTotal });
+  styleTotalRow(grandTotRow, 8, VERDE_CLARO);
+  grandTotRow.getCell(1).font = { bold: true, size: 11 };
+  grandTotRow.getCell(4).numFmt = '"$"#,##0.00';
+  grandTotRow.getCell(4).value = grandTotal;
+  grandTotRow.getCell(4).font = { bold: true, size: 11, color: { argb: VERDE } };
+  grandTotRow.height = 22;
+
   const buf = await wb.xlsx.writeBuffer();
   return buf as Buffer;
 }
