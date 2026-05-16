@@ -2,8 +2,19 @@
 import { NextResponse, NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-
 export const runtime = "nodejs";
+
+// Calcula la fecha real de una semana de la ronda
+function fechaDeSemana(fechaInicio: Date, semana: number, intervalo: number): Date {
+  const d = new Date(Date.UTC(
+    fechaInicio.getUTCFullYear(),
+    fechaInicio.getUTCMonth(),
+    fechaInicio.getUTCDate(),
+    12, 0, 0
+  ));
+  d.setUTCDate(d.getUTCDate() + (semana - 1) * intervalo);
+  return d;
+}
 
 export async function POST(req: Request | NextRequest, { params }: any) {
   const rondaId = Number(Array.isArray(params?.id) ? params.id[0] : params?.id);
@@ -17,7 +28,12 @@ export async function POST(req: Request | NextRequest, { params }: any) {
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
-    select: { id: true, nombre: true },
+    select: {
+      id: true,
+      nombre: true,
+      fechaInicio: true,
+      intervaloDiasCobro: true,
+    },
   });
   if (!ronda) {
     return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
@@ -31,13 +47,24 @@ export async function POST(req: Request | NextRequest, { params }: any) {
 
   const montoDecimal = new Prisma.Decimal(monto);
 
+  // Fecha real de la semana (no la fecha de registro)
+  const fechaSemana = ronda.fechaInicio
+    ? fechaDeSemana(ronda.fechaInicio, semana, ronda.intervaloDiasCobro ?? 7)
+    : new Date();
+
   // Transacción: crear ahorro + movimiento + actualizar saldo
   const [ahorro, , socioActualizado] = await prisma.$transaction([
-    // 1. Registrar en tabla ahorros
+    // 1. Registrar en tabla ahorros con la fecha correcta de la semana
     prisma.ahorro.create({
-      data: { rondaId, socioId, semana, monto: montoDecimal },
+      data: {
+        rondaId,
+        socioId,
+        semana,
+        monto: montoDecimal,
+        fecha: fechaSemana,        // ← fecha real de la semana
+      },
     }),
-    // 2. Crear movimiento visible en el detalle del socio
+    // 2. Crear movimiento con la fecha real de la semana
     prisma.movimientoCuenta.create({
       data: {
         socioId,
@@ -45,6 +72,7 @@ export async function POST(req: Request | NextRequest, { params }: any) {
         tipo: "AHORRO",
         monto: montoDecimal,
         nota: `Ahorro semana ${semana} · ${ronda.nombre}`,
+        createdAt: fechaSemana,    // ← fecha real de la semana
       },
     }),
     // 3. Incrementar saldoAhorros del socio
