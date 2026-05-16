@@ -2,6 +2,9 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { generarExcel } from "@/lib/reportes/generarExcel";
+
+export const runtime = "nodejs"; // requerido para generarExcel (exceljs)
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -9,7 +12,6 @@ const MULTA_BASE = 100;
 
 /** Ejecuta la devolución de inversiones al cierre de la ronda */
 async function devolverInversiones(rondaId: number) {
-  // 1. Obtener todas las cuentas de inversión de esta ronda no devueltas
   const cuentas = await prisma.cuentaInversion.findMany({
     where: { rondaId, devuelto: false },
     include: { socio: { select: { id: true, nombres: true, saldoAhorros: true } } },
@@ -17,8 +19,6 @@ async function devolverInversiones(rondaId: number) {
 
   if (cuentas.length === 0) return { devueltas: 0, totalDevuelto: 0 };
 
-  // 2. Calcular intereses reales acumulados de cuotas pagadas
-  //    para cada cuenta según su % de participación
   const cuotasPagadas = await prisma.prestamoCuota.findMany({
     where: { prestamo: { rondaId }, pagada: true },
     select: { interes: true },
@@ -37,7 +37,6 @@ async function devolverInversiones(rondaId: number) {
       const totalADevolver = Number(cuenta.montoInvertido) + interesCorrespondiente;
       totalDevuelto += totalADevolver;
 
-      // Actualizar intereses acumulados y marcar como devuelta
       await tx.cuentaInversion.update({
         where: { id: cuenta.id },
         data: {
@@ -46,7 +45,6 @@ async function devolverInversiones(rondaId: number) {
         },
       });
 
-      // Sumar a saldoAhorros del socio
       await tx.socio.update({
         where: { id: cuenta.socioId },
         data: {
@@ -56,7 +54,6 @@ async function devolverInversiones(rondaId: number) {
         },
       });
 
-      // Registrar movimiento de devolución
       await tx.movimientoCuenta.create({
         data: {
           socioId: cuenta.socioId,
@@ -67,7 +64,6 @@ async function devolverInversiones(rondaId: number) {
         },
       });
 
-      // Si hay intereses, registrar también movimiento de INTERES por separado
       if (interesCorrespondiente > 0) {
         await tx.movimientoCuenta.create({
           data: {
@@ -85,6 +81,77 @@ async function devolverInversiones(rondaId: number) {
   return { devueltas: cuentas.length, totalDevuelto };
 }
 
+/** Auto-asigna responsable de la semana si no fue seleccionado manualmente */
+async function autoAsignarResponsable(rondaId: number, semana: number) {
+  const yaRegistrado = await prisma.responsableCobroSemana.findUnique({
+    where: { rondaId_semana: { rondaId, semana } },
+  });
+  if (yaRegistrado) return;
+
+  const receptor = await prisma.participacion.findFirst({
+    where: { rondaId, orden: semana },
+    select: { socioId: true },
+  });
+  if (!receptor) return;
+
+  await prisma.responsableCobroSemana.create({
+    data: { rondaId, semana, socioId: receptor.socioId },
+  });
+}
+
+/** Genera el Excel del cierre y lo guarda en la ronda */
+async function generarYGuardarExcel(rondaId: number) {
+  try {
+    // Cargar datos completos de la ronda para el Excel
+    const rondaData = await prisma.ronda.findUnique({
+      where: { id: rondaId },
+      include: {
+        participaciones: {
+          include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+          orderBy: { orden: "asc" },
+        },
+        aportes: {
+          include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+        },
+        ahorros: {
+          include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+        },
+        prestamos: {
+          include: {
+            socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } },
+            cuotas: { orderBy: { numero: "asc" } },
+          },
+        },
+        prestamosExpress: {
+          include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+        },
+        cuentasInversion: {
+          include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+        },
+        responsablesSemana: {
+          include: { socio: { select: { nombres: true, apellidos: true } } },
+        },
+      },
+    });
+
+    if (!rondaData) return;
+
+    const excelBuffer = await generarExcel(rondaData);
+
+    // Guardar el Excel en la BD atado a la ronda
+    await prisma.ronda.update({
+      where: { id: rondaId },
+      data: {
+        reporteExcel: Buffer.from(excelBuffer),
+        reporteGeneradoAt: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error("Error generando Excel de cierre:", err);
+    // No bloquear el cierre si falla el Excel
+  }
+}
+
 export async function POST(_req: Request, context: Context) {
   const { params } = await context;
   const rondaId = Number((await params).id);
@@ -100,7 +167,7 @@ export async function POST(_req: Request, context: Context) {
   const semana = ronda.semanaActual;
   const participantes = ronda.participaciones.map((p) => p.socioId);
 
-  // Verificar si todos pagaron esta semana
+  // Verificar si todos pagaron
   const pagos = await prisma.aporte.findMany({
     where: { rondaId, semana },
     select: { socioId: true },
@@ -127,10 +194,13 @@ export async function POST(_req: Request, context: Context) {
     });
   }
 
+  // Auto-asignar responsable antes de avanzar
+  await autoAsignarResponsable(rondaId, semana);
+
   const totalSemanas = participantes.length;
   const siguiente = semana + 1;
 
-  // ── CIERRE DE RONDA ───────────────────────────────────────────────────────
+  // ── CIERRE FINAL DE RONDA ─────────────────────────────────────────────────
   if (siguiente > totalSemanas) {
     // 1. Cerrar la ronda
     await prisma.ronda.update({
@@ -138,14 +208,18 @@ export async function POST(_req: Request, context: Context) {
       data: { activa: false, fechaFin: new Date() },
     });
 
-    // 2. Devolver inversiones + intereses a cada socio
+    // 2. Devolver inversiones
     const devolucion = await devolverInversiones(rondaId);
+
+    // 3. Generar y guardar Excel del cierre (en background, no bloquea)
+    await generarYGuardarExcel(rondaId);
 
     return NextResponse.json({
       ok: true,
       avanzada: true,
       finalizada: true,
-      devolucion, // { devueltas: N, totalDevuelto: X }
+      devolucion,
+      excelGenerado: true,
     });
   }
 
