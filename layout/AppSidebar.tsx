@@ -21,8 +21,7 @@ const navItems: NavItem[] = [
     icon: <UserCircleIcon />, name: "Socios",
     subItems: [
       { name: "Lista de socios", path: "/socios" },
-      { name: "Detalle por socio", path: "/socios/detalle" },
-      { name: "Retiro de ahorros", path: "/socios/retiros" },
+      { name: "Detalle por socio", path: "/socios/detalle" }
     ],
   },
   {
@@ -43,9 +42,15 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    icon: <BoxCubeIcon />, name: "Retiros",
+    subItems: [
+      { name: "Retiro de ahorros", path: "/socios/retiros" },
+    ],
+  },
+  {
     icon: <BoxCubeIcon />, name: "Depositos",
     subItems: [
-      { name: "Registro de ahorros", path: "/ahorros/registro" },
+      { name: "Registro de depositos", path: "/ahorros/registro" },
     ],
   },
   {
