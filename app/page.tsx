@@ -313,101 +313,13 @@ export default function HomeDashboard() {
             )}
           </div>
 
-          {/* Ilustración mejorada */}
-          <div className="hidden sm:block shrink-0 w-60 h-48 relative">
-            <svg viewBox="0 0 240 190" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-              {/* Fondo blob suave */}
-              <ellipse cx="125" cy="165" rx="95" ry="18" fill="#bbf7d0" opacity="0.5"/>
-              <ellipse cx="125" cy="100" rx="88" ry="78" fill="#f0fdf4" opacity="0.8"/>
-
-              {/* Planta derecha */}
-              <path d="M195 160 Q205 130 220 120" stroke="#86efac" strokeWidth="3" fill="none" strokeLinecap="round"/>
-              <ellipse cx="216" cy="118" rx="12" ry="8" fill="#4ade80" opacity="0.7" transform="rotate(-30 216 118)"/>
-              <path d="M195 160 Q210 145 225 148" stroke="#86efac" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-              <ellipse cx="222" cy="146" rx="10" ry="7" fill="#4ade80" opacity="0.6" transform="rotate(20 222 146)"/>
-              <path d="M195 160 Q200 140 190 128" stroke="#86efac" strokeWidth="2" fill="none" strokeLinecap="round"/>
-              <ellipse cx="190" cy="126" rx="9" ry="6" fill="#4ade80" opacity="0.5" transform="rotate(-15 190 126)"/>
-
-              {/* Planta izquierda pequeña */}
-              <path d="M30 160 Q22 140 28 125" stroke="#86efac" strokeWidth="2" fill="none" strokeLinecap="round"/>
-              <ellipse cx="26" cy="123" rx="8" ry="6" fill="#4ade80" opacity="0.5" transform="rotate(20 26 123)"/>
-              <path d="M30 160 Q18 148 15 138" stroke="#86efac" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              <ellipse cx="14" cy="136" rx="7" ry="5" fill="#4ade80" opacity="0.4" transform="rotate(-10 14 136)"/>
-
-              {/* Mesa */}
-              <rect x="45" y="140" width="160" height="6" rx="3" fill="#a7f3d0"/>
-              <rect x="60" y="146" width="8" height="22" rx="2" fill="#6ee7b7"/>
-              <rect x="182" y="146" width="8" height="22" rx="2" fill="#6ee7b7"/>
-
-              {/* Laptop base */}
-              <rect x="58" y="105" width="120" height="38" rx="6" fill="#ecfdf5" stroke="#86efac" strokeWidth="1.5"/>
-              {/* Bisagra */}
-              <rect x="58" y="140" width="120" height="5" rx="2.5" fill="#a7f3d0"/>
-              {/* Trackpad */}
-              <rect x="103" y="147" width="30" height="20" rx="4" fill="#d1fae5" stroke="#a7f3d0" strokeWidth="1"/>
-              {/* Pantalla contenido */}
-              <rect x="65" y="111" width="106" height="26" rx="3" fill="#d1fae5"/>
-              {/* Barra superior laptop */}
-              <rect x="68" y="113" width="35" height="3" rx="1.5" fill="#10b981"/>
-              <rect x="68" y="118" width="50" height="2" rx="1" fill="#a7f3d0"/>
-              {/* Chart en pantalla */}
-              <rect x="115" y="124" width="5" height="7" rx="1" fill="#10b981" opacity="0.6"/>
-              <rect x="122" y="120" width="5" height="11" rx="1" fill="#10b981" opacity="0.8"/>
-              <rect x="129" y="116" width="5" height="15" rx="1" fill="#10b981"/>
-              <rect x="136" y="118" width="5" height="13" rx="1" fill="#10b981" opacity="0.7"/>
-              <rect x="143" y="113" width="5" height="18" rx="1" fill="#059669"/>
-              {/* Línea chart */}
-              <polyline points="117,124 124,120 131,116 138,119 145,113 152,115" stroke="#059669" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-
-              {/* Cuerpo persona */}
-              <path d="M95 105 Q80 118 75 140 L155 140 Q150 118 135 105 Z" fill="#10b981"/>
-              {/* Cuello */}
-              <rect x="109" y="95" width="12" height="14" rx="3" fill="#fde68a"/>
-              {/* Cabeza */}
-              <circle cx="115" cy="82" r="18" fill="#fde68a"/>
-              {/* Cabello - parte superior */}
-              <path d="M97 80 Q99 60 115 58 Q131 60 133 80" fill="#1a1a2e"/>
-              {/* Cabello lateral izquierdo - cola larga */}
-              <path d="M97 80 Q88 95 90 115 Q91 120 87 118 Q84 100 93 83 Q95 80 97 80Z" fill="#1a1a2e"/>
-              {/* Cabello lateral derecho */}
-              <path d="M133 80 Q136 90 133 100" stroke="#1a1a2e" strokeWidth="5" strokeLinecap="round" fill="none"/>
-              {/* Ojo izquierdo */}
-              <ellipse cx="109" cy="84" rx="2.5" ry="2.5" fill="#1a1a2e"/>
-              <circle cx="110" cy="83" r="0.8" fill="white"/>
-              {/* Ojo derecho */}
-              <ellipse cx="121" cy="84" rx="2.5" ry="2.5" fill="#1a1a2e"/>
-              <circle cx="122" cy="83" r="0.8" fill="white"/>
-              {/* Sonrisa */}
-              <path d="M110 90 Q115 94 120 90" stroke="#e67e22" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-              {/* Mejilla */}
-              <circle cx="106" cy="89" r="3" fill="#fca5a5" opacity="0.5"/>
-              <circle cx="124" cy="89" r="3" fill="#fca5a5" opacity="0.5"/>
-              {/* Brazo izquierdo */}
-              <path d="M82 118 Q70 128 65 138" stroke="#10b981" strokeWidth="8" strokeLinecap="round"/>
-              <ellipse cx="64" cy="139" rx="5" ry="4" fill="#fde68a"/>
-              {/* Brazo derecho - sobre laptop */}
-              <path d="M148 118 Q158 128 163 138" stroke="#10b981" strokeWidth="8" strokeLinecap="round"/>
-              <ellipse cx="164" cy="139" rx="5" ry="4" fill="#fde68a"/>
-
-              {/* Burbuja chart icon */}
-              <circle cx="82" cy="58" r="18" fill="white" filter="url(#shadow)"/>
-              <circle cx="82" cy="58" r="18" fill="white" stroke="#e2e8f0" strokeWidth="1"/>
-              <rect x="72" y="63" width="4" height="6" rx="1" fill="#10b981" opacity="0.7"/>
-              <rect x="78" y="59" width="4" height="10" rx="1" fill="#10b981" opacity="0.9"/>
-              <rect x="84" y="55" width="4" height="14" rx="1" fill="#059669"/>
-              <rect x="90" y="57" width="4" height="12" rx="1" fill="#10b981" opacity="0.8"/>
-
-              {/* Burbuja $ icon */}
-              <circle cx="185" cy="52" r="16" fill="white" stroke="#e2e8f0" strokeWidth="1"/>
-              <text x="185" y="58" textAnchor="middle" fontSize="18" fill="#059669" fontWeight="bold">$</text>
-
-              {/* Burbuja personas */}
-              <circle cx="48" cy="85" r="14" fill="white" stroke="#e2e8f0" strokeWidth="1"/>
-              <circle cx="44" cy="82" r="4" fill="#6366f1"/>
-              <path d="M38 92 Q44 88 50 92" stroke="#6366f1" strokeWidth="2" fill="none" strokeLinecap="round"/>
-              <circle cx="52" cy="82" r="3.5" fill="#818cf8" opacity="0.7"/>
-              <path d="M46 92 Q52 89 58 92" stroke="#818cf8" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.7"/>
-            </svg>
+          {/* Ilustración */}
+          <div className="hidden sm:block shrink-0 w-64 h-52">
+            <img
+              src="/banner-dashboard.png"
+              alt="Dashboard MiRonda"
+              className="w-full h-full object-contain drop-shadow-sm"
+            />
           </div>
         </div>
       </div>
