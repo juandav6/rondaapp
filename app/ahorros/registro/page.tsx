@@ -28,9 +28,12 @@ const tipoConfig: Record<string, { label: string; color: string; bg: string; sig
 
 function AhorrosRegistroContent() {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<"registrar" | "listado">(() =>
-    searchParams.get("tab") === "listado" ? "listado" : "registrar"
-  );
+  const [tab, setTab] = useState<"registrar" | "listado">("registrar");
+
+  // Leer tab del URL después del montaje
+  useEffect(() => {
+    if (searchParams.get("tab") === "listado") setTab("listado");
+  }, [searchParams]);
 
   // Registrar tab
   const [socios, setSocios] = useState<Socio[]>([]);
