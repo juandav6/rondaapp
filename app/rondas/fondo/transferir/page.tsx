@@ -50,6 +50,8 @@ export default function TransferirFondoPage() {
   const [fondoActual, setFondoActual] = useState(0);
   const [socios, setSocios] = useState<SocioFondo[]>([]);
   const [totalAhorrosRonda, setTotalAhorrosRonda] = useState(0);
+  const [totalYaTransferido, setTotalYaTransferido] = useState(0);
+  const [totalDisponible, setTotalDisponible] = useState(0);
   const [inputs, setInputs] = useState<Record<number, string>>({});
   const [resultado, setResultado] = useState<ResultadoTransferencia | null>(null);
   const [tab, setTab] = useState<"transferir" | "resultado">("transferir");
@@ -79,6 +81,8 @@ export default function TransferirFondoPage() {
       setFondoActual(data.fondoActual);
       setSocios(data.socios);
       setTotalAhorrosRonda(data.totalAhorrosRonda);
+      setTotalYaTransferido(data.totalYaTransferido ?? 0);
+      setTotalDisponible(data.totalDisponible ?? data.totalAhorrosRonda);
       const init: Record<number, string> = {};
       data.socios.forEach((s: SocioFondo) => { init[s.socioId] = ""; });
       setInputs(init);
@@ -208,7 +212,7 @@ export default function TransferirFondoPage() {
         </div>
 
         {/* KPIs */}
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
             <p className="text-[10px] text-blue-600 font-medium uppercase">Fondo actual</p>
             <p className="text-lg font-bold text-blue-800 tabular-nums">{fmt(fondoActual)}</p>
@@ -217,10 +221,14 @@ export default function TransferirFondoPage() {
             <p className="text-[10px] text-emerald-600 font-medium uppercase">Ahorros en ronda</p>
             <p className="text-lg font-bold text-emerald-800 tabular-nums">{fmt(totalAhorrosRonda)}</p>
           </div>
-          <div className="rounded-xl bg-violet-50 border border-violet-100 p-3">
-            <p className="text-[10px] text-violet-600 font-medium uppercase">A transferir</p>
-            <p className="text-lg font-bold text-violet-800 tabular-nums">{fmt(totalTransferir)}</p>
-            {totalTransferir > 0 && <p className="text-[10px] text-violet-500">Fondo nuevo: {fmt(fondoActual + totalTransferir)}</p>}
+          <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
+            <p className="text-[10px] text-amber-600 font-medium uppercase">Ya transferido</p>
+            <p className="text-lg font-bold text-amber-800 tabular-nums">{fmt(totalYaTransferido)}</p>
+          </div>
+          <div className={cn("rounded-xl border p-3", totalDisponible > 0 ? "bg-violet-50 border-violet-100" : "bg-gray-50 border-gray-200")}>
+            <p className={cn("text-[10px] font-medium uppercase", totalDisponible > 0 ? "text-violet-600" : "text-gray-400")}>Disponible transferir</p>
+            <p className={cn("text-lg font-bold tabular-nums", totalDisponible > 0 ? "text-violet-800" : "text-gray-400")}>{fmt(totalDisponible)}</p>
+            {totalTransferir > 0 && <p className="text-[10px] text-violet-500">Seleccionado: {fmt(totalTransferir)}</p>}
           </div>
         </div>
       </div>
@@ -241,13 +249,27 @@ export default function TransferirFondoPage() {
         <div className="space-y-3">
           {/* Acciones rápidas */}
           <div className="flex gap-2 flex-wrap">
-            <button onClick={setTodos} className="rounded-lg border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 shadow-sm">
+            <button onClick={setTodos} disabled={totalDisponible <= 0}
+              className="rounded-lg border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
               Transferir todos los ahorros
             </button>
             <button onClick={limpiar} className="rounded-lg border bg-white px-3 py-2 text-xs font-medium text-gray-500 hover:bg-gray-50 shadow-sm">
               Limpiar
             </button>
           </div>
+
+          {totalDisponible <= 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-center gap-3">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <p className="font-semibold">Todos los ahorros ya fueron transferidos al fondo</p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Se transfirieron {fmt(totalYaTransferido)} en transferencias anteriores. 
+                  Cuando los socios registren nuevos ahorros podrás transferirlos.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Tabla desktop */}
           <div className="hidden md:block rounded-xl border bg-white shadow-sm overflow-hidden">
@@ -256,6 +278,7 @@ export default function TransferirFondoPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Socio</th>
                   <th className="px-4 py-3 text-right">Ahorro ronda</th>
+                  <th className="px-4 py-3 text-right">Ya transferido</th>
                   <th className="px-4 py-3 text-right">Invertido actual</th>
                   <th className="px-4 py-3 text-right">% actual</th>
                   <th className="px-4 py-3 text-right">Transferir ($)</th>
@@ -276,6 +299,14 @@ export default function TransferirFondoPage() {
                         {s.tieneInversion && <span className="inline-flex rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-medium mt-0.5">Inversor</span>}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-medium text-emerald-700">{fmt(s.ahorroRonda)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-amber-600">
+                        {(s as any).yaTransferido > 0 ? (
+                          <span className="inline-flex items-center gap-1">
+                            {fmt((s as any).yaTransferido)}
+                            <span className="text-[10px] text-amber-400">✓</span>
+                          </span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-right tabular-nums text-blue-700">{s.tieneInversion ? fmt(s.montoInvertidoActual) : <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-xs text-gray-500">{s.tieneInversion ? fmtPct(s.porcentajeActual) : <span className="text-gray-300">—</span>}</td>
                       <td className="px-4 py-3">
