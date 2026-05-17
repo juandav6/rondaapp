@@ -57,6 +57,15 @@ export default function RondaActualPage() {
   const [loanInteres, setLoanInteres] = useState(0);
   const [loanObs, setLoanObs] = useState("");
 
+  // Observaciones y detalle de semanas
+  const [obsSemana, setObsSemana] = useState("");
+  const [savingObs, setSavingObs] = useState(false);
+  const [detalleOpen, setDetalleOpen] = useState(false);
+  const [semanas, setSemanas] = useState<any[]>([]);
+  const [loadingSemanas, setLoadingSemanas] = useState(false);
+  const [editandoSemana, setEditandoSemana] = useState<number | null>(null);
+  const [editObs, setEditObs] = useState("");
+
   const showToast = (text: string, type: Toast["type"] = "success", ms = 2500) => {
     setToast({ text, type });
     window.clearTimeout((showToast as any)._t);
@@ -217,15 +226,65 @@ export default function RondaActualPage() {
     } catch (e: any) { showToast(e.message, "error", 4000); }
   }
 
+  async function guardarObsSemana() {
+    if (!estado) return;
+    try {
+      setSavingObs(true);
+      const res = await fetch(`/api/rondas/${estado.ronda.id}/semanas`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ semana: estado.semana - 1, observaciones: obsSemana }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.error || "Error"); }
+      showToast("Observación guardada");
+    } catch (e: any) { showToast(e.message, "error", 4000); }
+    finally { setSavingObs(false); }
+  }
+
+  async function cargarSemanas() {
+    if (!estado) return;
+    setLoadingSemanas(true);
+    try {
+      const res = await fetch(`/api/rondas/${estado.ronda.id}/semanas`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Error");
+      setSemanas(data.semanas ?? []);
+    } catch { setSemanas([]); }
+    finally { setLoadingSemanas(false); }
+  }
+
+  async function guardarEditObs(semana: number) {
+    if (!estado) return;
+    try {
+      const res = await fetch(`/api/rondas/${estado.ronda.id}/semanas`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ semana, observaciones: editObs }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.error || "Error"); }
+      setSemanas(prev => prev.map(s => s.semana === semana ? { ...s, observaciones: editObs } : s));
+      setEditandoSemana(null);
+      showToast("Observación actualizada");
+    } catch (e: any) { showToast(e.message, "error", 4000); }
+  }
+
   async function cerrarSemana() {
     if (!estado) return;
     try {
       setCerrando(true);
+      // Guardar observaciones de la semana antes de cerrar
+      if (obsSemana.trim()) {
+        await fetch(`/api/rondas/${estado.ronda.id}/semanas`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ semana: estado.semana, observaciones: obsSemana }),
+        });
+      }
       const res = await fetch(`/api/rondas/${estado.ronda.id}/cerrar-semana`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Error");
       if (data.avanzada) {
-        setAhorroInputs({}); setMultasInputs({}); setObsInputs({});
+        setAhorroInputs({}); setMultasInputs({}); setObsInputs({}); setObsSemana("");
         if (data.finalizada) window.location.href = `/rondas/${estado.ronda.id}/resultados`;
         else { await cargar(); showToast("Semana cerrada"); }
       } else {
@@ -520,11 +579,42 @@ export default function RondaActualPage() {
         </ul>
       </div>
 
-      <div className="flex justify-end">
-        <button onClick={cerrarSemana} disabled={cerrando}
-          className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-          {cerrando ? "Cerrando…" : "Cerrar semana"}
-        </button>
+      {/* Observaciones de semana + Botones */}
+      <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium text-gray-700">Observaciones semana {estado.semana}</p>
+          <span className="text-xs text-gray-400">(se guardará al cerrar o manualmente)</span>
+        </div>
+        <textarea
+          rows={3}
+          value={obsSemana}
+          onChange={e => setObsSemana(e.target.value)}
+          placeholder="Anota cualquier novedad de esta semana: inasistencias, acuerdos, cambios de fecha, etc."
+          className="w-full rounded-lg border px-3 py-2 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={guardarObsSemana}
+              disabled={savingObs || !obsSemana.trim()}
+              className="rounded-lg border px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+              {savingObs ? "Guardando…" : "Guardar observación"}
+            </button>
+            <button
+              onClick={() => { setDetalleOpen(true); cargarSemanas(); }}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                <path fillRule="evenodd" d="M2.25 13.5a8.25 8.25 0 0 1 8.25-8.25.75.75 0 0 1 .75.75v6.75H18a.75.75 0 0 1 .75.75 8.25 8.25 0 0 1-16.5 0Z" clipRule="evenodd"/>
+                <path fillRule="evenodd" d="M12.75 3a.75.75 0 0 1 .75-.75 8.25 8.25 0 0 1 8.25 8.25.75.75 0 0 1-.75.75h-7.5a.75.75 0 0 1-.75-.75V3Z" clipRule="evenodd"/>
+              </svg>
+              Ver detalle semanas
+            </button>
+          </div>
+          <button onClick={cerrarSemana} disabled={cerrando}
+            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+            {cerrando ? "Cerrando…" : "Cerrar semana →"}
+          </button>
+        </div>
       </div>
 
       {/* Pendientes */}
@@ -686,6 +776,116 @@ export default function RondaActualPage() {
                 onClick={guardarAhorroTodos}
                 className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
                 Sí, registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal detalle semanas */}
+      {detalleOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30">
+          <div className="relative z-50 w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Detalle de semanas · {estado?.ronda.nombre}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{semanas.length} semana{semanas.length !== 1 ? "s" : ""} cerrada{semanas.length !== 1 ? "s" : ""}</p>
+              </div>
+              <button onClick={() => { setDetalleOpen(false); setEditandoSemana(null); }}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 p-4 space-y-3">
+              {loadingSemanas ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />)}
+                </div>
+              ) : semanas.length === 0 ? (
+                <div className="py-10 text-center text-sm text-gray-400">Aún no hay semanas cerradas.</div>
+              ) : semanas.map(s => (
+                <div key={s.semana} className="rounded-xl border bg-white p-4 space-y-3">
+                  {/* Header semana */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                        {s.semana}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Semana {s.semana}</p>
+                        {s.responsableNombre && (
+                          <p className="text-xs text-gray-400">Responsable: {s.responsableNombre}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setEditandoSemana(s.semana); setEditObs(s.observaciones ?? ""); }}
+                      className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2.5 py-1 hover:bg-blue-50 shrink-0">
+                      Editar obs.
+                    </button>
+                  </div>
+
+                  {/* KPIs semana */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="rounded-lg bg-gray-50 p-2">
+                      <p className="text-gray-400">Aportes</p>
+                      <p className="font-bold text-gray-800 tabular-nums">{fmtMoney(s.totalAportes)}</p>
+                      <p className="text-gray-400">{s.sociosPagaron}/{s.totalSocios} socios</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 p-2">
+                      <p className="text-blue-400">Ahorros</p>
+                      <p className="font-bold text-blue-700 tabular-nums">{fmtMoney(s.totalAhorros)}</p>
+                    </div>
+                    <div className="rounded-lg bg-red-50 p-2">
+                      <p className="text-red-400">Multas</p>
+                      <p className="font-bold text-red-600 tabular-nums">{fmtMoney(s.totalMultas)}</p>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 p-2">
+                      <p className="text-emerald-500">Cobra</p>
+                      <p className="font-semibold text-emerald-700 truncate">{s.receptor?.nombre ?? "—"}</p>
+                    </div>
+                  </div>
+
+                  {/* Observaciones */}
+                  {editandoSemana === s.semana ? (
+                    <div className="space-y-2">
+                      <textarea
+                        rows={3}
+                        value={editObs}
+                        onChange={e => setEditObs(e.target.value)}
+                        placeholder="Observaciones de la semana…"
+                        className="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditandoSemana(null)}
+                          className="flex-1 rounded-lg border py-2 text-xs text-gray-600 hover:bg-gray-50">
+                          Cancelar
+                        </button>
+                        <button onClick={() => guardarEditObs(s.semana)}
+                          className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700">
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      "rounded-lg px-3 py-2 text-xs",
+                      s.observaciones ? "bg-amber-50 border border-amber-100 text-amber-800" : "bg-gray-50 text-gray-400 italic"
+                    )}>
+                      {s.observaciones || "Sin observaciones"}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t px-5 py-3 shrink-0 flex justify-end">
+              <button onClick={() => { setDetalleOpen(false); setEditandoSemana(null); }}
+                className="rounded-lg border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                Cerrar
               </button>
             </div>
           </div>
