@@ -6,9 +6,10 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { socioId, monto } = (await req.json()) as {
+    const { socioId, monto, fecha } = (await req.json()) as {
       socioId?: number;
       monto?: number;
+      fecha?: string; // YYYY-MM-DD opcional, por defecto hoy
     };
 
     const sId = Number(socioId);
@@ -17,6 +18,16 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(sId) || sId <= 0 || !Number.isFinite(cant) || cant <= 0) {
       return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
     }
+
+    // Parsear fecha — permite fechas anteriores
+    let fechaRetiro: Date;
+    if (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      fechaRetiro = new Date(`${fecha}T12:00:00Z`);
+      if (Number.isNaN(fechaRetiro.getTime())) fechaRetiro = new Date();
+    } else {
+      fechaRetiro = new Date();
+    }
+    const fechaLabel = new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(fechaRetiro);
 
     // Bloquear si hay ronda activa
     const activas = await prisma.ronda.count({ where: { activa: true } });
@@ -46,14 +57,14 @@ export async function POST(req: NextRequest) {
 
     // Transacción: movimiento RETIRO + decrementar saldoAhorros
     const [movimiento, socioActualizado] = await prisma.$transaction([
-      // 1. Crear movimiento de retiro
       prisma.movimientoCuenta.create({
         data: {
           socioId: sId,
           rondaId: null,
           tipo: "RETIRO",
           monto: montoDecimal,
-          nota: `Retiro de ahorros · ${new Date().toLocaleDateString("es-EC")}`,
+          nota: `Retiro de ahorros · ${fechaLabel}`,
+          createdAt: fechaRetiro,
         },
       }),
       // 2. Decrementar saldoAhorros
