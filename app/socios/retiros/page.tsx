@@ -194,14 +194,32 @@ export default function RetirosAhorroPage() {
                 <div className="max-w-xs space-y-3">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-gray-600">Fecha del retiro</label>
-                    <input
-                      type="date"
-                      value={fechaRetiro}
-                      max={new Date().toISOString().slice(0, 10)}
-                      onChange={e => setFechaRetiro(e.target.value)}
-                      disabled={hayRondaActiva}
-                      className="w-full rounded-lg border px-3 py-2.5 text-sm focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-200 disabled:bg-gray-100"
-                    />
+                    <div className="relative">
+                      <input
+                        id="fecha-retiro-input"
+                        type="date"
+                        value={fechaRetiro}
+                        max={new Date().toISOString().slice(0, 10)}
+                        onChange={e => setFechaRetiro(e.target.value)}
+                        disabled={hayRondaActiva}
+                        className="w-full rounded-lg border px-3 py-2.5 pr-10 text-sm focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-200 disabled:bg-gray-100"
+                      />
+                      <button
+                        type="button"
+                        disabled={hayRondaActiva}
+                        onClick={() => {
+                          const el = document.getElementById("fecha-retiro-input") as HTMLInputElement | null;
+                          el?.showPicker?.();
+                          el?.focus();
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-rose-500 disabled:opacity-40"
+                        tabIndex={-1}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                          <path fillRule="evenodd" d="M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Zm13.5 9a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5Z" clipRule="evenodd"/>
+                        </svg>
+                      </button>
+                    </div>
                     <p className="mt-1 text-xs text-gray-400">Puedes seleccionar una fecha anterior si el retiro fue en otro día.</p>
                   </div>
 
