@@ -97,7 +97,9 @@ function RetirosAhorroContent() {
     finally { setLoadingList(false); }
   }
 
-  useEffect(() => { if (tab === "listado") cargarListado(); }, [tab, listPage, listDesde, listHasta]);
+  useEffect(() => { cargarListado(); }, [listPage, listDesde, listHasta]);
+
+  useEffect(() => { if (tab === "listado") cargarListado(); }, [tab]);
 
   const sociosFiltrados = useMemo(() => {
     const s = q.trim().toLowerCase();
