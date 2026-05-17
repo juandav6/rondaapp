@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
 import {
   BoxCubeIcon, CalenderIcon, ChevronDownIcon, GridIcon,
@@ -46,12 +46,14 @@ const navItems: NavItem[] = [
     icon: <BoxCubeIcon />, name: "Retiros",
     subItems: [
       { name: "Retiro de ahorros", path: "/socios/retiros" },
+      { name: "Listado de retiros", path: "/socios/retiros?tab=listado" },
     ],
   },
   {
-    icon: <BoxCubeIcon />, name: "Depositos",
+    icon: <BoxCubeIcon />, name: "Depósitos",
     subItems: [
-      { name: "Registro de depositos", path: "/ahorros/registro" },
+      { name: "Registro de depósitos", path: "/ahorros/registro" },
+      { name: "Listado de depósitos", path: "/ahorros/registro?tab=listado" },
     ],
   },
   {
@@ -98,32 +100,52 @@ function LogoIcon() {
   );
 }
 
+// ── Helpers para manejar paths con query params ───────────────────────────────
+function getBasePath(path: string) { return path.split("?")[0]; }
+function getTabParam(path: string) {
+  const q = path.split("?")[1];
+  if (!q) return null;
+  return new URLSearchParams(q).get("tab");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab");
 
   const [openSubmenu, setOpenSubmenu] = useState<{ type: "main" | "others"; index: number } | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const isActive = useCallback((path: string) => path === pathname, [pathname]);
+  // Un item está activo si el path base coincide Y el tab coincide (o ambos son null)
+  const isActive = useCallback((path: string) => {
+    const basePath = getBasePath(path);
+    const tabParam = getTabParam(path);
+    if (basePath !== pathname) return false;
+    if (tabParam === null && !currentTab) return true;
+    if (tabParam !== null && currentTab === tabParam) return true;
+    // Si el path no tiene tab pero el pathname sí es el mismo, solo activo si no hay tab param en la nav
+    return false;
+  }, [pathname, currentTab]);
+
   const isWide = isExpanded || isHovered || isMobileOpen;
 
   // Auto-abrir submenu activo
   useEffect(() => {
     navItems.forEach((nav, index) => {
-      if (nav.subItems?.some((sub) => sub.path === pathname)) {
+      if (nav.subItems?.some((sub) => isActive(sub.path))) {
         setOpenSubmenu({ type: "main", index });
       }
     });
-  }, [pathname]);
+  }, [pathname, currentTab, isActive]);
 
   // Cerrar sidebar móvil al cambiar de ruta
   useEffect(() => {
     if (isMobileOpen) toggleMobileSidebar();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, currentTab]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
@@ -204,7 +226,6 @@ const AppSidebar: React.FC = () => {
 
   return (
     <>
-      {/* ── Overlay móvil — toca afuera para cerrar ── */}
       {isMobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
@@ -213,7 +234,6 @@ const AppSidebar: React.FC = () => {
         />
       )}
 
-      {/* ── Sidebar ── */}
       <aside
         className={[
           "fixed left-0 top-0 z-50 h-screen",
@@ -221,21 +241,16 @@ const AppSidebar: React.FC = () => {
           "transition-all duration-300 ease-in-out",
           "flex flex-col px-5",
           isWide ? "w-[290px]" : "w-[90px]",
-          // Móvil: oculto por defecto, desliza cuando isMobileOpen
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
-          // Desktop: siempre visible
           "lg:translate-x-0",
         ].join(" ")}
         onMouseEnter={() => !isExpanded && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Logo + botón cerrar en móvil */}
         <div className={`py-5 shrink-0 flex items-center ${!isWide ? "lg:justify-center" : "justify-between"}`}>
           <Link href="/" onClick={() => isMobileOpen && toggleMobileSidebar()}>
             {isWide ? <LogoFull /> : <LogoIcon />}
           </Link>
-
-          {/* Botón X solo visible en móvil cuando está abierto */}
           {isMobileOpen && (
             <button
               onClick={toggleMobileSidebar}
@@ -251,7 +266,6 @@ const AppSidebar: React.FC = () => {
           )}
         </div>
 
-        {/* Nav */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <nav className="mb-6">
             <div className="flex flex-col gap-4">
