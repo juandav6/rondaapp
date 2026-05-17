@@ -1,6 +1,6 @@
 // app/socios/retiros/page.tsx
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: string };
@@ -15,7 +15,7 @@ const fmtDate = (iso: string | null | undefined) => {
 const toInputDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`; };
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-export default function RetirosAhorroPage() {
+function RetirosAhorroContent() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<"registrar" | "listado">(() =>
     searchParams.get("tab") === "listado" ? "listado" : "registrar"
@@ -466,5 +466,13 @@ export default function RetirosAhorroPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function RetirosAhorroPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-gray-400">Cargando…</div>}>
+      <RetirosAhorroContent />
+    </Suspense>
   );
 }
