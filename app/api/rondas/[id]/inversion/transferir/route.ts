@@ -17,7 +17,7 @@ export async function GET(_req: Request, ctx: Context) {
     return NextResponse.json({ error: "ID inválido" }, { status: 400 });
 
   try {
-    const [ronda, participaciones, cuentasInversion, ahorros] = await Promise.all([
+    const [ronda, participaciones, cuentasInversion, ahorros, transferenciasYaHechas] = await Promise.all([
       prisma.ronda.findUnique({ where: { id: rondaId }, select: { id: true, nombre: true, activa: true, semanaActual: true } }),
       prisma.participacion.findMany({
         where: { rondaId },
@@ -33,26 +33,36 @@ export async function GET(_req: Request, ctx: Context) {
         where: { rondaId },
         _sum: { monto: true },
       }),
+      // Transferencias ya realizadas en esta ronda
+      prisma.movimientoCuenta.groupBy({
+        by: ["socioId"],
+        where: { rondaId, tipo: "INVERSION" },
+        _sum: { monto: true },
+      }),
     ]);
 
     if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
 
     const inversionMap = new Map(cuentasInversion.map(c => [c.socioId, c]));
     const ahorroMap = new Map(ahorros.map(a => [a.socioId, Number(a._sum.monto ?? 0)]));
+    const transferidoMap = new Map(transferenciasYaHechas.map(t => [t.socioId, Number(t._sum.monto ?? 0)]));
     const fondoActual = cuentasInversion.reduce((s, c) => s + Number(c.montoInvertido), 0);
 
     const socios = participaciones.map(p => {
       const inv = inversionMap.get(p.socioId);
       const ahorroRonda = ahorroMap.get(p.socioId) ?? 0;
+      const yaTransferido = transferidoMap.get(p.socioId) ?? 0;
       const montoInvertido = inv ? Number(inv.montoInvertido) : 0;
       const intereses = inv ? Number(inv.interesesAcumulados) : 0;
-      const disponibleTransferir = ahorroRonda; // todo el ahorro de la ronda está disponible para transferir
+      // Solo puede transferir lo que ahorró MENOS lo que ya transfirió al fondo
+      const disponibleTransferir = Math.max(0, Math.round((ahorroRonda - yaTransferido) * 100) / 100);
 
       return {
         socioId: p.socioId,
         socio: p.socio,
-        ahorroRonda,                    // cuánto ha ahorrado en esta ronda
-        saldoAhorrosLibres: Number(p.socio.saldoAhorros), // saldo libre
+        ahorroRonda,
+        yaTransferido,
+        saldoAhorrosLibres: Number(p.socio.saldoAhorros),
         montoInvertidoActual: montoInvertido,
         interesesAcumulados: intereses,
         porcentajeActual: inv ? Number(inv.porcentajeParticipacion) : 0,
@@ -61,11 +71,17 @@ export async function GET(_req: Request, ctx: Context) {
       };
     });
 
+    const totalAhorrosRonda = ahorros.reduce((s, a) => s + Number(a._sum.monto ?? 0), 0);
+    const totalYaTransferido = Array.from(transferidoMap.values()).reduce((s, v) => s + v, 0);
+    const totalDisponible = Math.max(0, Math.round((totalAhorrosRonda - totalYaTransferido) * 100) / 100);
+
     return NextResponse.json({
       ronda,
       fondoActual,
       socios,
-      totalAhorrosRonda: ahorros.reduce((s, a) => s + Number(a._sum.monto ?? 0), 0),
+      totalAhorrosRonda,
+      totalYaTransferido,
+      totalDisponible,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Error" }, { status: 500 });
