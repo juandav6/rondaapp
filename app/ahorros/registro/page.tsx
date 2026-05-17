@@ -111,7 +111,9 @@ function AhorrosRegistroContent() {
     finally { setLoadingList(false); }
   }
 
-  useEffect(() => { if (tab === "listado") cargarListado(); }, [tab, listPage, listDesde, listHasta, listSocioId]);
+  useEffect(() => { cargarListado(); }, [listPage, listDesde, listHasta, listSocioId]);
+
+  useEffect(() => { if (tab === "listado") cargarListado(); }, [tab]);
 
   const sociosFiltrados = useMemo(() => {
     const s = q.trim().toLowerCase();
