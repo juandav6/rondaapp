@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
       { name: "Registrar ronda", path: "/rondas/registro_ronda" },
       { name: "Ronda actual", path: "/rondas/actual" },
       { name: "Historial de rondas", path: "/rondas/historial" },
+      { name: "Transferencia de ahorros", path: "/rondas/fondo/transferir" },
     ],
   },
   {
