@@ -151,7 +151,7 @@ model ResponsableCobroSemana {
   socioId   Int      @map("socio_id")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-
+  observaciones String?
   ronda Ronda @relation(fields: [rondaId], references: [id])
   socio Socio @relation(fields: [socioId], references: [id])
 
