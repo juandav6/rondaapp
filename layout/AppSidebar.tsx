@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { Suspense, useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
@@ -108,8 +108,8 @@ function getTabParam(path: string) {
   return new URLSearchParams(q).get("tab");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-const AppSidebar: React.FC = () => {
+// ─── Inner component (usa useSearchParams → necesita Suspense) ────────────────
+const AppSidebarInner: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -282,5 +282,13 @@ const AppSidebar: React.FC = () => {
     </>
   );
 };
+
+// ─── Export envuelto en Suspense (requerido por useSearchParams en Next.js 14+) ─
+
+const AppSidebar: React.FC = () => (
+  <Suspense fallback={null}>
+    <AppSidebarInner />
+  </Suspense>
+);
 
 export default AppSidebar;
