@@ -17,9 +17,12 @@ const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).jo
 
 function RetirosAhorroContent() {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<"registrar" | "listado">(() =>
-    searchParams.get("tab") === "listado" ? "listado" : "registrar"
-  );
+  const [tab, setTab] = useState<"registrar" | "listado">("registrar");
+
+  // Leer tab del URL después del montaje
+  useEffect(() => {
+    if (searchParams.get("tab") === "listado") setTab("listado");
+  }, [searchParams]);
 
   // Registrar tab
   const [socios, setSocios] = useState<Socio[]>([]);
