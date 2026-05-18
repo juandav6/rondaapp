@@ -128,7 +128,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       setSavingSemDet(true);
       const res = await fetch(weekUrl(openSemana), {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ updates: semanaRows.map(r => ({ socioId: r.socioId, aporteSemana: Number(r.aporteSemana) || 0, ahorroSemana: Number(r.ahorroSemana) || 0 })) }),
+        body: JSON.stringify({ updates: semanaRows.map(r => ({ socioId: r.socioId, aporteSemana: Number(r.aporteSemana) || 0, ahorroSemana: Number(r.ahorroSemana) || 0, multaSemana: Number(r.multaSemana) || 0 })) }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d?.error || "Error");
@@ -658,7 +658,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                                   onChange={e => { const v = toNum(e.target.value); setSemanaRows(prev => prev.map(x => x.socioId === r.socioId ? { ...x, ahorroSemana: v } : x)); }}
                                   className="w-28 rounded-md border px-2 py-1 text-right focus:outline-none focus:ring-2 focus:ring-blue-200" />
                               </td>
-                              <td className="px-4 py-3 text-right text-gray-500">{fmt(r.multaSemana)}</td>
+                              <td className="px-4 py-3 text-right">
+                                <input type="number" step="0.01" min="0" value={r.multaSemana}
+                                  onChange={e => { const v = toNum(e.target.value); setSemanaRows(prev => prev.map(x => x.socioId === r.socioId ? { ...x, multaSemana: v } : x)); }}
+                                  className="w-28 rounded-md border border-red-200 px-2 py-1 text-right focus:outline-none focus:ring-2 focus:ring-red-200" />
+                              </td>
                             </tr>
                           ))}
                       </tbody>
@@ -678,7 +682,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                             <p className="text-xs text-gray-400 font-mono">{r.numeroCuenta}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                           <div>
                             <label className="text-xs text-gray-500 mb-1 block">Aporte</label>
                             <input type="number" step="0.01" value={r.aporteSemana}
@@ -691,10 +695,13 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                               onChange={e => { const v = toNum(e.target.value); setSemanaRows(prev => prev.map(x => x.socioId === r.socioId ? { ...x, ahorroSemana: v } : x)); }}
                               className="w-full rounded-md border px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200" />
                           </div>
+                          <div>
+                            <label className="text-xs text-red-500 mb-1 block">Multa</label>
+                            <input type="number" step="0.01" min="0" value={r.multaSemana}
+                              onChange={e => { const v = toNum(e.target.value); setSemanaRows(prev => prev.map(x => x.socioId === r.socioId ? { ...x, multaSemana: v } : x)); }}
+                              className="w-full rounded-md border border-red-200 px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-red-200" />
+                          </div>
                         </div>
-                        {r.multaSemana > 0 && (
-                          <p className="text-xs text-rose-600">Multa: {fmt(r.multaSemana)}</p>
-                        )}
                       </div>
                     ))}
                   </div>
