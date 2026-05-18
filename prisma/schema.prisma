@@ -289,6 +289,7 @@ model GastoMulta {
   @@map("gastos_multa")
 }
 
+model ConfigReporte {
   id          Int      @id @default(1)
   emailAdmin  String   @default("")
   emailsExtra String   @default("")
