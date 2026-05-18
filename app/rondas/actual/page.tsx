@@ -151,12 +151,16 @@ export default function RondaActualPage() {
     if (!estado) return;
     try {
       setSaving(socioId);
+      const multa = Number(multasInputs[socioId] ?? 0);
       const res = await fetch(`/api/rondas/${estado.ronda.id}/aportes`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ socioId, semana: estado.semana, monto: Number(estado.ronda.montoAporte), multa: 0 }),
+        body: JSON.stringify({ socioId, semana: estado.semana, monto: Number(estado.ronda.montoAporte), multa }),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.error || "Error"); }
-      await cargar(); showToast("Aporte registrado");
+      // Limpiar multa del socio después de registrar
+      setMultasInputs(p => { const n = { ...p }; delete n[socioId]; return n; });
+      await cargar();
+      showToast(multa > 0 ? `Aporte + multa ${fmtMoney(multa)} registrados` : "Aporte registrado");
     } catch (e: any) { showToast(e.message, "error", 4000); }
     finally { setSaving(null); }
   }
@@ -376,7 +380,7 @@ export default function RondaActualPage() {
       </header>
 
       {/* KPIs + Responsable */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg border bg-white p-3">
           <p className="text-xs text-gray-500">Aportes semana</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{fmtMoney(totalAportesSemana)}</p>
@@ -384,6 +388,12 @@ export default function RondaActualPage() {
         <div className="rounded-lg border bg-white p-3">
           <p className="text-xs text-gray-500">Ahorros semana</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{fmtMoney(totalAhorrosSemana)}</p>
+        </div>
+        <div className="rounded-lg border bg-red-50 border-red-100 p-3">
+          <p className="text-xs text-red-500">Multas semana</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-red-700">
+            {fmtMoney(estado.items.reduce((s, it) => s + Number(multasInputs[it.socioId] ?? 0), 0))}
+          </p>
         </div>
         <div className="rounded-lg border bg-white p-3">
           <p className="text-xs text-gray-500 mb-1">Responsable cobro</p>
@@ -449,6 +459,9 @@ export default function RondaActualPage() {
               <th className="px-3 py-2 text-right">Ahorrado</th>
               <th className="px-3 py-2 text-right">Dif.</th>
               <th className="px-3 py-2 text-right">Ahorro sem.</th>
+              <th className="px-3 py-2 text-right">
+                <span className="text-red-400">Multa ($)</span>
+              </th>
               <th className="px-3 py-2 text-right">Acciones</th>
             </tr>
           </thead>
@@ -477,6 +490,16 @@ export default function RondaActualPage() {
                       onChange={e => setAhorroInputs(p => ({ ...p, [it.socioId]: e.target.value === "" ? 0 : Number(e.target.value) }))}
                       className="w-24 rounded border px-2 py-1 text-right text-xs disabled:bg-gray-100" placeholder="0.00" />
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number" min="0" step="0.01"
+                      disabled={it.pagado || saving === it.socioId}
+                      value={multasInputs[it.socioId] ?? ""}
+                      onChange={e => setMultasInputs(p => ({ ...p, [it.socioId]: Number(e.target.value || 0) }))}
+                      className="w-20 rounded border border-red-200 px-2 py-1 text-right text-xs disabled:bg-gray-100 focus:border-red-400 focus:outline-none"
+                      placeholder="0.00"
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end items-center gap-1.5 whitespace-nowrap">
                       {it.pagado ? (
@@ -485,7 +508,7 @@ export default function RondaActualPage() {
                         <>
                           <button disabled={saving === it.socioId} onClick={() => registrarAporteIndividual(it.socioId)}
                             className="rounded bg-brand-500 px-2.5 py-1 text-xs text-white disabled:opacity-50">
-                            {saving === it.socioId ? "…" : "Aporte"}
+                            {saving === it.socioId ? "…" : multasInputs[it.socioId] ? `Aporte + multa` : "Aporte"}
                           </button>
                           <button onClick={() => openLoanModal({ socioId: it.socioId, socio: it.socio, montoAporte: estado.ronda.montoAporte } as any)}
                             className="rounded bg-indigo-600 px-2.5 py-1 text-xs text-white">Express</button>
@@ -550,13 +573,26 @@ export default function RondaActualPage() {
 
                 {/* Botones aporte */}
                 {!it.pagado && (
-                  <div className="flex gap-2">
-                    <button disabled={saving === it.socioId} onClick={() => registrarAporteIndividual(it.socioId)}
-                      className="flex-1 rounded-lg bg-brand-500 py-2 text-xs text-white font-medium disabled:opacity-50">
-                      {saving === it.socioId ? "…" : "Registrar aporte"}
-                    </button>
-                    <button onClick={() => openLoanModal({ socioId: it.socioId, socio: it.socio, montoAporte: estado.ronda.montoAporte } as any)}
-                      className="rounded-lg bg-indigo-600 px-3 py-2 text-xs text-white font-medium">Express</button>
+                  <div className="space-y-2">
+                    {/* Input multa móvil */}
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-red-500 font-medium shrink-0">Multa ($):</label>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={multasInputs[it.socioId] ?? ""}
+                        onChange={e => setMultasInputs(p => ({ ...p, [it.socioId]: Number(e.target.value || 0) }))}
+                        className="flex-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-red-300"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button disabled={saving === it.socioId} onClick={() => registrarAporteIndividual(it.socioId)}
+                        className="flex-1 rounded-lg bg-brand-500 py-2 text-xs text-white font-medium disabled:opacity-50">
+                        {saving === it.socioId ? "…" : multasInputs[it.socioId] ? "Aporte + multa" : "Registrar aporte"}
+                      </button>
+                      <button onClick={() => openLoanModal({ socioId: it.socioId, socio: it.socio, montoAporte: estado.ronda.montoAporte } as any)}
+                        className="rounded-lg bg-indigo-600 px-3 py-2 text-xs text-white font-medium">Express</button>
+                    </div>
                   </div>
                 )}
 
