@@ -177,7 +177,6 @@ model Ahorro {
 }
 
 model ResponsableCobroSemana {
-<<<<<<< HEAD
   id            Int      @id @default(autoincrement())
   rondaId       Int      @map("ronda_id")
   semana        Int
@@ -186,15 +185,6 @@ model ResponsableCobroSemana {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-=======
-  id        Int      @id @default(autoincrement())
-  rondaId   Int      @map("ronda_id")
-  semana    Int
-  socioId   Int      @map("socio_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  observaciones String?
->>>>>>> bdf0e73466c175898e3c8306c52cd80c39d80be9
   ronda Ronda @relation(fields: [rondaId], references: [id])
   socio Socio @relation(fields: [socioId], references: [id])
 
@@ -299,7 +289,6 @@ model GastoMulta {
   @@map("gastos_multa")
 }
 
-model ConfigReporte {
   id          Int      @id @default(1)
   emailAdmin  String   @default("")
   emailsExtra String   @default("")
