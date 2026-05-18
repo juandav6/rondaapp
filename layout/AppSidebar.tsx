@@ -57,6 +57,12 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    icon: <PieChartIcon />, name: "Multas / Gastos",
+    subItems: [
+      { name: "Registro de Gastos", path: "/rondas/multas" },
+    ],
+  },
+  {
     icon: <PieChartIcon />, name: "Reportes / Estadísticas",
     subItems: [
       { name: "Configurar reportes", path: "/reportes/config" },
