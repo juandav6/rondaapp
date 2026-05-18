@@ -9,13 +9,6 @@ function toDecimal(n: any) {
   return new Prisma.Decimal(v.toFixed(2));
 }
 
-/**
- * GET /api/rondas/:id/semanas/:semana/detalles
- * Devuelve por socio:
- * - aporteSemana (Aporte.monto)
- * - multaSemana (Aporte.multa)
- * - ahorroSemana (Ahorro.monto)
- */
 export async function GET(
   _req: Request,
   { params }: { params: { id: string; semana: string } }
@@ -23,14 +16,11 @@ export async function GET(
   try {
     const rondaId = Number(params.id);
     const semana = Number(params.semana);
-    if (!Number.isFinite(rondaId) || rondaId <= 0) {
+    if (!Number.isFinite(rondaId) || rondaId <= 0)
       return NextResponse.json({ error: "rondaId inválido" }, { status: 400 });
-    }
-    if (!Number.isFinite(semana) || semana <= 0) {
+    if (!Number.isFinite(semana) || semana <= 0)
       return NextResponse.json({ error: "semana inválida" }, { status: 400 });
-    }
 
-    // Traemos socios participantes de la ronda
     const participaciones = await prisma.participacion.findMany({
       where: { rondaId, activo: true },
       include: { socio: true },
@@ -39,14 +29,9 @@ export async function GET(
 
     const socioIds = participaciones.map((p) => p.socioId);
 
-    // Traemos aportes y ahorros de esa semana
     const [aportes, ahorros] = await Promise.all([
-      prisma.aporte.findMany({
-        where: { rondaId, semana, socioId: { in: socioIds } },
-      }),
-      prisma.ahorro.findMany({
-        where: { rondaId, semana, socioId: { in: socioIds } },
-      }),
+      prisma.aporte.findMany({ where: { rondaId, semana, socioId: { in: socioIds } } }),
+      prisma.ahorro.findMany({ where: { rondaId, semana, socioId: { in: socioIds } } }),
     ]);
 
     const aporteBySocio = new Map<number, { monto: Prisma.Decimal; multa: Prisma.Decimal }>();
@@ -70,11 +55,7 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({
-      rondaId,
-      semana,
-      rows,
-    });
+    return NextResponse.json({ rondaId, semana, rows });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "Error al obtener detalle semanal" },
@@ -83,18 +64,6 @@ export async function GET(
   }
 }
 
-/**
- * PUT /api/rondas/:id/semanas/:semana/detalles
- * Body:
- * {
- *   updates: [
- *     { socioId: number, aporteSemana: number, ahorroSemana: number }
- *   ]
- * }
- *
- * - Upsert Aporte (monto) y Ahorro (monto) por socio/semana
- * - No tocamos multa aquí (si luego quieres editarla, se agrega también)
- */
 export async function PUT(
   req: Request,
   { params }: { params: { id: string; semana: string } }
@@ -102,62 +71,48 @@ export async function PUT(
   try {
     const rondaId = Number(params.id);
     const semana = Number(params.semana);
-    if (!Number.isFinite(rondaId) || rondaId <= 0) {
+    if (!Number.isFinite(rondaId) || rondaId <= 0)
       return NextResponse.json({ error: "rondaId inválido" }, { status: 400 });
-    }
-    if (!Number.isFinite(semana) || semana <= 0) {
+    if (!Number.isFinite(semana) || semana <= 0)
       return NextResponse.json({ error: "semana inválida" }, { status: 400 });
-    }
 
     const body = await req.json().catch(() => null);
     const updates = Array.isArray(body?.updates) ? body.updates : null;
-    if (!updates) {
+    if (!updates)
       return NextResponse.json({ error: "updates requerido" }, { status: 400 });
-    }
 
-    // Validación rápida
     for (const u of updates) {
-      if (!u || !Number.isFinite(Number(u.socioId))) {
+      if (!u || !Number.isFinite(Number(u.socioId)))
         return NextResponse.json({ error: "socioId inválido en updates" }, { status: 400 });
-      }
     }
 
-    // Ejecutamos todo en transacción
     await prisma.$transaction(async (tx) => {
       for (const u of updates) {
         const socioId = Number(u.socioId);
         const aporteSemana = toDecimal(u.aporteSemana);
         const ahorroSemana = toDecimal(u.ahorroSemana);
+        const multaSemana = toDecimal(u.multaSemana ?? 0); // ← nuevo
 
-        // Aporte: upsert (monto). multa queda igual (o 0 si se crea)
+        // Aporte: upsert con multa
         await tx.aporte.upsert({
-          where: {
-            rondaId_socioId_semana: { rondaId, socioId, semana },
-          },
-          update: { monto: aporteSemana },
-          create: {
-            rondaId,
-            socioId,
-            semana,
+          where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
+          update: {
             monto: aporteSemana,
-            multa: new Prisma.Decimal(0),
+            multa: multaSemana, // ← actualiza la multa
+          },
+          create: {
+            rondaId, socioId, semana,
+            monto: aporteSemana,
+            multa: multaSemana,
             observaciones: "",
           },
         });
 
-        // Ahorro: upsert (monto)
+        // Ahorro: upsert
         await tx.ahorro.upsert({
-          where: {
-            rondaId_socioId_semana: { rondaId, socioId, semana },
-          },
+          where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
           update: { monto: ahorroSemana },
-          create: {
-            rondaId,
-            socioId,
-            semana,
-            monto: ahorroSemana,
-            observaciones: "",
-          },
+          create: { rondaId, socioId, semana, monto: ahorroSemana, observaciones: "" },
         });
       }
     });
@@ -170,4 +125,3 @@ export async function PUT(
     );
   }
 }
-
