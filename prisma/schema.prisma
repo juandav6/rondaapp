@@ -44,21 +44,53 @@ model Ronda {
   intervaloDiasCobro     Int       @default(7) @map("intervalo_dias_cobro")
   ahorroObjetivoPorSocio Decimal   @db.Decimal(12, 2) @default(0)
   responsableId          Int?      @map("responsable_id")
-  // Reporte Excel generado al cierre de la ronda
+  // Fondo de inversión rotativo
+  saldoFondoDisponible   Decimal   @db.Decimal(12, 2) @default(0) @map("saldo_fondo_disponible")
+  fondoTotalHistorico    Decimal   @db.Decimal(12, 2) @default(0) @map("fondo_total_historico")
+  // Reporte Excel generado al cierre
   reporteExcel           Bytes?    @map("reporte_excel")
   reporteGeneradoAt      DateTime? @map("reporte_generado_at")
 
-  responsable       Socio?                   @relation("RondaResponsable", fields: [responsableId], references: [id])
-  aportes           Aporte[]
-  participaciones   Participacion[]
+  responsable        Socio?                   @relation("RondaResponsable", fields: [responsableId], references: [id])
+  aportes            Aporte[]
+  participaciones    Participacion[]
   responsablesSemana ResponsableCobroSemana[]
-  ahorros           Ahorro[]
-  prestamos         Prestamo[]
-  prestamosExpress  PrestamoExpress[]
-  cuentasInversion  CuentaInversion[]
-  movimientos       MovimientoCuenta[]
+  ahorros            Ahorro[]
+  prestamos          Prestamo[]
+  prestamosExpress   PrestamoExpress[]
+  cuentasInversion   CuentaInversion[]
+  movimientos        MovimientoCuenta[]
+  movimientosFondo   MovimientoFondo[]
+  gastosMulta        GastoMulta[]
 
   @@map("rondas")
+}
+
+// Historial de movimientos del fondo de inversión
+model MovimientoFondo {
+  id          Int      @id @default(autoincrement())
+  rondaId     Int      @map("ronda_id")
+  tipo        String
+  // Tipos:
+  // APORTE_INICIAL   → capital inicial del fondo al crear la ronda
+  // PRESTAMO_OTORGADO → se prestó dinero, sale del fondo
+  // CUOTA_CAPITAL    → capital recuperado de pago de cuota
+  // CUOTA_INTERES    → interés cobrado en pago de cuota
+  // DEVOLUCION_CIERRE → devolución a inversores al cerrar ronda
+  monto       Decimal  @db.Decimal(12, 2)
+  saldoAntes  Decimal  @db.Decimal(12, 2) @map("saldo_antes")
+  saldoDespues Decimal @db.Decimal(12, 2) @map("saldo_despues")
+  // Referencias opcionales
+  prestamoId  Int?     @map("prestamo_id")
+  cuotaId     Int?     @map("cuota_id")
+  nota        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  ronda   Ronda     @relation(fields: [rondaId], references: [id])
+  prestamo Prestamo? @relation(fields: [prestamoId], references: [id])
+  cuota   PrestamoCuota? @relation(fields: [cuotaId], references: [id])
+
+  @@map("movimientos_fondo")
 }
 
 model CuentaInversion {
@@ -145,6 +177,16 @@ model Ahorro {
 }
 
 model ResponsableCobroSemana {
+<<<<<<< HEAD
+  id            Int      @id @default(autoincrement())
+  rondaId       Int      @map("ronda_id")
+  semana        Int
+  socioId       Int      @map("socio_id")
+  observaciones String?  @map("observaciones")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+=======
   id        Int      @id @default(autoincrement())
   rondaId   Int      @map("ronda_id")
   semana    Int
@@ -152,6 +194,7 @@ model ResponsableCobroSemana {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   observaciones String?
+>>>>>>> bdf0e73466c175898e3c8306c52cd80c39d80be9
   ronda Ronda @relation(fields: [rondaId], references: [id])
   socio Socio @relation(fields: [socioId], references: [id])
 
@@ -192,9 +235,10 @@ model Prestamo {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  ronda  Ronda           @relation(fields: [rondaId], references: [id])
-  socio  Socio           @relation(fields: [socioId], references: [id])
-  cuotas PrestamoCuota[]
+  ronda            Ronda             @relation(fields: [rondaId], references: [id])
+  socio            Socio             @relation(fields: [socioId], references: [id])
+  cuotas           PrestamoCuota[]
+  movimientosFondo MovimientoFondo[]
 
   @@map("prestamos")
 }
@@ -213,7 +257,8 @@ model PrestamoCuota {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  prestamo Prestamo @relation(fields: [prestamoId], references: [id])
+  prestamo         Prestamo          @relation(fields: [prestamoId], references: [id])
+  movimientosFondo MovimientoFondo[]
 
   @@unique([prestamoId, numero])
   @@index([prestamoId, pagada, fechaVenc])
@@ -237,6 +282,21 @@ model Usuario {
   socio Socio? @relation(fields: [socioId], references: [id])
 
   @@map("usuarios")
+}
+
+model GastoMulta {
+  id          Int      @id @default(autoincrement())
+  rondaId     Int      @map("ronda_id")
+  descripcion String
+  monto       Decimal  @db.Decimal(12, 2)
+  fecha       DateTime @default(now())
+  creadoPor   String?  @map("creado_por")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  ronda Ronda @relation(fields: [rondaId], references: [id])
+
+  @@map("gastos_multa")
 }
 
 model ConfigReporte {
