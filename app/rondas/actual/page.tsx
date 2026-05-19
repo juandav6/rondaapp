@@ -1,6 +1,6 @@
 // app/rondas/actual/page.tsx
 "use client";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n) || 0);
@@ -100,13 +100,17 @@ export default function RondaActualPage() {
   }
 
   useEffect(() => { cargar(); }, []);
+  const prevSemanaRef = React.useRef<string>("");
   useEffect(() => {
-    if (estado?.items) {
+    const key = `${estado?.ronda?.id}-${estado?.semana}`;
+    if (estado?.items && key !== prevSemanaRef.current) {
+      prevSemanaRef.current = key;
       const defaults: Record<number, number> = {};
       estado.items.forEach(it => { defaults[it.socioId] = 1; });
       setAhorroInputs(defaults);
+      setMultasInputs({});
+      setObsInputs({});
     }
-    setMultasInputs({}); setObsInputs({});
   }, [estado?.semana, estado?.ronda?.id]);
   useEffect(() => { if (estado) setResponsableId(estado.responsableId ?? estado.ronda?.responsableId ?? ""); }, [estado?.responsableId, estado?.ronda?.responsableId]);
 
