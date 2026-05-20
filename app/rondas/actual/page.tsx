@@ -84,7 +84,7 @@ export default function RondaActualPage() {
       setLoanSaving(true);
       const res = await fetch("/api/prestamos/express", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rondaId: estado.ronda.id, semana: estado.semana, socioId: loanSocio.id, principal: loanPrincipal, interes: loanInteres, observaciones: loanObs || undefined }),
+        body: JSON.stringify({ rondaId: estado.ronda.id, semana: estado.semana, socioId: loanSocio.id, observaciones: loanObs || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Error");
@@ -719,32 +719,33 @@ export default function RondaActualPage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/30">
           <div className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-lg">
             <h4 className="text-base font-semibold mb-1">Préstamo express</h4>
-            <p className="text-sm text-gray-600 mb-4">Socio: <strong>{loanSocio.nombres} {loanSocio.apellidos}</strong></p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-gray-700">Principal</label>
-                <input type="number" readOnly value={loanPrincipal} className="mt-1 w-full rounded border px-3 py-2 text-right bg-gray-50 text-sm" />
+            <p className="text-sm text-gray-500 mb-4">Socio: <strong className="text-gray-900">{loanSocio.nombres} {loanSocio.apellidos}</strong></p>
+            <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4 mb-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Principal</span>
+                <span className="font-semibold">{fmtMoney(loanPrincipal)}</span>
               </div>
-              <div>
-                <label className="text-sm text-gray-700">Interés</label>
-                <input type="number" min={0} step="0.01" value={loanInteres}
-                  onChange={e => setLoanInteres(Number(e.target.value || 0))}
-                  className="mt-1 w-full rounded border px-3 py-2 text-right text-sm" />
+              <div className="flex justify-between">
+                <span className="text-gray-600">Interés semana {estado.semana + 1}</span>
+                <span className="font-semibold text-indigo-700">$1.00</span>
               </div>
-              <div>
-                <label className="text-sm text-gray-700">Observaciones</label>
-                <input value={loanObs} onChange={e => setLoanObs(e.target.value)}
-                  className="mt-1 w-full rounded border px-3 py-2 text-sm" />
+              <div className="flex justify-between border-t pt-2">
+                <span className="font-semibold">Total a cobrar sem. {estado.semana + 1}</span>
+                <span className="font-bold text-indigo-700">{fmtMoney(loanPrincipal + 1)}</span>
               </div>
-              <div className="rounded-md bg-gray-50 px-3 py-2 text-sm">
-                Total: <strong>{fmtMoney(loanPrincipal + (loanInteres || 0))}</strong>
-              </div>
+              <p className="text-[11px] text-gray-400 pt-1">Si no paga en la semana {estado.semana + 1}, el interés aumenta $1 automáticamente cada semana.</p>
+            </div>
+            <div>
+              <label className="text-sm text-gray-700 mb-1 block">Observaciones</label>
+              <input value={loanObs} onChange={e => setLoanObs(e.target.value)}
+                placeholder="Motivo del préstamo (opcional)"
+                className="w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
             </div>
             <div className="mt-4 flex gap-2">
               <button onClick={() => setLoanOpen(false)} className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700">Cancelar</button>
               <button onClick={crearPrestamoExpress} disabled={loanSaving}
                 className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm text-white font-medium disabled:opacity-50">
-                {loanSaving ? "Guardando…" : "Confirmar"}
+                {loanSaving ? "Guardando…" : "Confirmar express"}
               </button>
             </div>
           </div>
