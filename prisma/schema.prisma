@@ -30,6 +30,7 @@ model Socio {
   movimientos             MovimientoCuenta[]
   usuario                 Usuario?
   ingresosMulta           IngresoMulta[]
+  movimientosCaja         MovimientoCaja[]
 
   @@map("socios")
 }
@@ -64,6 +65,7 @@ model Ronda {
   movimientosFondo   MovimientoFondo[]
   gastosMulta        GastoMulta[]
   ingresosMulta      IngresoMulta[]
+  movimientosCaja    MovimientoCaja[]
 
   @@map("rondas")
 }
@@ -309,6 +311,27 @@ model GastoMulta {
   ronda Ronda @relation(fields: [rondaId], references: [id])
 
   @@map("gastos_multa")
+}
+
+model MovimientoCaja {
+  id             Int      @id @default(autoincrement())
+  rondaId        Int      @map("ronda_id")
+  // MULTA | INTERES_EXPRESS | GASTO
+  tipo           String
+  monto          Decimal  @db.Decimal(12, 2)
+  // Referencias opcionales según tipo
+  socioId        Int?     @map("socio_id")       // para MULTA e INTERES_EXPRESS
+  semana         Int?                             // semana relacionada
+  prestamoExpressId Int?  @map("prestamo_express_id")
+  descripcion    String?                          // para GASTO o nota libre
+  fecha          DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  ronda          Ronda           @relation(fields: [rondaId], references: [id])
+  socio          Socio?          @relation(fields: [socioId], references: [id])
+
+  @@map("movimientos_caja")
 }
 
 model ConfigReporte {
