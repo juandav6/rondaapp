@@ -81,7 +81,7 @@ const navItems: NavItem[] = [
       { name: "Ronda actual", path: "/rondas/actual" },
       { name: "Historial de rondas", path: "/rondas/historial" },
       { name: "Transferencia al fondo", path: "/rondas/fondo/transferir" },
-      { name: "Caja de multas", path: "/rondas/multas" },
+      { name: "Caja común", path: "/rondas/caja" },
     ],
   },
   {
@@ -89,6 +89,7 @@ const navItems: NavItem[] = [
     name: "Préstamos",
     subItems: [
       { name: "Solicitar préstamo", path: "/prestamos/solicitud" },
+      { name: "Préstamos express", path: "/prestamos/express" },
       { name: "Préstamos pendientes", path: "/prestamos/pendientes" },
       { name: "Historial por socio", path: "/prestamos/historial" },
       { name: "Reporte de préstamos", path: "/prestamos/resumen" },
