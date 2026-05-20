@@ -29,6 +29,7 @@ model Socio {
   cuentasInversion        CuentaInversion[]
   movimientos             MovimientoCuenta[]
   usuario                 Usuario?
+  ingresosMulta           IngresoMulta[]
 
   @@map("socios")
 }
@@ -62,6 +63,7 @@ model Ronda {
   movimientos        MovimientoCuenta[]
   movimientosFondo   MovimientoFondo[]
   gastosMulta        GastoMulta[]
+  ingresosMulta      IngresoMulta[]
 
   @@map("rondas")
 }
@@ -193,17 +195,20 @@ model ResponsableCobroSemana {
 }
 
 model PrestamoExpress {
-  id            Int      @id @default(autoincrement())
-  rondaId       Int
-  socioId       Int
-  semana        Int
-  principal     Decimal  @db.Decimal(12, 2)
-  interes       Decimal  @db.Decimal(12, 2)
-  total         Decimal  @db.Decimal(12, 2)
-  estado        String   @default("PENDIENTE")
-  observaciones String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  rondaId           Int
+  socioId           Int
+  semana            Int      // semana en que no pudo pagar (origen)
+  semanaVencimiento Int      @default(0) @map("semana_vencimiento") // debía pagar en esta semana
+  principal         Decimal  @db.Decimal(12, 2)
+  interesPorSemana  Decimal  @db.Decimal(12, 2) @default(1) @map("interes_por_semana") // $1 por semana
+  interesAcumulado  Decimal  @db.Decimal(12, 2) @default(0) @map("interes_acumulado")
+  total             Decimal  @db.Decimal(12, 2) // principal + interesAcumulado
+  estado            String   @default("PENDIENTE") // PENDIENTE | COBRADO
+  semanaCobro       Int?     @map("semana_cobro") // semana en que se cobró
+  observaciones     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   ronda  Ronda   @relation(fields: [rondaId], references: [id])
   socio  Socio   @relation(fields: [socioId], references: [id])
@@ -272,6 +277,23 @@ model Usuario {
   socio Socio? @relation(fields: [socioId], references: [id])
 
   @@map("usuarios")
+}
+
+model IngresoMulta {
+  id            Int      @id @default(autoincrement())
+  rondaId       Int      @map("ronda_id")
+  socioId       Int      @map("socio_id")
+  semana        Int
+  monto         Decimal  @db.Decimal(12, 2)
+  observaciones String?
+  fecha         DateTime @default(now())
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  ronda Ronda @relation(fields: [rondaId], references: [id])
+  socio Socio @relation(fields: [socioId], references: [id])
+
+  @@map("ingresos_multa")
 }
 
 model GastoMulta {
