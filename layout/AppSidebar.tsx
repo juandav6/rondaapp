@@ -123,6 +123,7 @@ function getTabParam(path: string) {
   if (!q) return null;
   return new URLSearchParams(q).get("tab");
 }
+const cn = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
 const AppSidebarInner: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
