@@ -124,6 +124,17 @@ export async function POST(req: Request, ctx: Context) {
         include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
       });
 
+      // También registrar en caja común
+      await (prisma as any).movimientoCaja.create({
+        data: {
+          rondaId, tipo: "MULTA",
+          monto: toDecimal(monto),
+          socioId, semana,
+          descripcion: observaciones || `Multa semana ${semana}`,
+          fecha,
+        },
+      });
+
       return NextResponse.json({
         ok: true,
         tipo: "ingreso",
