@@ -1,91 +1,144 @@
 // app/api/prestamos/express/route.ts
+// Lógica:
+// - Al crear: socio no puede pagar semana N → express por montoAporte, vence semana N+1
+// - Al cerrar semana: si express sigue PENDIENTE → interésAcumulado += $1/semana
+// - Al cobrar: marcar COBRADO, registrar semanaCobro, distribuir interés entre inversores
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
-// GET: lista préstamos express (pendientes por defecto)
+export const runtime = "nodejs";
+
+function round2(n: number) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+function toDecimal(n: number) { return new Prisma.Decimal(round2(n)); }
+
+// ── GET: todos los express de la ronda activa ──────────────────────────────────
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const estado = searchParams.get("estado") || "PENDIENTE"; // PENDIENTE|CANCELADO|PAGADO
-  const items = await prisma.prestamoExpress.findMany({
-    where: estado ? { estado: estado as any } : {},
-    orderBy: { createdAt: "desc" },
-    include: {
-      socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } },
-      ronda: { select: { id: true, nombre: true } },
-    },
-  });
-  return NextResponse.json(items);
-}
-
-// POST: crear préstamo express
-export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { rondaId, semana, socioId, principal, interes, observaciones } = body as {
-      rondaId: number; semana: number; socioId: number; principal: number; interes?: number; observaciones?: string;
-    };
+    const { searchParams } = new URL(req.url);
+    const rondaIdParam = searchParams.get("rondaId");
 
-    if (!rondaId || !semana || !socioId || !(principal >= 0))
-      return NextResponse.json({ error: "Datos incompletos" }, { status: 400 });
+    let rondaId: number;
+    if (rondaIdParam) {
+      rondaId = Number(rondaIdParam);
+    } else {
+      const rondaActiva = await prisma.ronda.findFirst({ where: { activa: true }, select: { id: true } });
+      if (!rondaActiva) return NextResponse.json({ prestamos: [] });
+      rondaId = rondaActiva.id;
+    }
 
-    const prestamo = await prisma.prestamoExpress.create({
-      data: {
-        rondaId,
-        semana,
-        socioId,
-        principal: new Prisma.Decimal(Number(principal || 0)),
-        interes: new Prisma.Decimal(Number(interes || 0)),
-        total: new Prisma.Decimal(Number(principal || 0) + Number(interes || 0)),
-        estado: "PENDIENTE",
-        observaciones: observaciones || null,
-      },
-      select: { id: true },
+    const ronda = await prisma.ronda.findUnique({
+      where: { id: rondaId },
+      select: { id: true, nombre: true, semanaActual: true, montoAporte: true },
     });
 
-    return NextResponse.json({ id: prestamo.id, ok: true });
+    const prestamos = await (prisma as any).prestamoExpress.findMany({
+      where: { rondaId },
+      include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } } },
+      orderBy: [{ estado: "asc" }, { semana: "desc" }],
+    });
+
+    // Calcular interés actualizado para pendientes (sin guardar aún)
+    const semanaActual = ronda?.semanaActual ?? 1;
+    const prestamosConInteres = prestamos.map((p: any) => {
+      const semanasTranscurridas = p.estado === "PENDIENTE"
+        ? Math.max(0, semanaActual - Number(p.semanaVencimiento))
+        : 0;
+      const interesActualizado = round2(
+        Number(p.interesPorSemana) * Math.max(1, semanaActual - Number(p.semana))
+      );
+      const totalActualizado = round2(Number(p.principal) + (p.estado === "PENDIENTE" ? interesActualizado : Number(p.interesAcumulado)));
+
+      return {
+        id: p.id,
+        socio: p.socio,
+        semana: Number(p.semana),
+        semanaVencimiento: Number(p.semanaVencimiento),
+        semanaCobro: p.semanaCobro,
+        principal: Number(p.principal),
+        interesPorSemana: Number(p.interesPorSemana),
+        interesAcumulado: p.estado === "PENDIENTE" ? interesActualizado : Number(p.interesAcumulado),
+        total: totalActualizado,
+        estado: p.estado,
+        observaciones: p.observaciones,
+        semanasVencidas: semanasTranscurridas,
+        createdAt: p.createdAt,
+      };
+    });
+
+    const pendientes = prestamosConInteres.filter((p: any) => p.estado === "PENDIENTE");
+    const cobrados = prestamosConInteres.filter((p: any) => p.estado === "COBRADO");
+    const totalIntereses = round2(cobrados.reduce((s: number, p: any) => s + p.interesAcumulado, 0));
+    const totalPendiente = round2(pendientes.reduce((s: number, p: any) => s + p.total, 0));
+
+    return NextResponse.json({
+      ronda,
+      prestamos: prestamosConInteres,
+      resumen: {
+        totalPendientes: pendientes.length,
+        totalCobrados: cobrados.length,
+        montoPendiente: totalPendiente,
+        interesesGenerados: totalIntereses,
+      },
+    });
   } catch (e: any) {
-    console.error(e);
-    return NextResponse.json({ error: "No se pudo crear el préstamo" }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? "Error" }, { status: 500 });
   }
 }
 
-// PUT: cancelar (anular) préstamo express
-export async function PUT(req: Request) {
+// ── POST: crear préstamo express ──────────────────────────────────────────────
+export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { id, revertirAporte } = body as { id: number; revertirAporte?: boolean };
+    const { rondaId, socioId, semana, observaciones } = body;
 
-    if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 });
+    if (!rondaId || !socioId || !semana)
+      return NextResponse.json({ error: "rondaId, socioId y semana son requeridos" }, { status: 400 });
 
-    // Busca préstamo
-    const px = await prisma.prestamoExpress.findUnique({ where: { id } });
-    if (!px) return NextResponse.json({ error: "Préstamo no encontrado" }, { status: 404 });
+    const ronda = await prisma.ronda.findUnique({
+      where: { id: Number(rondaId) },
+      select: { id: true, montoAporte: true, semanaActual: true },
+    });
+    if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
 
-    await prisma.$transaction(async (tx) => {
-      // Marca préstamo como CANCELADO
-      await tx.prestamoExpress.update({ where: { id }, data: { estado: "CANCELADO" } });
+    const principal = Number(ronda.montoAporte);
+    const interesPorSemana = 1; // $1 fijo por semana
+    const semanaVencimiento = Number(semana) + 1; // debe pagar la siguiente semana
+    const interesAcumulado = interesPorSemana; // interés mínimo de 1 semana
+    const total = round2(principal + interesAcumulado);
 
-      // Reversión del aporte de esa semana (si así se indica y existe vínculo)
-      if (revertirAporte) {
-        // si tu Aporte tiene clave compuesta (rondaId, socioId, semana) y un campo prestamoExpressId
-        const aporte = await tx.aporte.findUnique({
-          where: { rondaId_socioId_semana: { rondaId: px.rondaId, socioId: px.socioId, semana: px.semana } },
-          select: { prestamoExpressId: true },
-        }).catch(() => null);
+    // Verificar que no exista ya un express pendiente para este socio en esta semana
+    const existente = await (prisma as any).prestamoExpress.findFirst({
+      where: { rondaId: Number(rondaId), socioId: Number(socioId), semana: Number(semana), estado: "PENDIENTE" },
+    });
+    if (existente)
+      return NextResponse.json({ error: "Ya existe un préstamo express pendiente para este socio en esta semana" }, { status: 400 });
 
-        if (aporte && (aporte as any).prestamoExpressId === id) {
-          // elimina o anula el aporte
-          await tx.aporte.delete({
-            where: { rondaId_socioId_semana: { rondaId: px.rondaId, socioId: px.socioId, semana: px.semana } },
-          });
-        }
-      }
+    const express = await (prisma as any).prestamoExpress.create({
+      data: {
+        rondaId: Number(rondaId),
+        socioId: Number(socioId),
+        semana: Number(semana),
+        semanaVencimiento,
+        principal: toDecimal(principal),
+        interesPorSemana: toDecimal(interesPorSemana),
+        interesAcumulado: toDecimal(interesAcumulado),
+        total: toDecimal(total),
+        estado: "PENDIENTE",
+        observaciones: observaciones || null,
+      },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      id: express.id,
+      principal,
+      interesAcumulado,
+      total,
+      semanaVencimiento,
+      mensaje: `Préstamo express creado. Vence semana ${semanaVencimiento}. Interés: $${interesAcumulado}/semana`,
+    }, { status: 201 });
   } catch (e: any) {
-    console.error(e);
-    return NextResponse.json({ error: "No se pudo cancelar el préstamo" }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? "Error" }, { status: 400 });
   }
 }
