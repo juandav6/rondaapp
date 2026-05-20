@@ -1,6 +1,7 @@
 // app/socios/detalle/page.tsx
 import Link from "next/link";
 import { PrismaClient } from "@prisma/client";
+import { SocioSearch, MultasSection } from "./components";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const prisma = globalForPrisma.prisma ?? new PrismaClient();
@@ -124,11 +125,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
             <p className="text-sm font-semibold text-gray-700">Socios <span className="text-gray-400 font-normal">({socios.length})</span></p>
             <Link href="/socios/nuevo" className="rounded-md border px-2 py-1 text-xs hover:bg-white">+ Nuevo</Link>
           </div>
-          <ul className="divide-y max-h-[75vh] overflow-y-auto">
+          {/* Buscador */}
+          <div className="border-b px-3 py-2">
+            <div className="relative">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none">
+                <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z" clipRule="evenodd"/>
+              </svg>
+              <SocioSearch socios={socios} selectedId={selectedId} />
+            </div>
+          </div>
+          <ul className="divide-y max-h-[65vh] overflow-y-auto" id="socios-list">
             {socios.map(s => {
               const isActive = s.id === selectedId;
               return (
-                <li key={s.id}>
+                <li key={s.id} data-search={`${s.apellidos} ${s.nombres} ${s.numeroCuenta} ${s.cedula}`.toLowerCase()}>
                   <Link href={`/socios/detalle?socioId=${s.id}`}
                     className={`flex items-center justify-between gap-2 px-4 py-3 hover:bg-gray-50 transition-colors ${isActive ? "bg-violet-50 border-l-2 border-violet-500" : ""}`}>
                     <div className="min-w-0">
@@ -436,6 +447,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
                   <p className="text-xs text-gray-400">Los intereses se calculan al cerrar la ronda según % de participación.</p>
                 </div>
               </section>
+
+              {/* ── Historial de multas ── */}
+              <MultasSection socioId={selectedId!} />
             </>
           )}
         </main>
