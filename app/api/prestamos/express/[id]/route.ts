@@ -1,5 +1,5 @@
 // app/api/prestamos/express/[id]/route.ts
-// PUT /cobrar → marcar como cobrado, distribuir interés entre inversores
+// PUT /cobrar → marcar como cobrado, registrar interés en caja común
 // PUT /acumular → sumar $1 de interés (al cerrar semana con express pendiente)
 
 import { NextResponse } from "next/server";
@@ -77,44 +77,18 @@ export async function PUT(req: Request, ctx: Context) {
         },
       });
 
-      // Distribuir interés entre inversores y registrar en caja
-      if (inversores.length > 0 && interesReal > 0) {
-        await prisma.$transaction(async (tx) => {
-          // Registrar en caja común
-          await (tx as any).movimientoCaja.create({
-            data: {
-              rondaId: express.rondaId,
-              tipo: "INTERES_EXPRESS",
-              monto: toDecimal(interesReal),
-              socioId: express.socioId,
-              semana: semanaActual,
-              prestamoExpressId: expressId,
-              descripcion: `Interés express · ${express.socio.nombres} · ${semanasTranscurridas} sem.`,
-            },
-          });
-          // Distribuir entre inversores
-          let distribuido = 0;
-          for (let i = 0; i < inversores.length; i++) {
-            const inv = inversores[i];
-            const esUltimo = i === inversores.length - 1;
-            const pct = Number(inv.porcentajeParticipacion) / 100;
-            const monto = esUltimo ? round2(interesReal - distribuido) : round2(interesReal * pct);
-            if (monto <= 0) continue;
-            distribuido += monto;
-            await tx.cuentaInversion.update({
-              where: { id: inv.id },
-              data: { interesesAcumulados: { increment: toDecimal(monto) } },
-            });
-            await tx.movimientoCuenta.create({
-              data: {
-                socioId: inv.socioId,
-                rondaId: express.rondaId,
-                tipo: "INTERES",
-                monto: toDecimal(monto),
-                nota: `Interés express #${expressId} · ${express.socio.nombres} · ${semanasTranscurridas} sem. retraso`,
-              },
-            });
-          }
+      // Registrar interés en caja común (disponible para gastos de la ronda)
+      if (interesReal > 0) {
+        await (prisma as any).movimientoCaja.create({
+          data: {
+            rondaId: express.rondaId,
+            tipo: "INTERES_EXPRESS",
+            monto: toDecimal(interesReal),
+            socioId: express.socioId,
+            semana: semanaActual,
+            prestamoExpressId: expressId,
+            descripcion: `Interés express · ${express.socio.nombres} ${express.socio.apellidos} · sem. ${express.semana}→${semanaActual}`,
+          },
         });
       }
 
@@ -126,7 +100,7 @@ export async function PUT(req: Request, ctx: Context) {
         principal: Number(express.principal),
         interesAcumulado: interesReal,
         total: totalFinalCorrecto,
-        mensaje: `Cobrado en semana ${semanaActual}. Interés $${interesReal} distribuido entre ${inversores.length} inversores.`,
+        mensaje: `Cobrado en semana ${semanaActual}. Interés $${interesReal.toFixed(2)} ingresado a la caja común.`,
       });
     }
 
