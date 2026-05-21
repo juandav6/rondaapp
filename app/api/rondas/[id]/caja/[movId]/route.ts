@@ -10,7 +10,7 @@ export async function DELETE(_req: Request, ctx: Context) {
   const { id, movId } = await ctx.params;
   try {
     const mov = await (prisma as any).movimientoCaja.findUnique({ where: { id: Number(movId) } });
-    if (!mov) return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 });
+    if (!mov) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
     if (mov.rondaId !== Number(id)) return NextResponse.json({ error: "No pertenece a esta ronda" }, { status: 400 });
     await (prisma as any).movimientoCaja.delete({ where: { id: Number(movId) } });
     return NextResponse.json({ ok: true });
@@ -23,7 +23,26 @@ export async function PUT(req: Request, ctx: Context) {
   const { id, movId } = await ctx.params;
   try {
     const body = await req.json();
-    const { monto, descripcion, fecha } = body;
+    const { accion, monto, descripcion, fecha } = body;
+
+    // Cobrar un pendiente → pasa a COBRADO y entra al saldo de caja
+    if (accion === "cobrar") {
+      const mov = await (prisma as any).movimientoCaja.findUnique({ where: { id: Number(movId) } });
+      if (!mov) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+      if (mov.estado !== "PENDIENTE") return NextResponse.json({ error: "Este movimiento no está pendiente" }, { status: 400 });
+
+      await (prisma as any).movimientoCaja.update({
+        where: { id: Number(movId) },
+        data: { estado: "COBRADO" },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        mensaje: `${mov.tipo === "MULTA" ? "Multa" : "Valor"} de $${Number(mov.monto).toFixed(2)} ingresado a la caja común`,
+      });
+    }
+
+    // Editar descripción/monto
     const data: any = {};
     if (monto) data.monto = new Prisma.Decimal(Number(monto));
     if (descripcion !== undefined) data.descripcion = descripcion;
