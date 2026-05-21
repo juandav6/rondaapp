@@ -300,6 +300,8 @@ export async function DELETE(req: Request) {
         efectosCadena: efectos,
       });
     }
+
+    else if (tipo === "express") {
       const exp = await (prisma as any).prestamoExpress.findUnique({ where: { id: Number(id) } });
       if (!exp) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
       await (prisma as any).prestamoExpress.delete({ where: { id: Number(id) } });
