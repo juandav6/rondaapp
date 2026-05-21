@@ -248,8 +248,24 @@ export async function DELETE(req: Request) {
     }
 
     else if (tipo === "movimientoCaja") {
+      const mov = await (prisma as any).movimientoCaja.findUnique({
+        where: { id: Number(id) },
+        include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } }, ronda: { select: { nombre: true } } },
+      });
+      if (!mov) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
       await (prisma as any).movimientoCaja.delete({ where: { id: Number(id) } });
-      await registrarBitacora({ tabla: "movimientos_caja", registroId: Number(id), accion: "ELIMINAR", camposCambios: { id: { antes: id, despues: null } } });
+      await registrarBitacora({
+        tabla: "movimientos_caja", registroId: Number(id), accion: "ELIMINAR",
+        camposCambios: {
+          tipo: { antes: mov.tipo, despues: null },
+          monto: { antes: Number(mov.monto), despues: null },
+          estado: { antes: mov.estado, despues: null },
+          socio: { antes: mov.socio ? `${mov.socio.nombres} ${mov.socio.apellidos} (${mov.socio.numeroCuenta})` : null, despues: null },
+          semana: { antes: mov.semana, despues: null },
+          descripcion: { antes: mov.descripcion, despues: null },
+          ronda: { antes: mov.ronda?.nombre, despues: null },
+        },
+      });
     }
 
     else if (tipo === "express") {
