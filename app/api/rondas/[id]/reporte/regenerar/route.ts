@@ -49,6 +49,11 @@ export async function POST(_req: NextRequest, ctx: { params: Params }) {
       responsablesSemana: {
         include: { socio: { select: { nombres: true, apellidos: true } } },
       },
+      movimientosCaja: {
+        where: { estado: "PENDIENTE", tipo: "MULTA" },
+        include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+        orderBy: { semana: "asc" },
+      },
     },
   });
 
@@ -58,14 +63,28 @@ export async function POST(_req: NextRequest, ctx: { params: Params }) {
   try {
     const excelBuffer = await generarExcel(rondaData);
 
-    // Guardar en la BD
-    await prisma.ronda.update({
-      where: { id: rondaId },
-      data: {
-        reporteExcel: Buffer.from(excelBuffer),
-        reporteGeneradoAt: new Date(),
-      },
-    });
+    // Intentar con Prisma ORM primero
+    try {
+      await (prisma.ronda as any).update({
+        where: { id: rondaId },
+        data: {
+          reporteExcel: Buffer.from(excelBuffer),
+          reporteGeneradoAt: new Date(),
+        },
+      });
+    } catch (saveErr: any) {
+      // Fallback a SQL crudo si prisma client no está actualizado
+      if (saveErr?.message?.includes("Unknown argument")) {
+        await prisma.$executeRaw`
+          UPDATE rondas
+          SET reporte_excel = ${Buffer.from(excelBuffer)},
+              reporte_generado_at = NOW()
+          WHERE id = ${rondaId}
+        `;
+      } else {
+        throw saveErr;
+      }
+    }
 
     return NextResponse.json({
       ok: true,
