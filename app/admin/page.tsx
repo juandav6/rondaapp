@@ -29,8 +29,9 @@ export default function AdminPage() {
     { href: "/admin/prestamos", icon: "💳", label: "Préstamos",           desc: "Editar monto, tasa, plazo. Recalcula tabla de amortización automáticamente",               color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
     { href: "/admin/fondo",     icon: "📈", label: "Fondo de inversión",  desc: "Editar montos invertidos por socio. Recalcula % de participación de todos los inversores",   color: "bg-blue-50 border-blue-200 text-blue-700" },
     { href: "/admin/express",   icon: "⚡", label: "Express y caja",      desc: "Editar préstamos express y movimientos de caja. Cambiar estados pendiente/cobrado",         color: "bg-amber-50 border-amber-200 text-amber-700" },
-    { href: "/admin/multas",    icon: "⚠️", label: "Multas",              desc: "Ver, editar, cobrar y eliminar multas. Cambiar estado pendiente/cobrado",                   color: "bg-orange-50 border-orange-200 text-orange-700" },
-    { href: "/admin/bitacora",  icon: "📋", label: "Bitácora",            desc: "Historial de todos los cambios con fecha, hora, valores anteriores y efectos en cascada",   color: "bg-gray-50 border-gray-200 text-gray-700" },
+    { href: "/admin/multas",      icon: "⚠️", label: "Multas",              desc: "Ver, editar, cobrar y eliminar multas. Cambiar estado pendiente/cobrado",                   color: "bg-orange-50 border-orange-200 text-orange-700" },
+    { href: "/admin/secuencias",  icon: "🔢", label: "Secuencias",          desc: "Forzar el próximo número de cuenta (CTA) o código de ronda (RD). Útil al eliminar registros", color: "bg-cyan-50 border-cyan-200 text-cyan-700" },
+    { href: "/admin/bitacora",    icon: "📋", label: "Bitácora",            desc: "Historial de todos los cambios con fecha, hora, valores anteriores y efectos en cascada",   color: "bg-gray-50 border-gray-200 text-gray-700" },
   ];
 
   return (
