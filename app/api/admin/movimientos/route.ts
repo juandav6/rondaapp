@@ -268,7 +268,38 @@ export async function DELETE(req: Request) {
       });
     }
 
-    else if (tipo === "express") {
+    else if (tipo === "cuota") {
+      const cuota = await prisma.prestamoCuota.findUnique({
+        where: { id: Number(id) },
+        include: { prestamo: { include: { cuotas: { orderBy: { numero: "asc" } } } } },
+      });
+      if (!cuota) return NextResponse.json({ error: "Cuota no encontrada" }, { status: 404 });
+      if (cuota.pagada) return NextResponse.json({ error: "No se puede eliminar una cuota ya pagada" }, { status: 400 });
+
+      // Solo permitir eliminar la última cuota no pagada
+      const cuotasNoPagadas = cuota.prestamo.cuotas.filter(c => !c.pagada);
+      const esUltima = cuotasNoPagadas[cuotasNoPagadas.length - 1]?.id === cuota.id;
+      if (!esUltima) return NextResponse.json({ error: "Solo se puede eliminar la última cuota pendiente del préstamo" }, { status: 400 });
+
+      await prisma.$transaction(async (tx) => {
+        await tx.prestamoCuota.delete({ where: { id: Number(id) } });
+        // Recalcular saldo actual del préstamo
+        const cuotaAnterior = cuota.prestamo.cuotas.find(c => c.numero === cuota.numero - 1);
+        if (cuotaAnterior) {
+          await tx.prestamo.update({
+            where: { id: cuota.prestamoId },
+            data: { saldoActual: cuotaAnterior.saldo },
+          });
+        }
+      });
+
+      efectos.push({ tabla: "prestamos", registroId: cuota.prestamoId, descripcion: `Saldo recalculado tras eliminar cuota #${cuota.numero}` });
+      await registrarBitacora({
+        tabla: "prestamo_cuotas", registroId: Number(id), accion: "ELIMINAR",
+        camposCambios: { numero: { antes: cuota.numero, despues: null }, monto: { antes: Number(cuota.cuota), despues: null } },
+        efectosCadena: efectos,
+      });
+    }
       const exp = await (prisma as any).prestamoExpress.findUnique({ where: { id: Number(id) } });
       if (!exp) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
       await (prisma as any).prestamoExpress.delete({ where: { id: Number(id) } });
