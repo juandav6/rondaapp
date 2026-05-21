@@ -43,6 +43,10 @@ export default function AdminFondoPage() {
 
   async function guardar() {
     if (!editando) return;
+    const datos: any = {};
+    if (form.montoInvertido !== undefined) datos.montoInvertido = Number(form.montoInvertido);
+    if (form.interesesAcumulados !== undefined) datos.interesesAcumulados = Number(form.interesesAcumulados);
+
     const cambiaFondo = datos.montoInvertido !== undefined &&
       Number(form.montoInvertido) !== Number(editando.montoInvertido);
     if (!confirm(
@@ -52,10 +56,6 @@ export default function AdminFondoPage() {
     )) return;
     setSaving(true);
     try {
-      const datos: any = {};
-      if (form.montoInvertido !== undefined) datos.montoInvertido = Number(form.montoInvertido);
-      if (form.interesesAcumulados !== undefined) datos.interesesAcumulados = Number(form.interesesAcumulados);
-
       const res = await fetch("/api/admin/movimientos", {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tipo: "cuentaInversion", id: editando.id, datos }),
