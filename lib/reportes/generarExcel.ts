@@ -642,7 +642,54 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
 
   ws6.addRow([]);
 
-  // ── Sección 4: Préstamos Express pendientes ───────────────────────────────
+  // ── Sección 4: Multas pendientes de cobro ─────────────────────────────────
+  const multasPendientes = (ronda.movimientosCaja ?? []).filter((m: any) => m.tipo === "MULTA" && m.estado === "PENDIENTE");
+
+  const rowNumMul = ws6.rowCount + 1;
+  ws6.mergeCells(`A${rowNumMul}:H${rowNumMul}`);
+  const secMul = ws6.getCell(`A${rowNumMul}`);
+  secMul.value = `MULTAS PENDIENTES DE COBRO (${multasPendientes.length} registro${multasPendientes.length !== 1 ? "s" : ""})`;
+  secMul.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFfef9c3" } };
+  secMul.font = { bold: true, size: 10, color: { argb: "FFa16207" } };
+  secMul.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+  ws6.getRow(rowNumMul).height = 18;
+
+  const mulHeader = ws6.addRow(["Socio", "Cuenta", "Semana", "Monto ($)", "Observación", "", "", ""]);
+  styleHeader(mulHeader, 8, "FFd97706");
+  for (let c = 1; c <= 8; c++) mulHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
+
+  if (multasPendientes.length === 0) {
+    const emptyMul = ws6.addRow({ socio: "✓ Sin multas pendientes" });
+    for (let c = 1; c <= 8; c++) {
+      emptyMul.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
+      emptyMul.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
+    }
+    emptyMul.height = 16;
+  } else {
+    let totMul = 0;
+    multasPendientes.forEach((m: any, i: number) => {
+      totMul += Number(m.monto);
+      const row = ws6.addRow([
+        `${m.socio?.nombres ?? ""} ${m.socio?.apellidos ?? ""}`,
+        m.socio?.numeroCuenta ?? "",
+        m.semana ?? "",
+        Number(m.monto),
+        m.descripcion ?? "",
+        "", "", "",
+      ]);
+      styleAlternate(row, 8, i % 2 === 0);
+      row.getCell(4).numFmt = '"$"#,##0.00';
+      row.getCell(4).font = { color: { argb: "FFa16207" }, bold: true };
+    });
+    const totMulRow = ws6.addRow({ socio: "SUBTOTAL MULTAS PENDIENTES", cuenta: "", semana: "", principal: totMul });
+    styleTotalRow(totMulRow, 8, "FFfef9c3");
+    totMulRow.getCell(4).numFmt = '"$"#,##0.00';
+    totMulRow.getCell(4).value = totMul;
+  }
+
+  ws6.addRow([]);
+
+  // ── Sección 5: Préstamos Express pendientes ───────────────────────────────
   const expressActivos = (ronda.prestamosExpress ?? []).filter((pe: any) => pe.estado === "PENDIENTE");
 
   const rowNumEx = ws6.rowCount + 1;
@@ -654,11 +701,9 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   secEx.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
   ws6.getRow(rowNumEx).height = 18;
 
-  const exHeader = ws6.addRow(["Socio", "Cuenta", "Semana", "Principal ($)", "Interés ($)", "Total ($)", "Estado", "Observaciones"]);
+  const exHeader = ws6.addRow(["Socio", "Cuenta", "Sem. origen", "Principal ($)", "Interés ($)", "Total ($)", "Vence sem.", "Observaciones"]);
   styleHeader(exHeader, 8, "FF7c3aed");
-  for (let c = 1; c <= 8; c++) {
-    exHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
-  }
+  for (let c = 1; c <= 8; c++) exHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
 
   if (expressActivos.length === 0) {
     const emptyRow4 = ws6.addRow({ socio: "✓ Sin préstamos express pendientes" });
@@ -670,24 +715,28 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   } else {
     let totEx = 0;
     expressActivos.forEach((pe: any, i: number) => {
-      totEx += Number(pe.total);
-      const row = ws6.addRow({
-        socio: `${pe.socio.nombres} ${pe.socio.apellidos}`,
-        cuenta: pe.socio.numeroCuenta,
-        semana: pe.semana,
-        principal: Number(pe.principal),
-        interes: Number(pe.interes),
-        total: Number(pe.total),
-        estado: pe.estado,
-        obs: pe.observaciones ?? "",
-      });
+      // interesAcumulado es el campo nuevo, interes es el viejo — soporte ambos
+      const interes = Number(pe.interesAcumulado ?? pe.interes ?? 0);
+      const total = Number(pe.total ?? (Number(pe.principal) + interes));
+      totEx += total;
+      const row = ws6.addRow([
+        `${pe.socio.nombres} ${pe.socio.apellidos}`,
+        pe.socio.numeroCuenta,
+        pe.semana,
+        Number(pe.principal),
+        interes,
+        total,
+        pe.semanaVencimiento ?? (pe.semana + 1),
+        pe.observaciones ?? "",
+      ]);
       styleAlternate(row, 8, i % 2 === 0);
       row.getCell(4).numFmt = '"$"#,##0.00';
       row.getCell(5).numFmt = '"$"#,##0.00';
       row.getCell(6).numFmt = '"$"#,##0.00';
-      row.getCell(7).font = { color: { argb: "FF7c3aed" }, bold: true };
+      row.getCell(5).font = { color: { argb: "FF7c3aed" }, bold: true };
+      row.getCell(6).font = { bold: true };
     });
-    const totExRow = ws6.addRow({ socio: "SUBTOTAL EXPRESS", total: totEx });
+    const totExRow = ws6.addRow(["SUBTOTAL EXPRESS", "", "", "", "", totEx, "", ""]);
     styleTotalRow(totExRow, 8, "FFf3e8ff");
     totExRow.getCell(6).numFmt = '"$"#,##0.00';
   }
@@ -698,8 +747,9 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   const totalAportesPend = pendientesAporte.reduce((a, p) => a + p.monto, 0);
   const totalAhorrosPend = pendientesAhorro.reduce((a, p) => a + p.pendiente, 0);
   const totalPrestPend = prestamosConSaldo.reduce((a: number, p: any) => a + Number(p.saldoActual), 0);
-  const totalExpressPend = expressActivos.reduce((a: number, pe: any) => a + Number(pe.total), 0);
-  const grandTotal = totalAportesPend + totalAhorrosPend + totalPrestPend + totalExpressPend;
+  const totalExpressPend = expressActivos.reduce((a: number, pe: any) => a + Number(pe.total ?? (Number(pe.principal) + Number(pe.interesAcumulado ?? pe.interes ?? 0))), 0);
+  const totalMultasPend = multasPendientes.reduce((a: number, m: any) => a + Number(m.monto), 0);
+  const grandTotal = totalAportesPend + totalAhorrosPend + totalPrestPend + totalExpressPend + totalMultasPend;
 
   const rowNumRes = ws6.rowCount + 1;
   ws6.mergeCells(`A${rowNumRes}:H${rowNumRes}`);
@@ -710,22 +760,24 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   secRes.alignment = { horizontal: "center", vertical: "middle" };
   ws6.getRow(rowNumRes).height = 22;
 
-  const resRows = [
+  const resRows: [string, number][] = [
     ["Aportes pendientes", totalAportesPend],
     ["Ahorros pendientes (bajo objetivo)", totalAhorrosPend],
     ["Saldo préstamos activos", totalPrestPend],
+    ["Multas pendientes de cobro", totalMultasPend],
     ["Préstamos express pendientes", totalExpressPend],
   ];
   resRows.forEach(([label, val], i) => {
-    const row = ws6.addRow({ socio: label, principal: val });
+    const row = ws6.addRow([label, "", "", val, "", "", "", ""]);
     styleAlternate(row, 8, i % 2 === 0);
     row.getCell(1).font = { bold: false, size: 10 };
     row.getCell(4).numFmt = '"$"#,##0.00';
-    row.getCell(4).value = val;
     row.getCell(4).font = { bold: true };
+    if (label.includes("Multas")) row.getCell(4).font = { bold: true, color: { argb: "FFa16207" } };
+    if (label.includes("express")) row.getCell(4).font = { bold: true, color: { argb: "FF7c3aed" } };
   });
 
-  const grandTotRow = ws6.addRow({ socio: "TOTAL GENERAL POR COBRAR", principal: grandTotal });
+  const grandTotRow = ws6.addRow(["TOTAL GENERAL POR COBRAR", "", "", grandTotal, "", "", "", ""]);
   styleTotalRow(grandTotRow, 8, VERDE_CLARO);
   grandTotRow.getCell(1).font = { bold: true, size: 11 };
   grandTotRow.getCell(4).numFmt = '"$"#,##0.00';
