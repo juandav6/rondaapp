@@ -90,6 +90,7 @@ const navItems: NavItem[] = [
       { name: "Aportes y ahorros", path: "/admin/aportes" },
       { name: "Préstamos", path: "/admin/prestamos" },
       { name: "Express y caja", path: "/admin/express" },
+      { name: "Multas", path: "/admin/multas" },
       { name: "Bitácora de cambios", path: "/admin/bitacora" },
     ],
   },
