@@ -228,6 +228,7 @@ model Prestamo {
   plazoMeses  Int      @map("plazo_meses")
   fechaInicio DateTime @map("fecha_inicio")
   estado      String   @default("ACTIVO")
+  notaCancelacion String? @map("nota_cancelacion")
   saldoActual Decimal  @db.Decimal(12, 2) @map("saldo_actual")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -313,7 +314,6 @@ model GastoMulta {
   @@map("gastos_multa")
 }
 
-// ── Caja común: multas + intereses express + gastos ──────────────────────────
 model MovimientoCaja {
   id                Int      @id @default(autoincrement())
   rondaId           Int      @map("ronda_id")
