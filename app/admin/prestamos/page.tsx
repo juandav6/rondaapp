@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 
 const fmt = (n: number) => new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n||0));
 const cn = (...c: (string|false|null|undefined)[]) => c.filter(Boolean).join(" ");
-const toISO = (d: string | Date) => new Date(d).toISOString().slice(0,10);
+const toISO = (d: string | Date | null | undefined) => {
+  if (!d) return "";
+  const date = new Date(d);
+  return isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+};
 
 type Modal = "editar" | "cancelar" | "eliminar" | "fecha" | null;
 
@@ -309,7 +313,7 @@ export default function AdminPrestamosPage() {
                                       </span>
                                     </td>
                                     <td className="px-3 py-1.5 text-right text-gray-400">
-                                      {new Date(c.fechaVenc).toLocaleDateString("es-EC")}
+                                      {toISO(c.fechaVenc) || "—"}
                                     </td>
                                   </tr>
                                 ))}
