@@ -152,17 +152,17 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     const fechaCobro = fmtDate(fechaSemana(p.orden));
     totAp += totalA; totMult += totalMult; totAh += totalAh;
 
-    const row = ws2.addRow({
-      orden: p.orden,
-      cuenta: p.socio.numeroCuenta,
-      nombres: p.socio.nombres,
-      apellidos: p.socio.apellidos,
-      aportes: totalA,
-      multas: totalMult,
-      ahorros: totalAh,
-      semana: p.orden,
+    const row = ws2.addRow([
+      p.orden,
+      p.socio.numeroCuenta,
+      p.socio.nombres,
+      p.socio.apellidos,
+      totalA,
+      totalMult,
+      totalAh,
+      p.orden,
       fechaCobro,
-    });
+    ]);
     styleAlternate(row, 9, i % 2 === 0);
     row.getCell(5).numFmt = '"$"#,##0.00';
     row.getCell(6).numFmt = '"$"#,##0.00';
@@ -170,7 +170,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   });
 
   ws2.addRow([]);
-  const totalRow2 = ws2.addRow({ orden: "", cuenta: "", nombres: "TOTAL", apellidos: "", aportes: totAp, multas: totMult, ahorros: totAh });
+  const totalRow2 = ws2.addRow(["", "", "TOTAL", "", totAp, totMult, totAh, "", ""]);
   styleTotalRow(totalRow2, 9);
   totalRow2.getCell(5).numFmt = '"$"#,##0.00';
   totalRow2.getCell(6).numFmt = '"$"#,##0.00';
@@ -489,7 +489,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   styleHeader(apHeader, 8, ROJO);
 
   if (pendientesAporte.length === 0) {
-    const emptyRow = ws6.addRow({ socio: "✓ Todos los aportes al día", tipo: "", semana: "", fecha: "", monto: "", estado: "", obs: "" });
+    const emptyRow = ws6.addRow(["✓ Todos los aportes al día", "", "", "", "", "", "", ""]);
     for (let c = 1; c <= 8; c++) {
       emptyRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
       emptyRow.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
@@ -499,20 +499,20 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     let totalPendAporte = 0;
     pendientesAporte.forEach((p, i) => {
       totalPendAporte += p.monto;
-      const row = ws6.addRow({
-        socio: p.socio, cuenta: p.cuenta, tipo: "Aporte semanal",
-        semana: p.semana, fecha: p.fecha, monto: p.monto,
-        estado: "PENDIENTE", obs: "",
-      });
+      const row = ws6.addRow([
+        p.socio, p.cuenta, "Aporte semanal",
+        p.semana, p.fecha, p.monto,
+        "PENDIENTE", "",
+      ]);
       styleAlternate(row, 8, i % 2 === 0);
       row.getCell(6).numFmt = '"$"#,##0.00';
-      // Colorear estado
       row.getCell(7).font = { color: { argb: ROJO }, bold: true };
       row.getCell(7).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ROJO_CLARO } };
     });
-    const totApRow = ws6.addRow({ socio: "SUBTOTAL APORTES", cuenta: "", tipo: "", semana: "", fecha: "", monto: totalPendAporte, estado: "", obs: "" });
+    const totApRow = ws6.addRow(["SUBTOTAL APORTES", "", "", "", "", totalPendAporte, "", ""]);
     styleTotalRow(totApRow, 8, ROJO_CLARO);
     totApRow.getCell(6).numFmt = '"$"#,##0.00';
+    totApRow.getCell(6).font = { bold: true, color: { argb: ROJO } };
   }
 
   ws6.addRow([]);
@@ -560,7 +560,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   }
 
   if (pendientesAhorro.length === 0) {
-    const emptyRow2 = ws6.addRow({ socio: objetivoAhorro === 0 ? "Sin objetivo de ahorro configurado" : "✓ Todos los socios alcanzaron su objetivo", cuenta: "" });
+    const emptyRow2 = ws6.addRow([objetivoAhorro === 0 ? "Sin objetivo de ahorro configurado" : "✓ Todos los socios alcanzaron su objetivo", "", "", "", "", "", "", ""]);
     for (let c = 1; c <= 8; c++) {
       emptyRow2.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
       emptyRow2.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
@@ -571,20 +571,22 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     pendientesAhorro.forEach((p, i) => {
       totPendAh += p.pendiente;
       const pct = p.objetivo > 0 ? (p.acumulado / p.objetivo) * 100 : 0;
-      const row = ws6.addRow({
-        socio: p.socio, cuenta: p.cuenta,
-        objetivo: p.objetivo, acumulado: p.acumulado, pendiente: p.pendiente,
-        pct: `${pct.toFixed(1)}%`, estado: "INCOMPLETO", obs: "",
-      });
+      const row = ws6.addRow([
+        p.socio, p.cuenta,
+        p.objetivo, p.acumulado, p.pendiente,
+        `${pct.toFixed(1)}%`, "INCOMPLETO", "",
+      ]);
       styleAlternate(row, 8, i % 2 === 0);
       row.getCell(3).numFmt = '"$"#,##0.00';
       row.getCell(4).numFmt = '"$"#,##0.00';
       row.getCell(5).numFmt = '"$"#,##0.00';
+      row.getCell(5).font = { color: { argb: ROJO }, bold: true };
       row.getCell(7).font = { color: { argb: AMBER }, bold: true };
     });
-    const totAhRow = ws6.addRow({ socio: "SUBTOTAL AHORROS PENDIENTES", cuenta: "", objetivo: "", acumulado: "", pendiente: totPendAh });
+    const totAhRow = ws6.addRow(["SUBTOTAL AHORROS PENDIENTES", "", "", "", totPendAh, "", "", ""]);
     styleTotalRow(totAhRow, 8, AMBER_CLARO);
     totAhRow.getCell(5).numFmt = '"$"#,##0.00';
+    totAhRow.getCell(5).font = { bold: true, color: { argb: AMBER } };
   }
 
   ws6.addRow([]);
@@ -608,7 +610,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   }
 
   if (prestamosConSaldo.length === 0) {
-    const emptyRow3 = ws6.addRow({ socio: "✓ Sin préstamos activos con saldo pendiente" });
+    const emptyRow3 = ws6.addRow(["✓ Sin préstamos activos con saldo pendiente", "", "", "", "", "", "", ""]);
     for (let c = 1; c <= 8; c++) {
       emptyRow3.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
       emptyRow3.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
@@ -619,25 +621,27 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     prestamosConSaldo.forEach((p: any, i: number) => {
       const cuotasPend = p.cuotas.filter((c: any) => !c.pagada).length;
       totSaldoPr += Number(p.saldoActual);
-      const row = ws6.addRow({
-        socio: `${p.socio.nombres} ${p.socio.apellidos}`,
-        cuenta: p.socio.numeroCuenta,
-        monto: Number(p.monto),
-        saldo: Number(p.saldoActual),
-        tasa: Number(p.tasaAnual),
+      const row = ws6.addRow([
+        `${p.socio.nombres} ${p.socio.apellidos}`,
+        p.socio.numeroCuenta,
+        Number(p.monto),
+        Number(p.saldoActual),
+        Number(p.tasaAnual),
         cuotasPend,
-        estado: p.estado,
-        fechaInicio: new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(p.fechaInicio)),
-      });
+        p.estado,
+        new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(p.fechaInicio)),
+      ]);
       styleAlternate(row, 8, i % 2 === 0);
       row.getCell(3).numFmt = '"$"#,##0.00';
       row.getCell(4).numFmt = '"$"#,##0.00';
       row.getCell(5).numFmt = '0.00"%"';
+      row.getCell(4).font = { color: { argb: AZUL }, bold: true };
       row.getCell(7).font = { color: { argb: AZUL }, bold: true };
     });
-    const totPrRow = ws6.addRow({ socio: "SUBTOTAL SALDO PRÉSTAMOS", saldo: totSaldoPr });
+    const totPrRow = ws6.addRow(["SUBTOTAL SALDO PRÉSTAMOS", "", "", totSaldoPr, "", "", "", ""]);
     styleTotalRow(totPrRow, 8, AZUL_CLARO);
     totPrRow.getCell(4).numFmt = '"$"#,##0.00';
+    totPrRow.getCell(4).font = { bold: true, color: { argb: AZUL } };
   }
 
   ws6.addRow([]);
@@ -659,7 +663,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   for (let c = 1; c <= 8; c++) mulHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
 
   if (multasPendientes.length === 0) {
-    const emptyMul = ws6.addRow({ socio: "✓ Sin multas pendientes" });
+    const emptyMul = ws6.addRow(["✓ Sin multas pendientes", "", "", "", "", "", "", ""]);
     for (let c = 1; c <= 8; c++) {
       emptyMul.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
       emptyMul.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
@@ -681,10 +685,10 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
       row.getCell(4).numFmt = '"$"#,##0.00';
       row.getCell(4).font = { color: { argb: "FFa16207" }, bold: true };
     });
-    const totMulRow = ws6.addRow({ socio: "SUBTOTAL MULTAS PENDIENTES", cuenta: "", semana: "", principal: totMul });
+    const totMulRow = ws6.addRow(["SUBTOTAL MULTAS PENDIENTES", "", "", totMul, "", "", "", ""]);
     styleTotalRow(totMulRow, 8, "FFfef9c3");
     totMulRow.getCell(4).numFmt = '"$"#,##0.00';
-    totMulRow.getCell(4).value = totMul;
+    totMulRow.getCell(4).font = { bold: true, color: { argb: "FFa16207" } };
   }
 
   ws6.addRow([]);
@@ -706,7 +710,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   for (let c = 1; c <= 8; c++) exHeader.getCell(c).font = { bold: true, color: { argb: BLANCO }, size: 10 };
 
   if (expressActivos.length === 0) {
-    const emptyRow4 = ws6.addRow({ socio: "✓ Sin préstamos express pendientes" });
+    const emptyRow4 = ws6.addRow(["✓ Sin préstamos express pendientes", "", "", "", "", "", "", ""]);
     for (let c = 1; c <= 8; c++) {
       emptyRow4.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
       emptyRow4.getCell(c).font = { color: { argb: "FF15803d" }, italic: true };
