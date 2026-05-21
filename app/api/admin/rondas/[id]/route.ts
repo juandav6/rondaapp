@@ -20,6 +20,10 @@ export async function GET(_req: Request, ctx: Ctx) {
           orderBy: { orden: "asc" },
         },
         responsablesSemana: { include: { socio: { select: { nombres: true, apellidos: true } } } },
+        cuentasInversion: {
+          include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } } },
+          orderBy: { montoInvertido: "desc" },
+        },
         _count: { select: { aportes: true, ahorros: true, prestamos: true, prestamosExpress: true } },
       },
     });
@@ -29,6 +33,15 @@ export async function GET(_req: Request, ctx: Ctx) {
       montoAporte: Number(ronda.montoAporte),
       ahorroObjetivoPorSocio: Number(ronda.ahorroObjetivoPorSocio),
       saldoFondoDisponible: Number(ronda.saldoFondoDisponible),
+      cuentasInversion: ronda.cuentasInversion.map(c => ({
+        id: c.id,
+        socioId: c.socioId,
+        socio: c.socio,
+        montoInvertido: Number(c.montoInvertido),
+        porcentajeParticipacion: Number(c.porcentajeParticipacion),
+        interesesAcumulados: Number(c.interesesAcumulados),
+        devuelto: c.devuelto,
+      })),
     });
   } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
 }
