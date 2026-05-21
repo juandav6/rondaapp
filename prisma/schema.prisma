@@ -313,23 +313,26 @@ model GastoMulta {
   @@map("gastos_multa")
 }
 
+// ── Caja común: multas + intereses express + gastos ──────────────────────────
 model MovimientoCaja {
-  id             Int      @id @default(autoincrement())
-  rondaId        Int      @map("ronda_id")
+  id                Int      @id @default(autoincrement())
+  rondaId           Int      @map("ronda_id")
   // MULTA | INTERES_EXPRESS | GASTO
-  tipo           String
-  monto          Decimal  @db.Decimal(12, 2)
+  tipo              String
+  // PENDIENTE (multas esperando cobro) | COBRADO | null para gastos
+  estado            String   @default("COBRADO")
+  monto             Decimal  @db.Decimal(12, 2)
   // Referencias opcionales según tipo
-  socioId        Int?     @map("socio_id")       // para MULTA e INTERES_EXPRESS
-  semana         Int?                             // semana relacionada
-  prestamoExpressId Int?  @map("prestamo_express_id")
-  descripcion    String?                          // para GASTO o nota libre
-  fecha          DateTime @default(now())
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  socioId           Int?     @map("socio_id")
+  semana            Int?
+  prestamoExpressId Int?     @map("prestamo_express_id")
+  descripcion       String?
+  fecha             DateTime @default(now())
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
-  ronda          Ronda           @relation(fields: [rondaId], references: [id])
-  socio          Socio?          @relation(fields: [socioId], references: [id])
+  ronda Ronda  @relation(fields: [rondaId], references: [id])
+  socio Socio? @relation(fields: [socioId], references: [id])
 
   @@map("movimientos_caja")
 }
