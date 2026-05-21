@@ -337,6 +337,20 @@ model MovimientoCaja {
   @@map("movimientos_caja")
 }
 
+model Bitacora {
+  id           Int      @id @default(autoincrement())
+  tabla        String                        // Qué modelo se modificó
+  registroId   Int      @map("registro_id")  // ID del registro modificado
+  accion       String                        // CREAR | EDITAR | ELIMINAR
+  camposCambios Json                         // { campo: { antes, despues } }
+  efectosCadena Json?   @map("efectos_cadena") // Cambios cascada en otros modelos
+  usuario      String   @default("admin")
+  ip           String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("bitacora")
+}
+
 model ConfigReporte {
   id          Int      @id @default(1)
   emailAdmin  String   @default("")
