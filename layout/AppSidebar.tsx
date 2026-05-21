@@ -92,6 +92,7 @@ const navItems: NavItem[] = [
       { name: "Fondo de inversión", path: "/admin/fondo" },
       { name: "Express y caja", path: "/admin/express" },
       { name: "Multas", path: "/admin/multas" },
+      { name: "Secuencias", path: "/admin/secuencias" },
       { name: "Bitácora de cambios", path: "/admin/bitacora" },
     ],
   },
