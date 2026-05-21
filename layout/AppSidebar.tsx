@@ -89,6 +89,7 @@ const navItems: NavItem[] = [
       { name: "Rondas", path: "/admin/rondas" },
       { name: "Aportes y ahorros", path: "/admin/aportes" },
       { name: "Préstamos", path: "/admin/prestamos" },
+      { name: "Fondo de inversión", path: "/admin/fondo" },
       { name: "Express y caja", path: "/admin/express" },
       { name: "Multas", path: "/admin/multas" },
       { name: "Bitácora de cambios", path: "/admin/bitacora" },
