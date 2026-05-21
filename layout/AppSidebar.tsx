@@ -49,7 +49,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: Icon.caja, name: "Caja Común",
+    icon: Icon.wallet, name: "Caja Común",
     subItems: [
       { name: "Registro de multas", path: "/caja/multas" },
       { name: "Valores pendientes", path: "/caja/pendientes" },
@@ -58,7 +58,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    icon: Icon.depositos, name: "Depósitos",
+    icon: Icon.piggyBank, name: "Depósitos",
     subItems: [
       { name: "Registrar depósito", path: "/ahorros/registro" },
       { name: "Listado de depósitos", path: "/ahorros/registro?tab=listado" },
