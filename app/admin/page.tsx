@@ -23,14 +23,13 @@ export default function AdminPage() {
   }, []);
 
   const modulos = [
-    { href: "/admin/socios", icon: "👥", label: "Socios", desc: "Editar datos, ver historial completo, eliminar socios sin dependencias", color: "bg-violet-50 border-violet-200 text-violet-700" },
-    { href: "/admin/rondas", icon: "📅", label: "Rondas", desc: "Editar nombre, montos, semana actual. Eliminar respetando orden cronológico", color: "bg-blue-50 border-blue-200 text-blue-700" },
-    { href: "/admin/aportes", icon: "💵", label: "Aportes", desc: "Editar y eliminar aportes por semana/socio", color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-    { href: "/admin/ahorros", icon: "🏦", label: "Ahorros", desc: "Editar ahorros. Recalcula automáticamente saldo del socio", color: "bg-teal-50 border-teal-200 text-teal-700" },
-    { href: "/admin/prestamos", icon: "💳", label: "Préstamos", desc: "Editar monto, tasa, plazo. Recalcula tabla de amortización", color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
-    { href: "/admin/express", icon: "⚡", label: "Préstamos express", desc: "Editar principal, interés, estado de express pendientes", color: "bg-amber-50 border-amber-200 text-amber-700" },
-    { href: "/admin/caja", icon: "🏧", label: "Caja común", desc: "Editar movimientos de caja, cambiar estados pendiente/cobrado", color: "bg-orange-50 border-orange-200 text-orange-700" },
-    { href: "/admin/bitacora", icon: "📋", label: "Bitácora", desc: "Historial de todos los cambios realizados con fecha, hora y efectos en cascada", color: "bg-gray-50 border-gray-200 text-gray-700" },
+    { href: "/admin/socios",    icon: "👥", label: "Socios",              desc: "Editar datos, ver historial completo, eliminar socios sin dependencias",                    color: "bg-violet-50 border-violet-200 text-violet-700" },
+    { href: "/admin/rondas",    icon: "📅", label: "Rondas",              desc: "Editar nombre, montos, semana actual. Eliminar respetando orden cronológico",               color: "bg-blue-50 border-blue-200 text-blue-700" },
+    { href: "/admin/aportes",   icon: "💵", label: "Aportes y ahorros",   desc: "Editar y eliminar aportes/ahorros por semana. Ahorros recalculan saldo del socio",          color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+    { href: "/admin/prestamos", icon: "💳", label: "Préstamos",           desc: "Editar monto, tasa, plazo. Recalcula tabla de amortización automáticamente",               color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
+    { href: "/admin/express",   icon: "⚡", label: "Express y caja",      desc: "Editar préstamos express y movimientos de caja. Cambiar estados pendiente/cobrado",         color: "bg-amber-50 border-amber-200 text-amber-700" },
+    { href: "/admin/multas",    icon: "⚠️", label: "Multas",              desc: "Ver, editar, cobrar y eliminar multas. Cambiar estado pendiente/cobrado",                   color: "bg-orange-50 border-orange-200 text-orange-700" },
+    { href: "/admin/bitacora",  icon: "📋", label: "Bitácora",            desc: "Historial de todos los cambios con fecha, hora, valores anteriores y efectos en cascada",   color: "bg-gray-50 border-gray-200 text-gray-700" },
   ];
 
   return (
