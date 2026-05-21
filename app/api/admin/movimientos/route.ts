@@ -168,7 +168,72 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: true, cambios, efectos });
     }
 
-    // ── Editar Express ────────────────────────────────────────────────────────
+    // ── Editar CuentaInversion → recalcular % de todos los socios ────────────
+    if (tipo === "cuentaInversion") {
+      const cuenta = await prisma.cuentaInversion.findUnique({
+        where: { id: Number(id) },
+        include: { socio: { select: { nombres: true, apellidos: true } } },
+      });
+      if (!cuenta) return NextResponse.json({ error: "Cuenta de inversión no encontrada" }, { status: 404 });
+
+      const montoAntes = Number(cuenta.montoInvertido);
+      const montoNuevo = datos.montoInvertido !== undefined ? r2(Number(datos.montoInvertido)) : montoAntes;
+      const interesesNuevo = datos.interesesAcumulados !== undefined ? r2(Number(datos.interesesAcumulados)) : Number(cuenta.interesesAcumulados);
+
+      // Recalcular porcentajes de todos los inversores de la ronda
+      await prisma.$transaction(async (tx) => {
+        // Actualizar el monto de esta cuenta
+        await tx.cuentaInversion.update({
+          where: { id: Number(id) },
+          data: {
+            ...(datos.montoInvertido !== undefined && { montoInvertido: dec(montoNuevo) }),
+            ...(datos.interesesAcumulados !== undefined && { interesesAcumulados: dec(interesesNuevo) }),
+          },
+        });
+
+        if (datos.montoInvertido !== undefined && montoNuevo !== montoAntes) {
+          // Obtener todas las cuentas actualizadas
+          const todasCuentas = await tx.cuentaInversion.findMany({
+            where: { rondaId: cuenta.rondaId },
+          });
+          const totalFondo = r2(todasCuentas.reduce((s, c) => s + Number(c.montoInvertido), 0));
+
+          // Recalcular % de cada inversor
+          for (const c of todasCuentas) {
+            const pct = totalFondo > 0 ? r2((Number(c.montoInvertido) / totalFondo) * 100) : 0;
+            await tx.cuentaInversion.update({
+              where: { id: c.id },
+              data: { porcentajeParticipacion: dec(pct) },
+            });
+          }
+
+          // Actualizar saldoFondoDisponible de la ronda
+          await tx.ronda.update({
+            where: { id: cuenta.rondaId },
+            data: { saldoFondoDisponible: dec(totalFondo) },
+          });
+
+          efectos.push({
+            tabla: "cuenta_inversion",
+            registroId: cuenta.rondaId,
+            descripcion: `Porcentajes de participación recalculados para ${todasCuentas.length} inversores. Fondo total: $${totalFondo.toFixed(2)}`,
+            camposAfectados: {
+              saldoFondoDisponible: { antes: montoAntes, despues: totalFondo },
+            },
+          });
+        }
+      });
+
+      const cambios = diffObjetos(
+        { montoInvertido: montoAntes, interesesAcumulados: Number(cuenta.interesesAcumulados) },
+        { montoInvertido: montoNuevo, interesesAcumulados: interesesNuevo }
+      );
+      await registrarBitacora({
+        tabla: "cuenta_inversion", registroId: Number(id), accion: "EDITAR",
+        camposCambios: cambios, efectosCadena: efectos.length ? efectos : undefined,
+      });
+      return NextResponse.json({ ok: true, cambios, efectos });
+    }
     if (tipo === "express") {
       const antes = await (prisma as any).prestamoExpress.findUnique({ where: { id: Number(id) } });
       if (!antes) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
