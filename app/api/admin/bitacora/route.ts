@@ -44,14 +44,41 @@ export async function GET(req: Request) {
           const r = await prisma.ronda.findUnique({ where: { id: b.registroId }, select: { nombre: true } });
           if (r) descripcionRegistro = r.nombre;
         } else if (b.tabla === "aportes") {
-          const a = await prisma.aporte.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true } }, ronda: { select: { nombre: true } } } });
-          if (a) descripcionRegistro = `Aporte sem.${a.semana} · ${a.socio.nombres} · ${a.ronda.nombre}`;
+          const a = await prisma.aporte.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true, apellidos: true } }, ronda: { select: { nombre: true } } } });
+          if (a) descripcionRegistro = `Aporte sem.${a.semana} · ${a.socio.nombres} ${a.socio.apellidos} · ${a.ronda.nombre}`;
         } else if (b.tabla === "ahorros") {
-          const a = await prisma.ahorro.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true } }, ronda: { select: { nombre: true } } } });
-          if (a) descripcionRegistro = `Ahorro sem.${a.semana} · ${a.socio.nombres} · ${a.ronda.nombre}`;
+          const a = await prisma.ahorro.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true, apellidos: true } }, ronda: { select: { nombre: true } } } });
+          if (a) descripcionRegistro = `Ahorro sem.${a.semana} · ${a.socio.nombres} ${a.socio.apellidos} · ${a.ronda.nombre}`;
         } else if (b.tabla === "prestamos") {
-          const p = await prisma.prestamo.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true } } } });
-          if (p) descripcionRegistro = `Préstamo · ${p.socio.nombres}`;
+          const p = await prisma.prestamo.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true, apellidos: true } }, ronda: { select: { nombre: true } } } });
+          if (p) descripcionRegistro = `Préstamo $${Number(p.monto).toFixed(2)} · ${p.socio.nombres} ${p.socio.apellidos} · ${p.ronda.nombre}`;
+        } else if (b.tabla === "prestamos_express") {
+          const e = await (prisma as any).prestamoExpress.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true, apellidos: true } }, ronda: { select: { nombre: true } } } });
+          if (e) descripcionRegistro = `Express sem.${e.semana} · ${e.socio.nombres} ${e.socio.apellidos} · ${e.ronda.nombre} · ${e.estado}`;
+        } else if (b.tabla === "movimientos_caja") {
+          // Para registros eliminados, usar los campos_cambios guardados
+          const cambios = b.camposCambios as any;
+          // Intentar encontrar el registro aún vivo
+          try {
+            const m = await (prisma as any).movimientoCaja.findUnique({
+              where: { id: b.registroId },
+              include: { socio: { select: { nombres: true, apellidos: true } }, ronda: { select: { nombre: true } } },
+            });
+            if (m) {
+              const tipoLabel = m.tipo === "MULTA" ? "Multa" : m.tipo === "INTERES_EXPRESS" ? "Interés express" : "Gasto";
+              const socioNombre = m.socio ? `${m.socio.nombres} ${m.socio.apellidos}` : "";
+              descripcionRegistro = `${tipoLabel} $${Number(m.monto).toFixed(2)} · ${socioNombre}${m.semana ? ` · Sem.${m.semana}` : ""} · ${m.ronda.nombre} · ${m.estado}`;
+            } else {
+              // Registro eliminado — usar datos de los cambios
+              const montoAntes = cambios?.monto?.antes ?? cambios?.id?.antes ?? "?";
+              descripcionRegistro = `Movimiento eliminado · ID #${b.registroId} · valor anterior: ${montoAntes}`;
+            }
+          } catch {
+            descripcionRegistro = `Movimiento de caja #${b.registroId} (eliminado)`;
+          }
+        } else if (b.tabla === "movimientos_cuenta") {
+          const m = await prisma.movimientoCuenta.findUnique({ where: { id: b.registroId }, include: { socio: { select: { nombres: true, apellidos: true } } } });
+          if (m) descripcionRegistro = `${m.tipo} $${Number(m.monto).toFixed(2)} · ${m.socio.nombres} ${m.socio.apellidos}`;
         }
       } catch { descripcionRegistro = `ID #${b.registroId}`; }
 
