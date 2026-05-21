@@ -45,10 +45,7 @@ const navItems: NavItem[] = [
     icon: Icon.prestamos, name: "Préstamos",
     subItems: [
       { name: "Solicitar préstamo", path: "/prestamos/solicitud" },
-      { name: "Préstamos express", path: "/prestamos/express" },
-      { name: "Préstamos pendientes", path: "/prestamos/pendientes" },
-      { name: "Historial por socio", path: "/prestamos/historial" },
-      { name: "Reporte de préstamos", path: "/prestamos/resumen" },
+      { name: "Préstamos", path: "/prestamos/pendientes" },
     ],
   },
   {
