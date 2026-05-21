@@ -39,6 +39,23 @@ export default function AdminPrestamosPage() {
     finally { setLoading(false); }
   }
 
+  async function eliminarUltimaCuota(p: any) {
+    const pendientes = (p.cuotas ?? []).filter((c: any) => !c.pagada);
+    if (pendientes.length === 0) { showMsg("No hay cuotas pendientes para eliminar", false); return; }
+    const ultima = pendientes[pendientes.length - 1];
+    if (!confirm(`¿Eliminar la última cuota pendiente (#${ultima.numero} · ${fmt(ultima.cuota)}) de ${p.socio?.nombres} ${p.socio?.apellidos}?\n\nEl saldo del préstamo se recalculará.\n\nQuedará en bitácora.`)) return;
+    try {
+      const res = await fetch("/api/admin/movimientos", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "cuota", id: ultima.id }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      showMsg(`Cuota #${ultima.numero} eliminada. Saldo recalculado.`, true);
+      await buscar();
+    } catch (e: any) { showMsg(e.message, false); }
+  }
+
   async function guardar() {
     if (!editando) return;
     const recalcula = Number(form.monto) !== Number(editando.monto) ||
@@ -143,8 +160,16 @@ export default function AdminPrestamosPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={()=>{setEditando(p);setForm({monto:p.monto,tasaAnual:p.tasaAnual,plazoMeses:p.plazoMeses});}}
-                          className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700">Editar</button>
+                        <div className="flex gap-1.5 justify-center">
+                          <button onClick={()=>{setEditando(p);setForm({monto:p.monto,tasaAnual:p.tasaAnual,plazoMeses:p.plazoMeses});}}
+                            className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs text-white hover:bg-indigo-700">Editar</button>
+                          {p.cuotas?.some((c:any)=>!c.pagada) && (
+                            <button onClick={()=>eliminarUltimaCuota(p)}
+                              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100" title="Eliminar última cuota pendiente">
+                              − Cuota
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {verCuotas===p.id && p.cuotas && (
