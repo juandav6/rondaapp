@@ -267,34 +267,39 @@ export default function AdminPrestamosPage() {
 
                     {/* Acciones */}
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {p.estado !== "CANCELADO" && (
-                        <>
-                          <button onClick={()=>{setActivo(p);setFormEditar({monto:p.monto,tasaAnual:p.tasaAnual,plazoMeses:p.plazoMeses});setModal("editar");}}
-                            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700">
-                            ✎ Editar montos
-                          </button>
-                          <button onClick={()=>{setActivo(p);setNuevaFecha(toISO(p.fechaInicio));setModal("fecha");}}
-                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700">
-                            📅 Cambiar fecha
-                          </button>
-                          {cuotasPendientes>0 && (
-                            <button onClick={()=>eliminarUltimaCuota(p)}
-                              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-100">
-                              − Última cuota
-                            </button>
-                          )}
-                          <button onClick={()=>{setActivo(p);setNotaCancelacion("");setModal("cancelar");}}
-                            className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs text-orange-700 hover:bg-orange-100">
-                            ✕ Cancelar préstamo
-                          </button>
-                        </>
-                      )}
-                      {cuotasPagadas===0 && (
-                        <button onClick={()=>{setActivo(p);setModal("eliminar");}}
-                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">
-                          🗑 Eliminar registro
+                      {/* Editar montos — disponible en todos los estados */}
+                      <button onClick={()=>{setActivo(p);setFormEditar({monto:p.monto,tasaAnual:p.tasaAnual,plazoMeses:p.plazoMeses});setModal("editar");}}
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700">
+                        ✎ Editar montos
+                      </button>
+
+                      {/* Cambiar fecha — disponible en todos los estados */}
+                      <button onClick={()=>{setActivo(p);setNuevaFecha(toISO(p.fechaInicio));setModal("fecha");}}
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700">
+                        📅 Cambiar fecha
+                      </button>
+
+                      {/* Eliminar última cuota — solo si hay cuotas pendientes y está ACTIVO */}
+                      {p.estado === "ACTIVO" && cuotasPendientes > 0 && (
+                        <button onClick={()=>eliminarUltimaCuota(p)}
+                          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-100">
+                          − Última cuota
                         </button>
                       )}
+
+                      {/* Cancelar — solo si está ACTIVO */}
+                      {p.estado === "ACTIVO" && (
+                        <button onClick={()=>{setActivo(p);setNotaCancelacion("");setModal("cancelar");}}
+                          className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs text-orange-700 hover:bg-orange-100">
+                          ✕ Cancelar préstamo
+                        </button>
+                      )}
+
+                      {/* Eliminar registro — siempre visible, el backend valida si tiene cuotas pagadas */}
+                      <button onClick={()=>{setActivo(p);setModal("eliminar");}}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700 hover:bg-red-100">
+                        🗑 Eliminar registro
+                      </button>
                     </div>
 
                     {/* Cuotas expandibles */}
@@ -454,9 +459,12 @@ export default function AdminPrestamosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1 text-red-700">Eliminar registro</h3>
-            <p className="text-xs text-gray-400 mb-4">{activo.socio?.nombres} {activo.socio?.apellidos}</p>
+            <p className="text-xs text-gray-400 mb-4">{activo.socio?.nombres} {activo.socio?.apellidos} · {fmt(activo.monto)} · {activo.estado}</p>
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 mb-4 text-xs text-red-700">
-              <strong>⚠️ Esta acción no se puede deshacer.</strong> Se eliminarán permanentemente el préstamo y todas sus cuotas. Use esta opción <strong>solo si el préstamo fue ingresado con datos incorrectos</strong> y no tiene cuotas pagadas.
+              <strong>⚠️ Esta acción no se puede deshacer.</strong> Se eliminarán el préstamo y todas sus cuotas del historial.
+              {activo.estado === "ACTIVO"
+                ? <p className="mt-1">Este préstamo está <strong>ACTIVO</strong> y no tiene cuotas pagadas. Procede con cuidado.</p>
+                : <p className="mt-1">El préstamo está <strong>{activo.estado}</strong>. El registro quedará eliminado permanentemente.</p>}
             </div>
             <div className="rounded-lg bg-gray-50 border p-3 text-xs text-gray-500">📋 El evento quedará en bitácora aunque el registro se elimine.</div>
             <div className="mt-4 flex gap-2">
