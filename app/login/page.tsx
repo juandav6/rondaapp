@@ -93,11 +93,15 @@ function LoginForm() {
 
           {/* Ilustración + tagline */}
           <div className="flex flex-col items-center text-center">
-            <img
-              src="/banner-dashboard.png"
-              alt="MiRonda"
-              className="w-full max-w-md rounded-2xl shadow-2xl mb-8 object-cover"
-              style={{ filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.3))" }}
+            <div
+              className="w-full max-w-md rounded-2xl shadow-2xl mb-8 overflow-hidden"
+              style={{
+                backgroundImage: "url('/banner-dashboard.png')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                height: "220px",
+                filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.3))",
+              }}
             />
             <h2 className="text-3xl font-bold text-white mb-3" style={{ fontFamily: "Georgia, serif" }}>
               Tu ronda, tu ahorro,<br/>
