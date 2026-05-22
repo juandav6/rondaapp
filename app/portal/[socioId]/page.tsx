@@ -47,7 +47,7 @@ const tipoSigno: Record<string, string> = { INVERSION: "−", RETIRO: "−", DEV
 const tipoLabel: Record<string, string> = { INVERSION: "Inversión", RETIRO: "Retiro", DEVOLUCION: "Devolución", INTERES: "Interés", AHORRO: "Ahorro" };
 const tipoBg: Record<string, string> = { INVERSION: "bg-blue-100 text-blue-700", RETIRO: "bg-rose-100 text-rose-700", DEVOLUCION: "bg-emerald-100 text-emerald-700", INTERES: "bg-amber-100 text-amber-700", AHORRO: "bg-emerald-100 text-emerald-700" };
 
-type Tab = "resumen" | "ronda" | "prestamos" | "movimientos";
+type Tab = "resumen" | "ronda" | "prestamos" | "express" | "movimientos";
 
 export default function PortalSocioPage() {
   const params = useParams();
@@ -55,6 +55,8 @@ export default function PortalSocioPage() {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [express, setExpress] = useState<any[]>([]);
+  const [multas, setMultas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("resumen");
 
@@ -69,6 +71,35 @@ export default function PortalSocioPage() {
       if (r1.status === "fulfilled" && r1.value) setResumen(r1.value);
       if (r2.status === "fulfilled" && r2.value) setPrestamos(r2.value.prestamos ?? []);
       if (r3.status === "fulfilled" && r3.value) setMovimientos(r3.value.movimientos ?? []);
+
+      // Cargar express y multas de todas las rondas
+      try {
+        const rondasRes = await fetch("/api/rondas/historial");
+        const rondas: any[] = rondasRes.ok ? await rondasRes.json() : [];
+        const allExpress: any[] = [];
+        const allMultas: any[] = [];
+        await Promise.all(rondas.map(async (r: any) => {
+          try {
+            const [expRes, cajaRes] = await Promise.all([
+              fetch(`/api/prestamos/express?rondaId=${r.id}`),
+              fetch(`/api/rondas/${r.id}/caja`),
+            ]);
+            if (expRes.ok) {
+              const expData = await expRes.json();
+              const socioExpress = (expData.prestamos ?? []).filter((e: any) => e.socioId === Number(socioId));
+              allExpress.push(...socioExpress.map((e: any) => ({ ...e, rondaNombre: r.nombre })));
+            }
+            if (cajaRes.ok) {
+              const cajaData = await cajaRes.json();
+              const socioMultas = (cajaData.movimientos ?? []).filter((m: any) => m.tipo === "MULTA" && m.socio?.id === Number(socioId));
+              allMultas.push(...socioMultas.map((m: any) => ({ ...m, rondaNombre: r.nombre })));
+            }
+          } catch {}
+        }));
+        setExpress(allExpress.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setMultas(allMultas.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()));
+      } catch {}
+
       setLoading(false);
     }
     load();
@@ -90,10 +121,14 @@ export default function PortalSocioPage() {
   const totalIntereses = movimientos.filter(m => m.tipo === "INTERES").reduce((a, m) => a + m.monto, 0);
   const esSemanaDecobro = ronda?.estaEnRonda && ronda?.semanasRestantes === 0;
 
-  const tabs: { key: Tab; label: string; emoji: string }[] = [
+  const expressActivos = express.filter((e: any) => e.estado === "PENDIENTE");
+  const multasPendientes = multas.filter((m: any) => m.estado === "PENDIENTE");
+
+  const tabs: { key: Tab; label: string; emoji: string; badge?: number }[] = [
     { key: "resumen", label: "Resumen", emoji: "📊" },
     { key: "ronda", label: "Mi Ronda", emoji: "🔄" },
-    { key: "prestamos", label: "Préstamos", emoji: "💳" },
+    { key: "prestamos", label: "Préstamos", emoji: "💳", badge: prestamosActivos.length },
+    { key: "express", label: "Express", emoji: "⚡", badge: expressActivos.length || (multasPendientes.length > 0 ? multasPendientes.length : undefined) },
     { key: "movimientos", label: "Historial", emoji: "📋" },
   ];
 
@@ -270,13 +305,18 @@ export default function PortalSocioPage() {
           <nav className="flex border-b border-gray-100">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex flex-1 flex-col items-center gap-0.5 py-3 text-[10px] font-semibold transition-all sm:flex-row sm:justify-center sm:gap-2 sm:text-xs ${
+                className={`relative flex flex-1 flex-col items-center gap-0.5 py-3 text-[10px] font-semibold transition-all sm:flex-row sm:justify-center sm:gap-2 sm:text-xs ${
                   tab === t.key
                     ? "border-b-2 border-emerald-600 text-emerald-700 bg-emerald-50/60"
                     : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                 }`}>
                 <span className="text-sm">{t.emoji}</span>
                 {t.label}
+                {t.badge && t.badge > 0 ? (
+                  <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white leading-none">
+                    {t.badge}
+                  </span>
+                ) : null}
               </button>
             ))}
           </nav>
@@ -285,8 +325,45 @@ export default function PortalSocioPage() {
           {tab === "resumen" && (
             <div className="p-4 space-y-5">
 
-              {/* Estado ronda */}
-              {ronda && (
+              {/* Alertas pendientes express y multas */}
+              {(expressActivos.length > 0 || multasPendientes.length > 0) && (
+                <div className="space-y-2">
+                  {expressActivos.length > 0 && (
+                    <button onClick={() => setTab("express")}
+                      className="w-full rounded-2xl bg-amber-50 border border-amber-200 p-3 flex items-center gap-3 text-left hover:bg-amber-100 transition-colors">
+                      <span className="text-2xl shrink-0">⚡</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-amber-800">
+                          {expressActivos.length === 1 ? "Tienes un préstamo express pendiente" : `Tienes ${expressActivos.length} préstamos express pendientes`}
+                        </p>
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          Total: {fmt(expressActivos.reduce((s: number, e: any) => s + Number(e.total), 0))} · Toca en la ronda actual
+                        </p>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-amber-400 shrink-0">
+                        <path fillRule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clipRule="evenodd"/>
+                      </svg>
+                    </button>
+                  )}
+                  {multasPendientes.length > 0 && (
+                    <button onClick={() => setTab("express")}
+                      className="w-full rounded-2xl bg-orange-50 border border-orange-200 p-3 flex items-center gap-3 text-left hover:bg-orange-100 transition-colors">
+                      <span className="text-2xl shrink-0">⚠️</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-orange-800">
+                          {multasPendientes.length === 1 ? "Tienes una multa pendiente" : `Tienes ${multasPendientes.length} multas pendientes`}
+                        </p>
+                        <p className="text-xs text-orange-600 mt-0.5">
+                          Total: {fmt(multasPendientes.reduce((s: number, m: any) => s + m.monto, 0))} · Pendientes de cobro
+                        </p>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-orange-400 shrink-0">
+                        <path fillRule="evenodd" d="M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z" clipRule="evenodd"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
                 <div>
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Estado de la ronda</p>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
@@ -601,6 +678,115 @@ export default function PortalSocioPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ══ EXPRESS Y MULTAS ══ */}
+          {tab === "express" && (
+            <div className="p-4 space-y-4">
+
+              {/* Express pendientes */}
+              {expressActivos.length > 0 && (
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">⚡</span>
+                    <p className="font-semibold text-amber-800 text-sm">Préstamo{expressActivos.length > 1 ? "s" : ""} express pendiente{expressActivos.length > 1 ? "s" : ""}</p>
+                    <span className="ml-auto rounded-full bg-amber-200 text-amber-800 px-2 py-0.5 text-xs font-bold">
+                      {fmt(expressActivos.reduce((s: number, e: any) => s + Number(e.total), 0))}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {expressActivos.map((e: any) => (
+                      <div key={e.id} className="rounded-xl bg-white border border-amber-100 p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-700">{e.rondaNombre} · Sem. {e.semana}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Principal: {fmt(Number(e.principal))} + Interés: {fmt(Number(e.interesAcumulado ?? e.interes ?? 0))}
+                            </p>
+                            {e.semanasVencidas > 0 && (
+                              <p className="text-xs font-semibold text-red-600 mt-0.5">+{e.semanasVencidas} semana{e.semanasVencidas > 1 ? "s" : ""} de retraso</p>
+                            )}
+                          </div>
+                          <p className="text-base font-bold text-amber-700">{fmt(Number(e.total))}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Historial express completo */}
+              {express.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Historial express</p>
+                  <div className="space-y-2">
+                    {express.map((e: any) => (
+                      <div key={e.id} className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${
+                        e.estado === "PENDIENTE" ? "border-amber-200 bg-amber-50/40" : "border-gray-100 bg-white"
+                      }`}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              e.estado === "PENDIENTE" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                            }`}>{e.estado}</span>
+                            <span className="text-xs text-gray-400">{e.rondaNombre} · Sem. {e.semana}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Principal {fmt(Number(e.principal))} · Interés {fmt(Number(e.interesAcumulado ?? e.interes ?? 0))}
+                          </p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-700 shrink-0">{fmt(Number(e.total))}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {express.length === 0 && (
+                <div className="py-8 text-center text-sm text-gray-400">
+                  <p className="text-2xl mb-2">⚡</p>
+                  Sin préstamos express registrados.
+                </div>
+              )}
+
+              {/* Multas */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Multas
+                  {multasPendientes.length > 0 && (
+                    <span className="ml-2 rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold">
+                      {multasPendientes.length} pendiente{multasPendientes.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </p>
+                {multas.length === 0 ? (
+                  <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-center text-sm text-emerald-700">
+                    ✓ Sin multas registradas
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {multas.map((m: any) => (
+                      <div key={m.id} className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${
+                        m.estado === "PENDIENTE" ? "border-amber-200 bg-amber-50/40" : "border-gray-100 bg-white"
+                      }`}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              m.estado === "PENDIENTE" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
+                            }`}>{m.estado === "PENDIENTE" ? "Pendiente" : "Cobrada"}</span>
+                            <span className="text-xs text-gray-400">{m.rondaNombre}{m.semana ? ` · Sem. ${m.semana}` : ""}</span>
+                          </div>
+                          {m.descripcion && <p className="text-xs text-gray-500 mt-0.5">{m.descripcion}</p>}
+                        </div>
+                        <p className={`text-sm font-bold shrink-0 ${m.estado === "PENDIENTE" ? "text-amber-700" : "text-gray-500"}`}>
+                          {fmt(m.monto)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
