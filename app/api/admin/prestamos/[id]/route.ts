@@ -89,12 +89,15 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     });
     if (!prestamo) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
-    // Solo se puede eliminar si no tiene cuotas pagadas
     const cuotasPagadas = prestamo.cuotas.filter(c => c.pagada).length;
-    if (cuotasPagadas > 0)
+
+    // Si tiene cuotas pagadas y está ACTIVO, no permitir (podría afectar saldos)
+    // Si está CANCELADO o PAGADO, permitir siempre (ya no afecta flujo activo)
+    if (cuotasPagadas > 0 && prestamo.estado === "ACTIVO") {
       return NextResponse.json({
-        error: `No se puede eliminar: tiene ${cuotasPagadas} cuota(s) pagada(s). Use "Cancelar" en su lugar.`,
+        error: `No se puede eliminar un préstamo ACTIVO con ${cuotasPagadas} cuota(s) pagada(s). Use "Cancelar" en su lugar, o primero cambie el estado.`,
       }, { status: 400 });
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.prestamoCuota.deleteMany({ where: { prestamoId: id } });
