@@ -364,6 +364,9 @@ export default function PortalSocioPage() {
                   )}
                 </div>
               )}
+
+              {/* Estado de la ronda */}
+              {ronda && (
                 <div>
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Estado de la ronda</p>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
