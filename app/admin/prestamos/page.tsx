@@ -31,6 +31,7 @@ export default function AdminPrestamosPage() {
   const [msg, setMsg] = useState<{text:string;ok:boolean;efectos?:any[]}|null>(null);
   const [verCuotas, setVerCuotas] = useState<number|null>(null);
   const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<string>("TODOS");
 
   const showMsg = (text:string, ok:boolean, efectos?:any[]) => { setMsg({text,ok,efectos}); setTimeout(()=>setMsg(null),5000); };
   const cerrarModal = () => { setModal(null); setActivo(null); setSaving(false); };
@@ -43,7 +44,7 @@ export default function AdminPrestamosPage() {
     if (!rondaId) return;
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`/api/rondas/${rondaId}/prestamos-activos`, { cache:"no-store" });
+      const res = await fetch(`/api/admin/rondas/${rondaId}/prestamos`, { cache:"no-store" });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const d = await res.json();
       setPrestamos(Array.isArray(d)?d:(d.prestamos??[]));
@@ -147,9 +148,11 @@ export default function AdminPrestamosPage() {
     PAGADO:    {bg:"bg-blue-100",    text:"text-blue-700"},
   };
 
-  const filtrados = prestamos.filter(p =>
-    `${p.socio?.nombres??""} ${p.socio?.apellidos??""} ${p.socio?.numeroCuenta??""}`.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const filtrados = prestamos
+    .filter(p => filtroEstado === "TODOS" || p.estado === filtroEstado)
+    .filter(p =>
+      `${p.socio?.nombres??""} ${p.socio?.apellidos??""} ${p.socio?.numeroCuenta??""}`.toLowerCase().includes(busqueda.toLowerCase())
+    );
 
   return (
     <div className="space-y-4 p-3 sm:p-6">
@@ -189,10 +192,27 @@ export default function AdminPrestamosPage() {
 
       {prestamos.length>0 && (
         <>
-          {/* Buscador */}
-          <div className="flex justify-end">
+          {/* Filtros buscador + estado */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1 flex-wrap">
+              {["TODOS","ACTIVO","CANCELADO","PAGADO"].map(e => {
+                const count = e === "TODOS" ? prestamos.length : prestamos.filter(p=>p.estado===e).length;
+                return (
+                  <button key={e} onClick={()=>setFiltroEstado(e)}
+                    className={cn("rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                      filtroEstado===e
+                        ? e==="ACTIVO" ? "bg-emerald-600 text-white border-emerald-600"
+                          : e==="CANCELADO" ? "bg-orange-500 text-white border-orange-500"
+                          : e==="PAGADO" ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-gray-800 text-white border-gray-800"
+                        : "text-gray-600 border-gray-200 hover:bg-gray-100")}>
+                    {e === "TODOS" ? "Todos" : e.charAt(0) + e.slice(1).toLowerCase()} ({count})
+                  </button>
+                );
+              })}
+            </div>
             <input type="text" placeholder="Buscar socio…" value={busqueda} onChange={e=>setBusqueda(e.target.value)}
-              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200 w-52"/>
+              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200 w-44"/>
           </div>
 
           <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
