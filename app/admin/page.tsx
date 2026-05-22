@@ -25,7 +25,8 @@ export default function AdminPage() {
   const modulos = [
     { href: "/admin/socios",    icon: "👥", label: "Socios",              desc: "Editar datos, ver historial completo, eliminar socios sin dependencias",                    color: "bg-violet-50 border-violet-200 text-violet-700" },
     { href: "/admin/rondas",    icon: "📅", label: "Rondas",              desc: "Editar nombre, montos, semana actual. Eliminar respetando orden cronológico",               color: "bg-blue-50 border-blue-200 text-blue-700" },
-    { href: "/admin/aportes",   icon: "💵", label: "Aportes y ahorros",   desc: "Editar y eliminar aportes/ahorros por semana. Ahorros recalculan saldo del socio",          color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+    { href: "/admin/aportes",    icon: "💵", label: "Aportes y ahorros",   desc: "Editar y eliminar aportes/ahorros por semana. Ahorros recalculan saldo del socio",          color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+    { href: "/admin/depositos",  icon: "🏦", label: "Depósitos y retiros", desc: "Editar y eliminar depósitos y retiros. Recalcula saldo de ahorros automáticamente",          color: "bg-teal-50 border-teal-200 text-teal-700" },
     { href: "/admin/prestamos", icon: "💳", label: "Préstamos",           desc: "Editar monto, tasa, plazo. Recalcula tabla de amortización automáticamente",               color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
     { href: "/admin/fondo",     icon: "📈", label: "Fondo de inversión",  desc: "Editar montos invertidos por socio. Recalcula % de participación de todos los inversores",   color: "bg-blue-50 border-blue-200 text-blue-700" },
     { href: "/admin/express",   icon: "⚡", label: "Express y caja",      desc: "Editar préstamos express y movimientos de caja. Cambiar estados pendiente/cobrado",         color: "bg-amber-50 border-amber-200 text-amber-700" },
