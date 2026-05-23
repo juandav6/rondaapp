@@ -22,8 +22,13 @@ export async function GET(req: Request) {
   try {
     const where: any = {};
     if (socioId) where.socioId = Number(socioId);
-    if (tipo)    where.tipo = tipo;
-    else         where.tipo = { in: ["AHORRO", "RETIRO"] }; // solo depósitos y retiros
+    if (tipo && tipo !== "TODOS") {
+      where.tipo = tipo;
+    } else if (!tipo) {
+      // Sin parámetro tipo → solo depósitos y retiros por defecto
+      where.tipo = { in: ["AHORRO", "RETIRO"] };
+    }
+    // tipo=TODOS → sin filtro de tipo (muestra todos)
 
     const [total, movimientos] = await Promise.all([
       prisma.movimientoCuenta.count({ where }),
