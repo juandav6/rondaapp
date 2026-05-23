@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 type Socio = { id: number; nombres: string; apellidos: string; numeroCuenta: string };
 type MovItem = {
-  id: number; tipo?: string; rondaId?: number | null; rondaNombre?: string | null;
+  id: string | number; tipo?: string; rondaId?: number | null; rondaNombre?: string | null;
   semana?: number | null; monto: number; nota?: string | null; fecha: string;
   socio?: { nombres: string; apellidos: string; numeroCuenta: string };
 };
@@ -63,6 +63,7 @@ function AhorrosRegistroContent() {
   const [listHasta, setListHasta] = useState("");
   const [listQ, setListQ] = useState("");
   const [listSocioId, setListSocioId] = useState<number | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   // Edición
   const [editId, setEditId] = useState<number | null>(null);
@@ -71,7 +72,7 @@ function AhorrosRegistroContent() {
   const [editNota, setEditNota] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | string | null>(null);
 
   useEffect(() => {
     fetch("/api/socios").then(r => r.json()).then(l => setSocios(Array.isArray(l) ? l : [])).catch(() => setSocios([])).finally(() => setLoadingSocios(false));
@@ -170,15 +171,38 @@ function AhorrosRegistroContent() {
     finally { setEditSaving(false); }
   }
 
-  async function eliminar(id: number) {
+  async function eliminar(id: string | number) {
     try {
-      const res = await fetch(`/api/movimientos/${id}`, { method: "DELETE" });
+      const strId = String(id);
+      let res: Response;
+
+      if (strId.startsWith("r_")) {
+        // Es un registro de tabla Ahorro — eliminar via admin que ajusta saldoAhorros
+        const ahorroId = Number(strId.replace("r_", ""));
+        res = await fetch("/api/admin/movimientos", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tipo: "ahorro", id: ahorroId }),
+        });
+      } else if (strId.startsWith("m_")) {
+        // Es un MovimientoCuenta libre
+        const movId = Number(strId.replace("m_", ""));
+        res = await fetch(`/api/movimientos/${movId}`, { method: "DELETE" });
+      } else {
+        // ID numérico directo (listado)
+        res = await fetch(`/api/movimientos/${id}`, { method: "DELETE" });
+      }
+
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Error al eliminar");
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status} al eliminar`);
       setDeleteConfirm(null);
+      setListError(null);
       await cargarListado();
       if (selectedId) await cargarHistorial(selectedId, desde, hasta);
-    } catch (e: any) { setEditError(e?.message); }
+    } catch (e: any) {
+      setListError(e?.message ?? "Error al eliminar");
+      setDeleteConfirm(null);
+    }
   }
 
   return (
@@ -348,7 +372,7 @@ function AhorrosRegistroContent() {
                                         const desc = esSaldoInicial
                                           ? `¿Eliminar el movimiento de "Saldo inicial" (${fmt(Number(it.monto))})?\n\nEl saldo de ahorros del socio se reducirá en ${fmt(Number(it.monto))}.`
                                           : `¿Eliminar este movimiento de ${fmt(Number(it.monto))}?`;
-                                        if (confirm(desc + "\n\nQuedará en bitácora.")) eliminar(it.id);
+                                        if (confirm(desc + "\n\nQuedará en bitácora.")) eliminar(it.id as string | number);
                                       }}
                                       className={cx(
                                         "rounded-lg border px-2 py-1 text-xs",
@@ -414,6 +438,12 @@ function AhorrosRegistroContent() {
               </p>
               <span className="text-sm font-bold text-blue-700 tabular-nums">Total: {fmt(listTotalMonto)}</span>
             </div>
+            {listError && (
+              <div className="border-b bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between">
+                <span>⚠ {listError}</span>
+                <button onClick={() => setListError(null)} className="text-red-400 hover:text-red-600">✕</button>
+              </div>
+            )}
 
             {loadingList ? (
               <div className="p-8 text-center text-sm text-gray-400">
@@ -436,8 +466,10 @@ function AhorrosRegistroContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {listadoFiltrado.map(m => (
-                        <tr key={m.id} className={cx("hover:bg-gray-50", editId === m.id && "bg-blue-50/40")}>
+                      {listadoFiltrado.map(m => {
+                        const esSaldoInicial = m.nota?.toLowerCase().includes("inicial") || m.nota?.toLowerCase().includes("saldo inicial");
+                        return (
+                        <tr key={m.id} className={cx("hover:bg-gray-50", editId === m.id && "bg-blue-50/40", esSaldoInicial && "bg-amber-50/40")}>
                           {editId === m.id ? (
                             <>
                               <td className="px-4 py-2" colSpan={2}>
@@ -480,7 +512,10 @@ function AhorrosRegistroContent() {
                                 <p className="text-xs text-gray-400 font-mono">{m.socio?.numeroCuenta}</p>
                               </td>
                               <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDate(m.fecha)}</td>
-                              <td className="px-4 py-3 text-gray-400 text-xs">{m.nota || "—"}</td>
+                              <td className="px-4 py-3 text-gray-400 text-xs">
+                                {m.nota || "—"}
+                                {esSaldoInicial && <span className="ml-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-semibold">Saldo inicial</span>}
+                              </td>
                               <td className="px-4 py-3 text-right font-semibold tabular-nums text-blue-700">{fmt(m.monto)}</td>
                               <td className="px-4 py-3">
                                 <div className="flex justify-center gap-1.5">
@@ -503,7 +538,8 @@ function AhorrosRegistroContent() {
                             </>
                           )}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
