@@ -324,18 +324,42 @@ function AhorrosRegistroContent() {
                             <th className="px-4 py-3 text-left">Tipo</th>
                             <th className="px-4 py-3 text-left">Origen / Nota</th>
                             <th className="px-4 py-3 text-right">Monto</th>
+                            <th className="px-4 py-3 text-center">Acción</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {items.map((it, i) => {
                             const tipo = it.tipo ?? "ronda";
                             const cfg = tipoConfig[tipo] ?? tipoConfig.ronda;
+                            const esSaldoInicial = it.nota?.toLowerCase().includes("inicial") || it.nota?.toLowerCase().includes("saldo");
                             return (
-                              <tr key={`${it.id}_${i}`} className="hover:bg-gray-50">
+                              <tr key={`${it.id}_${i}`} className={cx("hover:bg-gray-50", esSaldoInicial && "bg-amber-50/40")}>
                                 <td className="px-4 py-3 text-gray-600">{fmtDate(it.fecha)}</td>
                                 <td className="px-4 py-3"><span className={cx("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", cfg.bg, cfg.color)}>{cfg.label}</span></td>
-                                <td className="px-4 py-3 text-gray-500 text-xs">{it.rondaNombre ?? (it.nota ?? "—")}</td>
+                                <td className="px-4 py-3 text-gray-500 text-xs">
+                                  {it.rondaNombre ?? (it.nota ?? "—")}
+                                  {esSaldoInicial && <span className="ml-1 rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[10px] font-semibold">Saldo inicial</span>}
+                                </td>
                                 <td className={cx("px-4 py-3 text-right font-semibold tabular-nums", cfg.color)}>{cfg.signo}{fmt(Math.abs(Number(it.monto)))}</td>
+                                <td className="px-4 py-3 text-center">
+                                  {it.id && (
+                                    <button
+                                      onClick={() => {
+                                        const desc = esSaldoInicial
+                                          ? `¿Eliminar el movimiento de "Saldo inicial" (${fmt(Number(it.monto))})?\n\nEl saldo de ahorros del socio se reducirá en ${fmt(Number(it.monto))}.`
+                                          : `¿Eliminar este movimiento de ${fmt(Number(it.monto))}?`;
+                                        if (confirm(desc + "\n\nQuedará en bitácora.")) eliminar(it.id);
+                                      }}
+                                      className={cx(
+                                        "rounded-lg border px-2 py-1 text-xs",
+                                        esSaldoInicial
+                                          ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold"
+                                          : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                                      )}>
+                                      {esSaldoInicial ? "⚠ Eliminar" : "Eliminar"}
+                                    </button>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
