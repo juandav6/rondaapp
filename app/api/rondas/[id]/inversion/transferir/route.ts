@@ -97,6 +97,7 @@ export async function POST(req: Request, ctx: Context) {
   try {
     const body = await req.json();
     const transferencias: { socioId: number; monto: number }[] = body?.transferencias ?? [];
+    const fechaParam: string | undefined = body?.fecha;
 
     if (!transferencias.length)
       return NextResponse.json({ error: "No se recibieron transferencias" }, { status: 400 });
@@ -106,9 +107,22 @@ export async function POST(req: Request, ctx: Context) {
     if (!validas.length)
       return NextResponse.json({ error: "Todos los montos son 0" }, { status: 400 });
 
-    const ronda = await prisma.ronda.findUnique({ where: { id: rondaId } });
+    const ronda = await prisma.ronda.findUnique({
+      where: { id: rondaId },
+      select: { id: true, nombre: true, activa: true, semanaActual: true, fechaInicio: true, intervaloDiasCobro: true },
+    });
     if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
     if (!ronda.activa) return NextResponse.json({ error: "La ronda no está activa" }, { status: 400 });
+
+    // Fecha del movimiento: elegida por el usuario o calculada desde semana actual
+    let fechaMovimiento: Date;
+    if (fechaParam) {
+      fechaMovimiento = new Date(fechaParam + "T12:00:00Z");
+    } else {
+      const diasTranscurridos = (ronda.semanaActual - 1) * (ronda.intervaloDiasCobro ?? 7);
+      fechaMovimiento = new Date(ronda.fechaInicio);
+      fechaMovimiento.setDate(fechaMovimiento.getDate() + diasTranscurridos);
+    }
 
     // Verificar que los socios tengan ahorros suficientes en la ronda
     const ahorrosPorSocio = await prisma.ahorro.groupBy({
@@ -222,11 +236,7 @@ export async function POST(req: Request, ctx: Context) {
           data: { saldoAhorros: { decrement: toDecimal(monto) } },
         });
 
-        // Registrar movimiento con fecha = fecha de la semana actual de la ronda
-        const diasTranscurridos = (ronda.semanaActual - 1) * (ronda.intervaloDiasCobro ?? 7);
-        const fechaMovimiento = new Date(ronda.fechaInicio);
-        fechaMovimiento.setDate(fechaMovimiento.getDate() + diasTranscurridos);
-
+        // Registrar movimiento con fecha elegida o calculada
         await tx.movimientoCuenta.create({
           data: {
             socioId: t.socioId,
