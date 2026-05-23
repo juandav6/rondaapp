@@ -11,13 +11,15 @@ type Context = { params: Promise<{ id: string }> };
 const MULTA_BASE = 100;
 
 /** Ejecuta la devolución de inversiones al cierre de la ronda */
-async function devolverInversiones(rondaId: number) {
+async function devolverInversiones(rondaId: number, fechaFin: Date) {
   const cuentas = await prisma.cuentaInversion.findMany({
     where: { rondaId, devuelto: false },
     include: { socio: { select: { id: true, nombres: true, saldoAhorros: true } } },
   });
 
   if (cuentas.length === 0) return { devueltas: 0, totalDevuelto: 0 };
+
+  const ronda = await prisma.ronda.findUnique({ where: { id: rondaId }, select: { nombre: true } });
 
   const cuotasPagadas = await prisma.prestamoCuota.findMany({
     where: { prestamo: { rondaId }, pagada: true },
@@ -54,16 +56,19 @@ async function devolverInversiones(rondaId: number) {
         },
       });
 
+      // DEVOLUCION = solo capital (con fecha de cierre de ronda)
       await tx.movimientoCuenta.create({
         data: {
           socioId: cuenta.socioId,
           rondaId,
           tipo: "DEVOLUCION",
-          monto: new Prisma.Decimal(Math.round(totalADevolver * 100) / 100),
-          nota: `Devolución al cierre de ronda: $${Number(cuenta.montoInvertido).toFixed(2)} capital + $${interesCorrespondiente.toFixed(2)} intereses`,
+          monto: new Prisma.Decimal(Number(cuenta.montoInvertido)),
+          nota: `Retorno capital fondo · ${ronda?.nombre} · $${Number(cuenta.montoInvertido).toFixed(2)}`,
+          createdAt: fechaFin,
         },
       });
 
+      // INTERES = solo interés (con fecha de cierre de ronda)
       if (interesCorrespondiente > 0) {
         await tx.movimientoCuenta.create({
           data: {
@@ -71,7 +76,8 @@ async function devolverInversiones(rondaId: number) {
             rondaId,
             tipo: "INTERES",
             monto: new Prisma.Decimal(interesCorrespondiente),
-            nota: `Intereses ganados (${(pct * 100).toFixed(2)}% participación)`,
+            nota: `Intereses ${ronda?.nombre} · ${(pct * 100).toFixed(2)}% participación · $${interesCorrespondiente.toFixed(2)}`,
+            createdAt: fechaFin,
           },
         });
       }
@@ -226,7 +232,7 @@ export async function POST(_req: Request, context: Context) {
     });
 
     // 2. Devolver inversiones
-    const devolucion = await devolverInversiones(rondaId);
+    const devolucion = await devolverInversiones(rondaId, fechaFinReal);
 
     // 3. Generar y guardar Excel del cierre (en background, no bloquea)
     await generarYGuardarExcel(rondaId);
