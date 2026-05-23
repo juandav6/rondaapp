@@ -35,14 +35,14 @@ export async function GET(_req: NextRequest, ctx: { params: Params }) {
     const objetivo = Number(ronda.ahorroObjetivoPorSocio ?? 0);
     const socioIds = ronda.participaciones.map((p) => p.socioId);
 
-    const [acums, ahorrosSemana, aportesSemana, responsableSemana] = await Promise.all([
-      // Ahorros acumulados totales por socio
+    const [acums, ahorrosSemana, aportesSemana, responsableSemana, ahorrosParciales] = await Promise.all([
+      // Ahorros acumulados totales por socio participante
       prisma.ahorro.groupBy({
         by: ["socioId"],
         where: { rondaId, socioId: { in: socioIds } },
         _sum: { monto: true },
       }),
-      // Ahorros de esta semana específica (para ahorroSemana y ahorroRegistradoSemana)
+      // Ahorros de esta semana específica (participantes)
       prisma.ahorro.findMany({
         where: { rondaId, semana: semanaNum, socioId: { in: socioIds } },
         select: { socioId: true, monto: true },
@@ -56,6 +56,11 @@ export async function GET(_req: NextRequest, ctx: { params: Params }) {
       prisma.responsableCobroSemana.findUnique({
         where: { rondaId_semana: { rondaId, semana: semanaNum } },
         select: { socioId: true },
+      }),
+      // Socios que tienen ahorros en esta ronda pero NO son participantes (socios parciales)
+      prisma.ahorro.findMany({
+        where: { rondaId, socioId: { notIn: socioIds.length > 0 ? socioIds : [-1] } },
+        include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true, saldoAhorros: true } } },
       }),
     ]);
 
@@ -117,9 +122,31 @@ export async function GET(_req: NextRequest, ctx: { params: Params }) {
       semana: semanaNum,
       totalParticipantes: ronda.participaciones.length,
       responsableId: responsableSemana?.socioId ?? ronda.responsableId ?? null,
-      totalAportesSemana,   // ← nuevo
-      totalAhorrosSemana,   // ← nuevo
+      totalAportesSemana,
+      totalAhorrosSemana,
       items,
+      sociosParciales: (() => {
+        // Agrupar por socio
+        const parcialMap = new Map<number, { socio: any; ahorros: { semana: number; monto: number }[]; totalAcumulado: number }>();
+        for (const a of ahorrosParciales) {
+          if (!parcialMap.has(a.socioId)) {
+            parcialMap.set(a.socioId, { socio: a.socio, ahorros: [], totalAcumulado: 0 });
+          }
+          const entry = parcialMap.get(a.socioId)!;
+          entry.ahorros.push({ semana: a.semana, monto: Number(a.monto) });
+          entry.totalAcumulado += Number(a.monto);
+        }
+        return Array.from(parcialMap.values()).map(p => ({
+          socioId: p.socio.id,
+          socio: { nombres: p.socio.nombres, apellidos: p.socio.apellidos, numeroCuenta: p.socio.numeroCuenta, saldoAhorros: Number(p.socio.saldoAhorros) },
+          ahorroSemanaActual: Number(ahorrosParciales.find(a => a.socioId === p.socio.id && a.semana === semanaNum)?.monto ?? 0),
+          ahorroRegistradoSemana: ahorrosParciales.some(a => a.socioId === p.socio.id && a.semana === semanaNum),
+          totalAcumulado: p.totalAcumulado,
+          objetivo: Number(ronda.ahorroObjetivoPorSocio ?? 0),
+          ahorroRestante: Math.max(Number(ronda.ahorroObjetivoPorSocio ?? 0) - p.totalAcumulado, 0),
+          historial: p.ahorros.sort((a, b) => a.semana - b.semana),
+        })).sort((a, b) => a.socio.apellidos.localeCompare(b.socio.apellidos));
+      })(),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Error inesperado" }, { status: 500 });
