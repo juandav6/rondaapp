@@ -108,34 +108,129 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   try {
     const ronda = await prisma.ronda.findUnique({
       where: { id: rondaId },
-      select: { id: true, nombre: true, activa: true, fechaInicio: true },
+      select: {
+        id: true, nombre: true, activa: true,
+        _count: {
+          select: {
+            aportes: true, ahorros: true, prestamos: true,
+            participaciones: true, cuentasInversion: true,
+          },
+        },
+      },
     });
     if (!ronda) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
 
-    // Verificar que no haya rondas posteriores
-    const rondasPosteriores = await prisma.ronda.count({
-      where: { id: { gt: rondaId } },
+    // Conteo total para el resumen en bitácora
+    const resumen = {
+      aportes: ronda._count.aportes,
+      ahorros: ronda._count.ahorros,
+      prestamos: ronda._count.prestamos,
+      participaciones: ronda._count.participaciones,
+      inversiones: ronda._count.cuentasInversion,
+    };
+
+    // Eliminar en orden para respetar FK — todo dentro de una transacción
+    await prisma.$transaction(async (tx) => {
+
+      // 1. Cuotas de préstamos
+      const prestamosIds = (await tx.prestamo.findMany({
+        where: { rondaId }, select: { id: true },
+      })).map(p => p.id);
+      if (prestamosIds.length > 0) {
+        await tx.prestamoCuota.deleteMany({ where: { prestamoId: { in: prestamosIds } } });
+      }
+
+      // 2. Préstamos
+      await tx.prestamo.deleteMany({ where: { rondaId } });
+
+      // 3. Desconectar aportes de sus express (limpiar FK antes de eliminar express)
+      await tx.aporte.updateMany({
+        where: { rondaId, prestamoExpressId: { not: null } },
+        data: { prestamoExpressId: null },
+      });
+
+      // 4. Préstamos express
+      await (tx as any).prestamoExpress.deleteMany({ where: { rondaId } });
+
+      // 5. Aportes
+      await tx.aporte.deleteMany({ where: { rondaId } });
+
+      // 6. Ahorros — revertir saldoAhorros de cada socio
+      const ahorrosRonda = await tx.ahorro.findMany({
+        where: { rondaId },
+        select: { socioId: true, monto: true },
+      });
+      const deltaAhorros = new Map<number, number>();
+      ahorrosRonda.forEach(a => {
+        deltaAhorros.set(a.socioId, (deltaAhorros.get(a.socioId) ?? 0) + Number(a.monto));
+      });
+      await tx.ahorro.deleteMany({ where: { rondaId } });
+      for (const [socioId, total] of deltaAhorros) {
+        await tx.socio.update({
+          where: { id: socioId },
+          data: { saldoAhorros: { decrement: new Prisma.Decimal(total) } },
+        });
+      }
+
+      // 7. Movimientos de cuenta
+      await tx.movimientoCuenta.deleteMany({ where: { rondaId } });
+
+      // 8. Movimientos de caja (multas, intereses express, gastos)
+      await (tx as any).movimientoCaja.deleteMany({ where: { rondaId } });
+
+      // 9. IngresoMulta y GastoMulta (tablas legacy de multas)
+      await (tx as any).ingresoMulta.deleteMany({ where: { rondaId } });
+      await (tx as any).gastoMulta.deleteMany({ where: { rondaId } });
+
+      // 10. Cuentas de inversión + movimientos del fondo
+      await tx.cuentaInversion.deleteMany({ where: { rondaId } });
+      await tx.movimientoFondo.deleteMany({ where: { rondaId } });
+
+      // 11. Responsables de semana
+      await tx.responsableCobroSemana.deleteMany({ where: { rondaId } });
+
+      // 12. Participaciones
+      await tx.participacion.deleteMany({ where: { rondaId } });
+
+      // 13. Si era la ronda activa, marcar la más reciente como activa
+      if (ronda.activa) {
+        const anterior = await tx.ronda.findFirst({
+          where: { id: { not: rondaId } },
+          orderBy: { id: "desc" },
+        });
+        if (anterior) {
+          await tx.ronda.update({
+            where: { id: anterior.id },
+            data: { activa: true },
+          });
+        }
+      }
+
+      // 14. Eliminar la ronda
+      await tx.ronda.delete({ where: { id: rondaId } });
+    }, {
+      timeout: 30000, // 30s para rondas con muchos datos
     });
-    if (rondasPosteriores > 0)
-      return NextResponse.json({
-        error: `No se puede eliminar: existen ${rondasPosteriores} ronda(s) posterior(es). Elimine primero las más recientes.`,
-      }, { status: 400 });
-
-    if (ronda.activa)
-      return NextResponse.json({ error: "No se puede eliminar una ronda activa. Ciérrela primero." }, { status: 400 });
-
-    // Ejecutar el DELETE del ronda-id-route existente reutilizando su lógica
-    const res = await fetch(`${process.env.NEXTAUTH_URL ?? ""}/api/rondas/${rondaId}`, { method: "DELETE" });
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}));
-      return NextResponse.json({ error: d.error ?? "Error eliminando ronda" }, { status: 400 });
-    }
 
     await registrarBitacora({
       tabla: "rondas", registroId: rondaId, accion: "ELIMINAR",
-      camposCambios: { nombre: { antes: ronda.nombre, despues: null } },
+      camposCambios: {
+        nombre:  { antes: ronda.nombre, despues: null },
+        activa:  { antes: ronda.activa, despues: null },
+      },
+      efectosCadena: [{
+        tabla: "rondas",
+        registroId: rondaId,
+        descripcion: `Eliminados en cascada: ${resumen.aportes} aportes, ${resumen.ahorros} ahorros, ${resumen.prestamos} préstamos, ${resumen.inversiones} cuentas de inversión, ${resumen.participaciones} participaciones. Saldos de ahorros revertidos.`,
+      }],
     });
 
-    return NextResponse.json({ ok: true });
-  } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+    return NextResponse.json({ ok: true, resumen });
+  } catch (e: any) {
+    console.error("[DELETE ronda]", e);
+    return NextResponse.json({
+      error: e?.message ?? "Error eliminando ronda",
+      detail: e?.code ?? null,
+    }, { status: 500 });
+  }
 }
