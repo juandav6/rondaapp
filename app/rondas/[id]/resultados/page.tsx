@@ -63,6 +63,8 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const PAGE_SIZE = 12;
   const [openSemana, setOpenSemana] = useState<number | null>(null);
   const [semanaRows, setSemanaRows] = useState<SemanaDetalleRow[]>([]);
+  const [semanaResponsableId, setSemanaResponsableId] = useState<number | null>(null);
+  const [semanaSocios, setSemanaSocios] = useState<any[]>([]);
   const [loadingSemDet, setLoadingSemDet] = useState(false);
   const [errorSemDet, setErrorSemDet] = useState<string | null>(null);
   const [savingSemDet, setSavingSemDet] = useState(false);
@@ -111,16 +113,19 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
 
   async function openSemDet(sem: number) {
     setOpenSemana(sem); setLoadingSemDet(true); setErrorSemDet(null); setSemanaRows([]);
+    setSemanaResponsableId(null); setSemanaSocios([]);
     try {
       const r = await fetch(weekUrl(sem));
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.error || "Error");
       setSemanaRows(Array.isArray(d?.rows) ? d.rows : []);
+      setSemanaResponsableId(d?.responsableId ?? null);
+      setSemanaSocios(d?.socios ?? []);
     } catch (e: any) { setErrorSemDet(e?.message); }
     finally { setLoadingSemDet(false); }
   }
 
-  function closeSemDet() { setOpenSemana(null); setSemanaRows([]); setErrorSemDet(null); setSavingSemDet(false); }
+  function closeSemDet() { setOpenSemana(null); setSemanaRows([]); setErrorSemDet(null); setSavingSemDet(false); setSemanaResponsableId(null); setSemanaSocios([]); }
 
   async function saveSemDet() {
     if (openSemana == null) return;
@@ -128,7 +133,10 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       setSavingSemDet(true);
       const res = await fetch(weekUrl(openSemana), {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ updates: semanaRows.map(r => ({ socioId: r.socioId, aporteSemana: Number(r.aporteSemana) || 0, ahorroSemana: Number(r.ahorroSemana) || 0, multaSemana: Number(r.multaSemana) || 0 })) }),
+        body: JSON.stringify({
+          updates: semanaRows.map(r => ({ socioId: r.socioId, aporteSemana: Number(r.aporteSemana) || 0, ahorroSemana: Number(r.ahorroSemana) || 0, multaSemana: Number(r.multaSemana) || 0 })),
+          responsableId: semanaResponsableId,
+        }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d?.error || "Error");
@@ -624,12 +632,35 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
           <div className="fixed inset-0 bg-black/30" onClick={closeSemDet} />
           <div className="relative z-50 w-full sm:max-w-4xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3 mb-4">
-              <div>
+              <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold">Semana #{openSemana}</h3>
                 <p className="text-xs text-gray-500">Editar aporte y ahorro por socio.</p>
               </div>
-              <button onClick={closeSemDet} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+              <button onClick={closeSemDet} className="text-gray-400 hover:text-gray-600 text-lg shrink-0">✕</button>
             </div>
+
+            {/* Selector responsable */}
+            {semanaSocios.length > 0 && (
+              <div className="mb-4 flex items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 px-3 py-2.5">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-blue-500 shrink-0">
+                  <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd"/>
+                </svg>
+                <label className="text-xs font-medium text-blue-700 shrink-0">Responsable:</label>
+                <select
+                  value={semanaResponsableId ?? ""}
+                  onChange={e => setSemanaResponsableId(e.target.value ? Number(e.target.value) : null)}
+                  className="flex-1 rounded-lg border border-blue-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="">— Sin asignar —</option>
+                  {semanaSocios
+                    .sort((a, b) => a.orden - b.orden)
+                    .map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.orden}. {s.nombres} {s.apellidos} ({s.numeroCuenta})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             {loadingSemDet ? <div className="p-4 text-sm text-gray-500">Cargando…</div>
               : errorSemDet ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorSemDet}</div>
