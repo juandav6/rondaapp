@@ -50,7 +50,7 @@ export async function PUT(req: Request, ctx: Ctx) {
   const rondaId = Number((await ctx.params).id);
   try {
     const body = await req.json();
-    const { nombre, montoAporte, ahorroObjetivoPorSocio, intervaloDiasCobro, semanaActual } = body;
+    const { nombre, montoAporte, ahorroObjetivoPorSocio, intervaloDiasCobro, semanaActual, fechaInicio, fechaFin } = body;
 
     const antes = await prisma.ronda.findUnique({ where: { id: rondaId } });
     if (!antes) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
@@ -89,12 +89,14 @@ export async function PUT(req: Request, ctx: Ctx) {
         ...(ahorroObjetivoPorSocio !== undefined && { ahorroObjetivoPorSocio: new Prisma.Decimal(Number(ahorroObjetivoPorSocio)) }),
         ...(intervaloDiasCobro !== undefined && { intervaloDiasCobro: Number(intervaloDiasCobro) }),
         ...(semanaActual !== undefined && { semanaActual: Number(semanaActual) }),
+        ...(fechaInicio && { fechaInicio: new Date(fechaInicio) }),
+        ...(fechaFin !== undefined && { fechaFin: fechaFin ? new Date(fechaFin) : null }),
       },
     });
 
     const cambios = diffObjetos(
-      { nombre: antes.nombre, montoAporte: Number(antes.montoAporte), ahorroObjetivoPorSocio: Number(antes.ahorroObjetivoPorSocio), semanaActual: antes.semanaActual },
-      { nombre: despues.nombre, montoAporte: Number(despues.montoAporte), ahorroObjetivoPorSocio: Number(despues.ahorroObjetivoPorSocio), semanaActual: despues.semanaActual }
+      { nombre: antes.nombre, montoAporte: Number(antes.montoAporte), ahorroObjetivoPorSocio: Number(antes.ahorroObjetivoPorSocio), semanaActual: antes.semanaActual, fechaFin: antes.fechaFin?.toISOString().slice(0,10) ?? null },
+      { nombre: despues.nombre, montoAporte: Number(despues.montoAporte), ahorroObjetivoPorSocio: Number(despues.ahorroObjetivoPorSocio), semanaActual: despues.semanaActual, fechaFin: despues.fechaFin?.toISOString().slice(0,10) ?? null }
     );
 
     await registrarBitacora({ tabla: "rondas", registroId: rondaId, accion: "EDITAR", camposCambios: cambios, efectosCadena: efectos.length ? efectos : undefined });
