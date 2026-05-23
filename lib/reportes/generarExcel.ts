@@ -343,40 +343,55 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   // ── HOJA 4: Préstamos ───────────────────────────────────────────────────────
   const ws4 = wb.addWorksheet("Préstamos");
   ws4.columns = [
-    { header: "Socio", key: "socio", width: 28 },
-    { header: "Cuenta", key: "cuenta", width: 12 },
-    { header: "Monto ($)", key: "monto", width: 14 },
-    { header: "Tasa (%)", key: "tasa", width: 12 },
-    { header: "Plazo (meses)", key: "plazo", width: 15 },
-    { header: "Estado", key: "estado", width: 13 },
-    { header: "Saldo ($)", key: "saldo", width: 14 },
-    { header: "Cuotas pagadas", key: "pagadas", width: 16 },
-    { header: "Total cuotas", key: "total", width: 14 },
-    { header: "Fecha inicio", key: "fechaInicio", width: 14 },
+    { header: "Socio",           key: "socio",       width: 28 },
+    { header: "Cuenta",          key: "cuenta",      width: 12 },
+    { header: "Monto ($)",       key: "monto",       width: 14 },
+    { header: "Tasa (%)",        key: "tasa",        width: 12 },
+    { header: "Plazo (meses)",   key: "plazo",       width: 15 },
+    { header: "Interés ($)",     key: "interes",     width: 14 },
+    { header: "Total a pagar ($)", key: "totalPagar", width: 18 },
+    { header: "Estado",          key: "estado",      width: 13 },
+    { header: "Saldo ($)",       key: "saldo",       width: 14 },
+    { header: "Cuotas pagadas",  key: "pagadas",     width: 16 },
+    { header: "Total cuotas",    key: "total",       width: 14 },
+    { header: "Fecha inicio",    key: "fechaInicio", width: 14 },
   ];
-  styleHeader(ws4.getRow(1), 10);
+  styleHeader(ws4.getRow(1), 12);
 
+  let totMontoPrest = 0, totInteresPrest = 0, totTotalPrest = 0;
   ronda.prestamos.forEach((p: any, i: number) => {
     const pagadas = p.cuotas.filter((c: any) => c.pagada).length;
+    // Calcular interés total = suma de intereses de todas las cuotas
+    const totalInteres = p.cuotas.reduce((s: number, c: any) => s + Number(c.interes), 0);
+    const totalAPagar = Number(p.monto) + totalInteres;
+    totMontoPrest  += Number(p.monto);
+    totInteresPrest += totalInteres;
+    totTotalPrest  += totalAPagar;
+
     const row = ws4.addRow({
-      socio: `${p.socio.nombres} ${p.socio.apellidos}`,
-      cuenta: p.socio.numeroCuenta,
-      monto: Number(p.monto),
-      tasa: Number(p.tasaAnual),
-      plazo: p.plazoMeses,
-      estado: p.estado,
-      saldo: Number(p.saldoActual),
+      socio:      `${p.socio.nombres} ${p.socio.apellidos}`,
+      cuenta:     p.socio.numeroCuenta,
+      monto:      Number(p.monto),
+      tasa:       Number(p.tasaAnual),
+      plazo:      p.plazoMeses,
+      interes:    totalInteres,
+      totalPagar: totalAPagar,
+      estado:     p.estado,
+      saldo:      Number(p.saldoActual),
       pagadas,
-      total: p.cuotas.length,
+      total:      p.cuotas.length,
       fechaInicio: fmtDate(new Date(p.fechaInicio)),
     });
-    styleAlternate(row, 10, i % 2 === 0);
-    row.getCell(3).numFmt = '"$"#,##0.00';
-    row.getCell(4).numFmt = '0.00"%"';
-    row.getCell(7).numFmt = '"$"#,##0.00';
+    styleAlternate(row, 12, i % 2 === 0);
+    row.getCell(3).numFmt = '"$"#,##0.00';   // Monto
+    row.getCell(4).numFmt = '0.00"%"';       // Tasa
+    row.getCell(6).numFmt = '"$"#,##0.00';   // Interés
+    row.getCell(6).font   = { color: { argb: "FF15803d" }, bold: true };
+    row.getCell(7).numFmt = '"$"#,##0.00';   // Total a pagar
+    row.getCell(9).numFmt = '"$"#,##0.00';   // Saldo
 
     // Color estado
-    const estadoCell = row.getCell(6);
+    const estadoCell = row.getCell(8);
     if (p.estado === "ACTIVO") {
       estadoCell.font = { color: { argb: "FF15803d" }, bold: true };
       estadoCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFdcfce7" } };
@@ -386,31 +401,80 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     }
   });
 
+  // Fila total préstamos
+  ws4.addRow([]);
+  const totalRow4 = ws4.addRow([
+    "TOTAL", "", totMontoPrest, "", "", totInteresPrest, totTotalPrest, "", "", "", "", "",
+  ]);
+  styleTotalRow(totalRow4, 12, AZUL_CLARO);
+  totalRow4.getCell(3).numFmt = '"$"#,##0.00';
+  totalRow4.getCell(3).font   = { bold: true };
+  totalRow4.getCell(6).numFmt = '"$"#,##0.00';
+  totalRow4.getCell(6).font   = { bold: true, color: { argb: "FF15803d" } };
+  totalRow4.getCell(7).numFmt = '"$"#,##0.00';
+  totalRow4.getCell(7).font   = { bold: true };
+
   // ── HOJA 5: Fondo de Inversión ──────────────────────────────────────────────
   const ws5 = wb.addWorksheet("Fondo Inversión");
   ws5.columns = [
-    { header: "Socio", key: "socio", width: 28 },
-    { header: "Cuenta", key: "cuenta", width: 12 },
+    { header: "Socio",               key: "socio",     width: 28 },
+    { header: "Cuenta",              key: "cuenta",    width: 12 },
     { header: "Monto invertido ($)", key: "invertido", width: 20 },
-    { header: "% Participación", key: "pct", width: 17 },
+    { header: "% Participación",     key: "pct",       width: 17 },
     { header: "Intereses acum. ($)", key: "intereses", width: 20 },
-    { header: "Total a recibir ($)", key: "total", width: 20 },
-    { header: "Devuelto", key: "devuelto", width: 12 },
+    { header: "Total a recibir ($)", key: "total",     width: 20 },
+    { header: "Devuelto",            key: "devuelto",  width: 12 },
   ];
   styleHeader(ws5.getRow(1), 7);
+
+  // Calcular intereses reales desde movimientos de cuenta tipo=INTERES incluidos en ronda
+  // Los movimientos llegan en ronda.participaciones[].socio o en ronda.movimientos si se incluyen
+  // Estrategia: calcular desde cuotas de préstamos pagadas (interés cobrado a socios)
+  // y distribuir proporcionalmente según % de cada inversor
+  const interesesPorSocio = new Map<number, number>();
+
+  // Si la ronda incluye movimientos de cuenta (tipo INTERES), usarlos directamente
+  const movsRonda: any[] = ronda.movimientos ?? ronda.movimientosCuenta ?? [];
+  movsRonda
+    .filter((m: any) => m.tipo === "INTERES")
+    .forEach((m: any) => {
+      interesesPorSocio.set(m.socioId, (interesesPorSocio.get(m.socioId) ?? 0) + Number(m.monto));
+    });
+
+  // Si no hay movimientos, calcular desde préstamos: total interés cobrado × % participación
+  if (interesesPorSocio.size === 0 && ronda.cuentasInversion?.length > 0) {
+    const totalInteresCobrado = (ronda.prestamos ?? []).reduce((s: number, p: any) => {
+      return s + p.cuotas
+        .filter((c: any) => c.pagada)
+        .reduce((si: number, c: any) => si + Number(c.interes), 0);
+    }, 0);
+
+    if (totalInteresCobrado > 0) {
+      ronda.cuentasInversion.forEach((ci: any) => {
+        const pct = Number(ci.porcentajeParticipacion) / 100;
+        interesesPorSocio.set(ci.socioId, Number((totalInteresCobrado * pct).toFixed(2)));
+      });
+    }
+  }
 
   let totInv = 0, totInt = 0;
   ronda.cuentasInversion.forEach((ci: any, i: number) => {
     const invertido = Number(ci.montoInvertido);
-    const intereses = Number(ci.interesesAcumulados);
-    totInv += invertido; totInt += intereses;
+    // Usar el mayor entre interesesAcumulados del modelo y los calculados
+    const interesesModelo  = Number(ci.interesesAcumulados ?? 0);
+    const interesesCalc    = interesesPorSocio.get(ci.socioId) ?? 0;
+    const intereses        = Math.max(interesesModelo, interesesCalc);
+
+    totInv += invertido;
+    totInt += intereses;
+
     const row = ws5.addRow({
-      socio: `${ci.socio.nombres} ${ci.socio.apellidos}`,
-      cuenta: ci.socio.numeroCuenta,
+      socio:    `${ci.socio.nombres} ${ci.socio.apellidos}`,
+      cuenta:   ci.socio.numeroCuenta,
       invertido,
-      pct: Number(ci.porcentajeParticipacion),
+      pct:      Number(ci.porcentajeParticipacion),
       intereses,
-      total: invertido + intereses,
+      total:    invertido + intereses,
       devuelto: ci.devuelto ? "Sí" : "No",
     });
     styleAlternate(row, 7, i % 2 === 0);
@@ -418,7 +482,16 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     row.getCell(4).numFmt = '0.00"%"';
     row.getCell(5).numFmt = '"$"#,##0.00';
     row.getCell(6).numFmt = '"$"#,##0.00';
+    if (intereses > 0) row.getCell(5).font = { color: { argb: "FF15803d" }, bold: true };
+    if (ci.devuelto)   row.getCell(7).font = { color: { argb: AZUL }, bold: true };
   });
+
+  // Nota si ronda activa
+  if (ronda.activa) {
+    ws5.addRow([]);
+    const notaRow = ws5.addRow(["⚠ Ronda activa — intereses proyectados hasta la semana " + ronda.semanaActual + " (basado en cuotas cobradas)"]);
+    notaRow.getCell(1).font = { italic: true, color: { argb: "FFb45309" } };
+  }
 
   ws5.addRow([]);
   const totalRow5 = ws5.addRow({ socio: "TOTAL", cuenta: "", invertido: totInv, pct: 100, intereses: totInt, total: totInv + totInt });
@@ -426,7 +499,9 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   totalRow5.getCell(3).numFmt = '"$"#,##0.00';
   totalRow5.getCell(4).numFmt = '0.00"%"';
   totalRow5.getCell(5).numFmt = '"$"#,##0.00';
+  totalRow5.getCell(5).font   = { bold: true, color: { argb: "FF15803d" } };
   totalRow5.getCell(6).numFmt = '"$"#,##0.00';
+  totalRow5.getCell(6).font   = { bold: true };
 
   // ── HOJA 6: Cuentas por cobrar ──────────────────────────────────────────────
   const ws6 = wb.addWorksheet("Cuentas por Cobrar");
