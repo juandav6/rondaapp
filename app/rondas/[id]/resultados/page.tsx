@@ -51,6 +51,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [socios, setSocios] = useState<SocioDetalle[]>([]);
   const [prestamos, setPrestamos] = useState<PrestamoRonda[]>([]);
+  const [inversores, setInversores] = useState<any[]>([]);
   const [semanas, setSemanas] = useState<SemanaResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSemanas, setLoadingSemanas] = useState(true);
@@ -75,7 +76,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
     setLoading(true);
     fetch(`/api/rondas/${id}/resultados`)
       .then(r => { if (!r.ok) throw new Error("No se pudo obtener los resultados"); return r.json(); })
-      .then((d: any) => { setResumen(d?.resumen ?? null); setSocios(d?.socios ?? []); setPrestamos(d?.prestamos ?? []); })
+      .then((d: any) => { setResumen(d?.resumen ?? null); setSocios(d?.socios ?? []); setPrestamos(d?.prestamos ?? []); setInversores(d?.inversores ?? []); })
       .catch((e: any) => setError(e?.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -370,23 +371,29 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                 </tr>
               </thead>
               <tbody>
-                {[...socios].filter(s => s.montoInvertido > 0).sort((a, b) => b.proporcion - a.proporcion).map(s => (
-                  <tr key={s.id} className="border-t hover:bg-gray-50/70">
+                {(inversores.length > 0 ? inversores : [...socios].filter(s => s.montoInvertido > 0).map(s => ({
+                  socio: { nombres: s.nombres, apellidos: s.apellidos, numeroCuenta: s.numeroCuenta },
+                  montoInvertido: s.montoInvertido,
+                  porcentaje: s.proporcion,
+                  interesesAcumulados: s.interesGanado,
+                  totalARecibir: s.totalARecibir,
+                }))).sort((a, b) => b.montoInvertido - a.montoInvertido).map((inv, i) => (
+                  <tr key={i} className="border-t hover:bg-gray-50/70">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
-                      <p className="text-xs text-gray-400 font-mono">{s.numeroCuenta}</p>
+                      <p className="font-medium text-gray-900">{inv.socio.nombres} {inv.socio.apellidos}</p>
+                      <p className="text-xs text-gray-400 font-mono">{inv.socio.numeroCuenta}</p>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium text-blue-700">{fmt(s.montoInvertido)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-medium text-blue-700">{fmt(inv.montoInvertido)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       <div className="flex items-center justify-end gap-2">
                         <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(s.proporcion, 100)}%` }} />
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(inv.porcentaje, 100)}%` }} />
                         </div>
-                        <span>{fmtPct(s.proporcion)}</span>
+                        <span>{fmtPct(inv.porcentaje)}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-amber-700">{fmt(s.interesGanado)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700">{fmt(s.totalARecibir)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-amber-700">{fmt(inv.interesesAcumulados)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700">{fmt(inv.totalARecibir)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -404,31 +411,32 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
 
           {/* Tarjetas móvil distribución */}
           <ul className="sm:hidden divide-y">
-            {[...socios].filter(s => s.montoInvertido > 0).sort((a, b) => b.proporcion - a.proporcion).map(s => (
-              <li key={s.id} className="p-4 space-y-2">
+            {(inversores.length > 0 ? inversores : [...socios].filter(s => s.montoInvertido > 0).map(s => ({
+              socio: { nombres: s.nombres, apellidos: s.apellidos, numeroCuenta: s.numeroCuenta },
+              montoInvertido: s.montoInvertido,
+              porcentaje: s.proporcion,
+              interesesAcumulados: s.interesGanado,
+              totalARecibir: s.totalARecibir,
+            }))).sort((a, b) => b.montoInvertido - a.montoInvertido).map((inv, i) => (
+              <li key={i} className="p-4 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 truncate text-sm">{s.nombres} {s.apellidos}</p>
-                    <p className="text-xs text-gray-400 font-mono">{s.numeroCuenta}</p>
+                  <div>
+                    <p className="font-medium text-gray-900">{inv.socio.nombres} {inv.socio.apellidos}</p>
+                    <p className="text-xs text-gray-400 font-mono">{inv.socio.numeroCuenta}</p>
                   </div>
-                  <span className="text-xs font-semibold text-blue-700 shrink-0">{fmtPct(s.proporcion)}</span>
+                  <p className="font-semibold text-blue-700 tabular-nums mt-0.5">{fmt(inv.montoInvertido)}</p>
                 </div>
-                <div className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(s.proporcion, 100)}%` }} />
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Participación</span>
+                  <span className="font-medium">{fmtPct(inv.porcentaje)}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 text-xs">
-                  <div className="rounded bg-blue-50 p-2">
-                    <p className="text-blue-400">Invertido</p>
-                    <p className="font-semibold text-blue-700 tabular-nums mt-0.5">{fmt(s.montoInvertido)}</p>
-                  </div>
-                  <div className="rounded bg-amber-50 p-2">
-                    <p className="text-amber-500">Interés</p>
-                    <p className="font-semibold text-amber-700 tabular-nums mt-0.5">{fmt(s.interesGanado)}</p>
-                  </div>
-                  <div className="rounded bg-emerald-50 p-2">
-                    <p className="text-emerald-500">Total</p>
-                    <p className="font-bold text-emerald-700 tabular-nums mt-0.5">{fmt(s.totalARecibir)}</p>
-                  </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Interés ganado</span>
+                  <span className="font-medium text-amber-700">{fmt(inv.interesesAcumulados)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-gray-600">Total a recibir</span>
+                  <span className="text-emerald-700">{fmt(inv.totalARecibir)}</span>
                 </div>
               </li>
             ))}
