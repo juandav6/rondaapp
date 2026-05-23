@@ -280,11 +280,19 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="border-t bg-gray-50">
+              <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                 <tr>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-700" colSpan={4}>Total</td>
-                  <td className="px-4 py-3 text-right font-bold text-emerald-700">{fmt(resumen.totalInteresGenerado)}</td>
-                  <td className="px-4 py-3 text-right font-bold">{fmt(prestamos.reduce((a, p) => a + p.totalAPagar, 0))}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-gray-700">Total</td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-gray-900">
+                    {fmt(prestamos.reduce((a, p) => a + p.monto, 0))}
+                  </td>
+                  <td colSpan={2} />
+                  <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700">
+                    {fmt(resumen.totalInteresGenerado)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold tabular-nums">
+                    {fmt(prestamos.reduce((a, p) => a + p.totalAPagar, 0))}
+                  </td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
