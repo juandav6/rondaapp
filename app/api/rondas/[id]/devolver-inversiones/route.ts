@@ -68,18 +68,18 @@ export async function POST(_req: Request, context: Context) {
         data: { saldoAhorros: { increment: new Prisma.Decimal(totalADevolver) } },
       });
 
-      // Movimiento DEVOLUCION = solo el capital devuelto
+      // Movimiento DEVOLUCION = retorno del capital invertido
       await tx.movimientoCuenta.create({
         data: {
           socioId: cuenta.socioId,
           rondaId,
           tipo: "DEVOLUCION",
           monto: new Prisma.Decimal(Number(cuenta.montoInvertido)),
-          nota: `Devolución capital al cierre de ${ronda.nombre}`,
+          nota: `Retorno capital fondo · ${ronda.nombre} · $${Number(cuenta.montoInvertido).toFixed(2)}`,
         },
       });
 
-      // Movimiento INTERES = solo el interés ganado (si aplica)
+      // Movimiento INTERES = interés generado en esta ronda específica
       if (interesCorrespondiente > 0) {
         await tx.movimientoCuenta.create({
           data: {
@@ -87,7 +87,7 @@ export async function POST(_req: Request, context: Context) {
             rondaId,
             tipo: "INTERES",
             monto: new Prisma.Decimal(interesCorrespondiente),
-            nota: `Intereses ganados ${ronda.nombre} (${(pct * 100).toFixed(2)}% participación)`,
+            nota: `Intereses ${ronda.nombre} · ${(pct * 100).toFixed(2)}% participación · $${interesCorrespondiente.toFixed(2)}`,
           },
         });
       }
