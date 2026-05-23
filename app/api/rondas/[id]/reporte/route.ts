@@ -74,6 +74,10 @@ export async function GET(_req: NextRequest, ctx: { params: Params }) {
           include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
           orderBy: { semana: "asc" },
         },
+        movimientosCuenta: {
+          where: { tipo: "INTERES" },
+          select: { socioId: true, monto: true, tipo: true },
+        },
       },
     });
 
