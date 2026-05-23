@@ -66,7 +66,7 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const { id, monto, nota } = await req.json();
+    const { id, monto, nota, fecha } = await req.json();
     if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
 
     const antes = await prisma.movimientoCuenta.findUnique({
@@ -74,27 +74,28 @@ export async function PUT(req: Request) {
       include: { socio: { select: { nombres: true, apellidos: true, saldoAhorros: true } } },
     });
     if (!antes) return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 });
-    if (!["AHORRO", "RETIRO"].includes(antes.tipo))
-      return NextResponse.json({ error: "Solo se pueden editar depósitos y retiros" }, { status: 400 });
 
-    const montoAntes = Number(antes.monto);
-    const montoNuevo = monto !== undefined ? r2(Number(monto)) : montoAntes;
-    const diff = r2(montoNuevo - montoAntes);
+    // Si solo se cambia la fecha (sin monto), permitir cualquier tipo
+    const soloFecha = fecha !== undefined && monto === undefined && nota === undefined;
+    if (!soloFecha && !["AHORRO", "RETIRO"].includes(antes.tipo))
+      return NextResponse.json({ error: "Solo se pueden editar montos de depósitos y retiros" }, { status: 400 });
 
+    const montoAntes  = Number(antes.monto);
+    const montoNuevo  = monto !== undefined ? r2(Number(monto)) : montoAntes;
+    const diff        = r2(montoNuevo - montoAntes);
     const efectos: any[] = [];
 
     await prisma.$transaction(async (tx) => {
-      // Actualizar el movimiento
       await tx.movimientoCuenta.update({
         where: { id: Number(id) },
         data: {
           ...(monto !== undefined && { monto: dec(montoNuevo) }),
-          ...(nota !== undefined && { nota: String(nota).trim() || null }),
+          ...(nota  !== undefined && { nota: String(nota).trim() || null }),
+          ...(fecha !== undefined && { createdAt: new Date(fecha + "T12:00:00Z") }),
         },
       });
 
-      // Recalcular saldoAhorros si cambió el monto
-      if (diff !== 0) {
+      if (diff !== 0 && ["AHORRO", "RETIRO"].includes(antes.tipo)) {
         const ajuste = antes.tipo === "AHORRO" ? diff : -diff;
         await tx.socio.update({
           where: { id: antes.socioId },
@@ -103,13 +104,8 @@ export async function PUT(req: Request) {
         const socioAct = await tx.socio.findUnique({ where: { id: antes.socioId }, select: { saldoAhorros: true } });
         efectos.push({
           tabla: "socios", registroId: antes.socioId,
-          descripcion: `saldoAhorros recalculado por edición de ${antes.tipo === "AHORRO" ? "depósito" : "retiro"}`,
-          camposAfectados: {
-            saldoAhorros: {
-              antes: r2(Number(antes.socio.saldoAhorros)),
-              despues: Number(socioAct?.saldoAhorros ?? 0),
-            },
-          },
+          descripcion: `saldoAhorros recalculado por edición`,
+          camposAfectados: { saldoAhorros: { antes: r2(Number(antes.socio.saldoAhorros)), despues: Number(socioAct?.saldoAhorros ?? 0) } },
         });
       }
     });
@@ -117,8 +113,9 @@ export async function PUT(req: Request) {
     await registrarBitacora({
       tabla: "movimientos_cuenta", registroId: Number(id), accion: "EDITAR",
       camposCambios: {
-        monto: { antes: montoAntes, despues: montoNuevo },
-        nota: { antes: antes.nota, despues: nota ?? antes.nota },
+        ...(monto !== undefined && { monto: { antes: montoAntes, despues: montoNuevo } }),
+        ...(nota  !== undefined && { nota:  { antes: antes.nota, despues: nota } }),
+        ...(fecha !== undefined && { fecha: { antes: antes.createdAt.toISOString().slice(0,10), despues: fecha } }),
       },
       efectosCadena: efectos.length ? efectos : undefined,
     });
