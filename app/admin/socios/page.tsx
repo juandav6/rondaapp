@@ -32,17 +32,21 @@ export default function AdminSociosPage() {
 
   function abrirEditar(s: any) {
     setEditando(s);
-    setForm({ nombres: s.nombres, apellidos: s.apellidos, cedula: s.cedula, edad: s.edad, numeroCuenta: s.numeroCuenta });
+    setForm({ nombres: s.nombres, apellidos: s.apellidos, cedula: s.cedula, edad: s.edad, numeroCuenta: s.numeroCuenta, saldoAhorros: s.saldoAhorros });
   }
 
   async function guardar() {
     if (!editando) return;
-    if (!confirm(`¿Confirmar cambios en el socio ${editando.nombres} ${editando.apellidos}?\n\nEsta acción quedará registrada en la bitácora.`)) return;
+    const cambiaAhorros = Number(form.saldoAhorros) !== Number(editando.saldoAhorros);
+    const advertencia = cambiaAhorros
+      ? `\n\n💰 Saldo de ahorros: ${fmt(editando.saldoAhorros)} → ${fmt(Number(form.saldoAhorros))}`
+      : "";
+    if (!confirm(`¿Confirmar cambios en el socio ${editando.nombres} ${editando.apellidos}?${advertencia}\n\nEsta acción quedará registrada en la bitácora.`)) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/socios/${editando.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, saldoAhorros: Number(form.saldoAhorros) }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
@@ -142,6 +146,19 @@ export default function AdminSociosPage() {
                 <label className="text-xs font-medium text-gray-600 mb-1 block">Edad</label>
                 <input type="number" value={form.edad ?? ""} onChange={e => setForm((p: any) => ({ ...p, edad: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"/>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                  Saldo de ahorros ($)
+                  <span className="ml-1 font-normal text-gray-400">— editar solo si el valor fue ingresado incorrectamente</span>
+                </label>
+                <input type="number" step="0.01" min="0" value={form.saldoAhorros ?? ""} onChange={e => setForm((p: any) => ({ ...p, saldoAhorros: e.target.value }))}
+                  className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-amber-200"/>
+                {Number(form.saldoAhorros) !== Number(editando.saldoAhorros) && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Cambio: {fmt(Number(editando.saldoAhorros))} → {fmt(Number(form.saldoAhorros))}
+                  </p>
+                )}
               </div>
             </div>
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mt-4 text-xs text-amber-700">
