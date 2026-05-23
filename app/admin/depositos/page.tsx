@@ -15,7 +15,7 @@ type Mov = {
 export default function AdminDepositosPage() {
   const [socios, setSocios] = useState<any[]>([]);
   const [socioId, setSocioId] = useState<number | null>(null);
-  const [filtroTipo, setFiltroTipo] = useState<"TODOS" | "AHORRO" | "RETIRO">("TODOS");
+  const [filtroTipo, setFiltroTipo] = useState<string>("DEPOSITOS");
   const [movimientos, setMovimientos] = useState<Mov[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -31,12 +31,23 @@ export default function AdminDepositosPage() {
     fetch("/api/admin/socios").then(r => r.json()).then(d => setSocios(Array.isArray(d) ? d : []));
   }, []);
 
+  // Cargar automáticamente al montar
+  useEffect(() => { buscar(); }, []);
+
   async function buscar() {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "100" });
+      const params = new URLSearchParams({ limit: "200" });
       if (socioId) params.set("socioId", String(socioId));
-      if (filtroTipo !== "TODOS") params.set("tipo", filtroTipo);
+      // Filtrar según tipo seleccionado
+      if (filtroTipo === "DEPOSITOS") {
+        params.set("tipo", "AHORRO");
+      } else if (filtroTipo === "RETIROS") {
+        params.set("tipo", "RETIRO");
+      } else if (filtroTipo === "TODOS") {
+        // sin filtro de tipo → trae todos los movimientos_cuenta
+        params.set("tipo", "TODOS");
+      }
       const res = await fetch(`/api/admin/movimientos-cuenta?${params}`, { cache: "no-store" });
       const d = await res.json();
       setMovimientos(d.movimientos ?? []);
@@ -121,17 +132,17 @@ export default function AdminDepositosPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Tipo</label>
-            <div className="flex gap-1">
-              {(["TODOS", "AHORRO", "RETIRO"] as const).map(t => (
-                <button key={t} onClick={() => setFiltroTipo(t)}
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Mostrar</label>
+            <div className="flex gap-1 flex-wrap">
+              {[
+                { key: "DEPOSITOS", label: "💰 Depósitos", active: "bg-emerald-600 text-white border-emerald-600" },
+                { key: "RETIROS",   label: "↑ Retiros",    active: "bg-rose-600 text-white border-rose-600" },
+                { key: "TODOS",     label: "📋 Todos los movimientos", active: "bg-gray-800 text-white border-gray-800" },
+              ].map(t => (
+                <button key={t.key} onClick={() => setFiltroTipo(t.key)}
                   className={cn("rounded-lg px-3 py-2 text-xs font-medium border transition-colors",
-                    filtroTipo === t
-                      ? t === "AHORRO" ? "bg-emerald-600 text-white border-emerald-600"
-                        : t === "RETIRO" ? "bg-rose-600 text-white border-rose-600"
-                        : "bg-gray-800 text-white border-gray-800"
-                      : "text-gray-600 border-gray-200 hover:bg-gray-50")}>
-                  {t === "TODOS" ? "Todos" : t === "AHORRO" ? "💰 Depósitos" : "↑ Retiros"}
+                    filtroTipo === t.key ? t.active : "text-gray-600 border-gray-200 hover:bg-gray-50")}>
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -189,12 +200,21 @@ export default function AdminDepositosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map(m => (
+                {filtrados.map(m => {
+                  const TIPO_CFG: Record<string, { label: string; bg: string; color: string; signo: string }> = {
+                    AHORRO:     { label: "💰 Depósito",   bg: "bg-emerald-100", color: "text-emerald-700", signo: "+" },
+                    RETIRO:     { label: "↑ Retiro",      bg: "bg-rose-100",    color: "text-rose-700",    signo: "−" },
+                    INVERSION:  { label: "📈 Inversión",  bg: "bg-blue-100",    color: "text-blue-700",    signo: "−" },
+                    DEVOLUCION: { label: "↩ Devolución",  bg: "bg-teal-100",    color: "text-teal-700",    signo: "+" },
+                    INTERES:    { label: "✦ Interés",     bg: "bg-amber-100",   color: "text-amber-700",   signo: "+" },
+                  };
+                  const cfg = TIPO_CFG[m.tipo] ?? { label: m.tipo, bg: "bg-gray-100", color: "text-gray-600", signo: "+" };
+                  const canEdit = ["AHORRO", "RETIRO"].includes(m.tipo);
+                  return (
                   <tr key={m.id} className="border-t hover:bg-gray-50/60">
                     <td className="px-4 py-3 text-center">
-                      <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-                        m.tipo === "AHORRO" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>
-                        {m.tipo === "AHORRO" ? "💰 Depósito" : "↑ Retiro"}
+                      <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", cfg.bg, cfg.color)}>
+                        {cfg.label}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -202,9 +222,8 @@ export default function AdminDepositosPage() {
                       <p className="text-xs text-gray-400 font-mono">{m.socio.numeroCuenta}</p>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{m.ronda?.nombre ?? <span className="text-gray-300">—</span>}</td>
-                    <td className={cn("px-4 py-3 text-right tabular-nums font-semibold",
-                      m.tipo === "AHORRO" ? "text-emerald-700" : "text-rose-700")}>
-                      {m.tipo === "AHORRO" ? "+" : "−"}{fmt(m.monto)}
+                    <td className={cn("px-4 py-3 text-right tabular-nums font-semibold", cfg.color)}>
+                      {cfg.signo}{fmt(m.monto)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-600 text-xs">
                       {fmt(m.socio.saldoAhorros)}
@@ -215,20 +234,27 @@ export default function AdminDepositosPage() {
                     <td className="px-4 py-3 text-right text-xs text-gray-400 whitespace-nowrap">{fmtDate(m.createdAt)}</td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex gap-1.5 justify-center">
-                        <button
-                          onClick={() => { setEditando(m); setForm({ monto: m.monto, nota: m.nota ?? "" }); }}
-                          className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => eliminar(m)}
-                          className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100">
-                          Eliminar
-                        </button>
+                        {canEdit ? (
+                          <>
+                            <button
+                              onClick={() => { setEditando(m); setForm({ monto: m.monto, nota: m.nota ?? "" }); }}
+                              className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => eliminar(m)}
+                              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100">
+                              Eliminar
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-300 italic">Solo lectura</span>
+                        )}
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -240,7 +266,7 @@ export default function AdminDepositosPage() {
 
       {!loading && movimientos.length === 0 && (
         <div className="rounded-xl border bg-white p-8 text-center text-sm text-gray-400">
-          Selecciona un filtro y presiona Buscar para ver los registros
+          {total === 0 ? "Sin movimientos encontrados para los filtros seleccionados" : "Presiona Buscar para cargar los registros"}
         </div>
       )}
 
