@@ -1,6 +1,7 @@
 // app/api/admin/socios/[id]/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { registrarBitacora, diffObjetos, CambiosCadena } from "@/lib/bitacora";
 
 export const runtime = "nodejs";
@@ -39,10 +40,27 @@ export async function PUT(req: Request, ctx: Ctx) {
   const id = Number((await ctx.params).id);
   try {
     const body = await req.json();
-    const { nombres, apellidos, cedula, edad, numeroCuenta } = body;
+    const { nombres, apellidos, cedula, edad, numeroCuenta, saldoAhorros } = body;
 
     const antes = await prisma.socio.findUnique({ where: { id } });
     if (!antes) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
+    const efectos: CambiosCadena[] = [];
+
+    // Si cambia saldoAhorros, registrarlo como efecto en cascada
+    if (saldoAhorros !== undefined && Number(saldoAhorros) !== Number(antes.saldoAhorros)) {
+      efectos.push({
+        tabla: "socios",
+        registroId: id,
+        descripcion: `saldoAhorros ajustado manualmente por administrador`,
+        camposAfectados: {
+          saldoAhorros: {
+            antes: Number(antes.saldoAhorros),
+            despues: Number(saldoAhorros),
+          },
+        },
+      });
+    }
 
     const despues = await prisma.socio.update({
       where: { id },
@@ -52,15 +70,20 @@ export async function PUT(req: Request, ctx: Ctx) {
         ...(cedula && { cedula: String(cedula).trim() }),
         ...(edad && { edad: Number(edad) }),
         ...(numeroCuenta && { numeroCuenta: String(numeroCuenta).trim().toUpperCase() }),
+        ...(saldoAhorros !== undefined && { saldoAhorros: new Prisma.Decimal(Number(saldoAhorros)) }),
       },
     });
 
     const cambios = diffObjetos(
-      { nombres: antes.nombres, apellidos: antes.apellidos, cedula: antes.cedula, edad: antes.edad, numeroCuenta: antes.numeroCuenta },
-      { nombres: despues.nombres, apellidos: despues.apellidos, cedula: despues.cedula, edad: despues.edad, numeroCuenta: despues.numeroCuenta }
+      { nombres: antes.nombres, apellidos: antes.apellidos, cedula: antes.cedula, edad: antes.edad, numeroCuenta: antes.numeroCuenta, saldoAhorros: Number(antes.saldoAhorros) },
+      { nombres: despues.nombres, apellidos: despues.apellidos, cedula: despues.cedula, edad: despues.edad, numeroCuenta: despues.numeroCuenta, saldoAhorros: Number(despues.saldoAhorros) }
     );
 
-    await registrarBitacora({ tabla: "socios", registroId: id, accion: "EDITAR", camposCambios: cambios });
+    await registrarBitacora({
+      tabla: "socios", registroId: id, accion: "EDITAR",
+      camposCambios: cambios,
+      efectosCadena: efectos.length ? efectos : undefined,
+    });
 
     return NextResponse.json({ ok: true, socio: despues });
   } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
