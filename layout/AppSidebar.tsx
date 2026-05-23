@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Lista de socios", path: "/socios" },
       { name: "Detalle por socio", path: "/socios/detalle" },
+      { name: "Kardex del socio", path: "/socios/kardex" },
     ],
   },
   {
