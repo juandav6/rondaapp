@@ -52,13 +52,38 @@ export default function AdminRondasPage() {
   }
 
   async function eliminar(r: any) {
-    if (r.activa) { showMsg("No se puede eliminar una ronda activa", false); return; }
-    if (!confirm(`¿ELIMINAR PERMANENTEMENTE la ronda "${r.nombre}"?\n\nEsto eliminará todos sus aportes, ahorros, préstamos y datos asociados.\n\n⚠️ Esta acción NO se puede deshacer.`)) return;
+    const lineas = [
+      `⚠️ ¿ELIMINAR PERMANENTEMENTE la ronda "${r.nombre}"?`,
+      ``,
+      `Se eliminará TODO lo asociado a esta ronda:`,
+      `  • Todos los aportes y ahorros`,
+      `  • Todos los préstamos y sus cuotas`,
+      `  • Todos los préstamos express`,
+      `  • Movimientos de caja (multas, gastos, intereses)`,
+      `  • Cuentas de inversión y movimientos del fondo`,
+      `  • Participaciones de socios`,
+      ``,
+      `Los saldos de ahorros de los socios se revertirán automáticamente.`,
+      r.activa ? `\n🟢 Esta es la ronda ACTIVA. La ronda anterior quedará como activa.` : ``,
+      ``,
+      `Esta acción NO se puede deshacer.`,
+    ].filter(l => l !== null).join("\n");
+
+    if (!confirm(lineas)) return;
+
+    // Segunda confirmación para rondas activas
+    if (r.activa) {
+      if (!confirm(`⚠️ Confirmación adicional requerida.\n\nEstás eliminando la ronda ACTIVA "${r.nombre}".\n\n¿Estás completamente seguro?`)) return;
+    }
+
     try {
       const res = await fetch(`/api/admin/rondas/${r.id}`, { method: "DELETE" });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
-      showMsg("Ronda eliminada", true);
+      const resumenMsg = d.resumen
+        ? ` Eliminados: ${d.resumen.aportes} aportes, ${d.resumen.ahorros} ahorros, ${d.resumen.prestamos} préstamos.`
+        : "";
+      showMsg(`Ronda "${r.nombre}" eliminada.${resumenMsg}`, true);
       await cargar();
     } catch (e: any) { showMsg(e.message, false); }
   }
@@ -117,9 +142,13 @@ export default function AdminRondasPage() {
                     <button onClick={() => abrirEditar(r)}
                       className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">Editar</button>
                     <button onClick={() => eliminar(r)}
-                      disabled={r.activa}
-                      className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100 disabled:opacity-30 disabled:cursor-not-allowed">
-                      Eliminar
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs hover:bg-red-100",
+                        r.activa
+                          ? "border-orange-300 bg-orange-50 text-orange-700"
+                          : "border-red-200 bg-red-50 text-red-700"
+                      )}>
+                      {r.activa ? "⚠️ Eliminar" : "Eliminar"}
                     </button>
                   </div>
                 </td>
