@@ -169,11 +169,18 @@ export default function AdminRondasPage() {
       {/* Modal editar */}
       {editando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">Editar ronda</h3>
             <p className="text-xs text-gray-400 mb-4">ID #{editando.id} · {editando.activa ? "🟢 Activa" : "⚪ Cerrada"}</p>
 
-            {/* Sección: Datos generales */}
+            {/* Info de solo lectura */}
+            <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 mb-4 grid grid-cols-2 gap-2 text-xs">
+              <div><span className="text-gray-400">Monto aporte:</span> <span className="font-semibold">{fmt(editando.montoAporte)}</span></div>
+              <div><span className="text-gray-400">Obj. ahorro:</span> <span className="font-semibold">{fmt(editando.ahorroObjetivoPorSocio)}</span></div>
+              <div><span className="text-gray-400">Semana actual:</span> <span className="font-semibold">{editando.semanaActual}</span></div>
+              <div><span className="text-gray-400">Intervalo:</span> <span className="font-semibold">{editando.intervaloDiasCobro ?? 7} días</span></div>
+            </div>
+
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">Nombre</label>
@@ -182,53 +189,22 @@ export default function AdminRondasPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Monto aporte ($)</label>
-                  <input type="number" step="0.01" value={form.montoAporte ?? ""} onChange={e => setForm((p: any) => ({ ...p, montoAporte: e.target.value }))}
-                    className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Objetivo ahorro ($)</label>
-                  <input type="number" step="0.01" value={form.ahorroObjetivoPorSocio ?? ""} onChange={e => setForm((p: any) => ({ ...p, ahorroObjetivoPorSocio: e.target.value }))}
-                    className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Semana actual</label>
-                  <input type="number" min="1" value={form.semanaActual ?? ""} onChange={e => setForm((p: any) => ({ ...p, semanaActual: e.target.value }))}
-                    className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Intervalo días</label>
-                  <input type="number" min="1" value={form.intervaloDiasCobro ?? 7} onChange={e => setForm((p: any) => ({ ...p, intervaloDiasCobro: e.target.value }))}
-                    className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
-                </div>
-              </div>
-            </div>
-
-            {/* Sección: Fechas */}
-            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Fechas</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Fecha inicio</label>
                   <input type="date" value={form.fechaInicio ?? ""} onChange={e => setForm((p: any) => ({ ...p, fechaInicio: e.target.value }))}
-                    className="w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    Fecha fin
-                    {!editando.activa && <span className="ml-1 text-amber-500 font-normal">editable</span>}
+                    Fecha fin {!editando.activa && <span className="text-amber-500 font-normal">editable</span>}
                   </label>
                   <input type="date" value={form.fechaFin ?? ""} onChange={e => setForm((p: any) => ({ ...p, fechaFin: e.target.value }))}
                     disabled={editando.activa}
-                    className="w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-gray-100 disabled:text-gray-400"/>
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-gray-100 disabled:text-gray-400"/>
+                  {editando.activa
+                    ? <p className="text-[10px] text-gray-400 mt-0.5">Se calcula al cerrar la ronda</p>
+                    : <p className="text-[10px] text-amber-600 mt-0.5">Corrige si se guardó la fecha de hoy en vez de la fecha real</p>}
                 </div>
               </div>
-              {editando.activa
-                ? <p className="text-[10px] text-gray-400">La fecha fin se calcula automáticamente al cerrar la ronda ({editando.participaciones?.length ?? "N"} socios × {form.intervaloDiasCobro ?? 7} días).</p>
-                : <p className="text-[10px] text-amber-600">Si la fecha fin está incorrecta (ej: se guardó la fecha de hoy en vez de la fecha real), corrígela aquí.</p>
-              }
             </div>
             {Number(form.montoAporte) !== Number(editando.montoAporte) && (
               <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
