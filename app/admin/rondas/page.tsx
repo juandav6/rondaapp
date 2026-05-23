@@ -124,9 +124,6 @@ export default function AdminRondasPage() {
             <tr>
               <th className="px-4 py-3 text-left">Ronda</th>
               <th className="px-4 py-3 text-center">Estado</th>
-              <th className="px-4 py-3 text-right">Monto aporte</th>
-              <th className="px-4 py-3 text-center">Semana</th>
-              <th className="px-4 py-3 text-center">Participantes</th>
               <th className="px-4 py-3 text-center">Acciones</th>
             </tr>
           </thead>
@@ -142,9 +139,6 @@ export default function AdminRondasPage() {
                     {r.activa ? "Activa" : "Cerrada"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right tabular-nums font-semibold">{fmt(r.montoAporte)}</td>
-                <td className="px-4 py-3 text-center text-sm font-medium">{r.semanaActual}</td>
-                <td className="px-4 py-3 text-center text-sm text-gray-500">{r._count?.participaciones ?? r.participaciones?.length ?? "—"}</td>
                 <td className="px-4 py-3 text-center">
                   <div className="flex gap-1.5 justify-center">
                     <button onClick={() => abrirEditar(r)}
@@ -172,14 +166,6 @@ export default function AdminRondasPage() {
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">Editar ronda</h3>
             <p className="text-xs text-gray-400 mb-4">ID #{editando.id} · {editando.activa ? "🟢 Activa" : "⚪ Cerrada"}</p>
-
-            {/* Info de solo lectura */}
-            <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 mb-4 grid grid-cols-2 gap-2 text-xs">
-              <div><span className="text-gray-400">Monto aporte:</span> <span className="font-semibold">{fmt(editando.montoAporte)}</span></div>
-              <div><span className="text-gray-400">Obj. ahorro:</span> <span className="font-semibold">{fmt(editando.ahorroObjetivoPorSocio)}</span></div>
-              <div><span className="text-gray-400">Semana actual:</span> <span className="font-semibold">{editando.semanaActual}</span></div>
-              <div><span className="text-gray-400">Intervalo:</span> <span className="font-semibold">{editando.intervaloDiasCobro ?? 7} días</span></div>
-            </div>
 
             <div className="space-y-3">
               <div>
