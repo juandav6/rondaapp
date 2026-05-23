@@ -10,112 +10,140 @@ export async function GET(_req: Request, context: Context) {
 
   const ronda = await prisma.ronda.findUnique({
     where: { id: rondaId },
-    include: { participaciones: { include: { socio: true } } },
+    include: {
+      participaciones: { include: { socio: true } },
+    },
   });
   if (!ronda) return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
 
-  const [totalAportesAgg, totalAhorrosAgg] = await Promise.all([
-    prisma.aporte.aggregate({ where: { rondaId }, _sum: { monto: true, multa: true } }),
-    prisma.ahorro.aggregate({ where: { rondaId }, _sum: { monto: true } }),
-  ]);
-
-  const [aportesPorSocio, ahorrosPorSocio] = await Promise.all([
-    prisma.aporte.groupBy({ by: ["socioId"], where: { rondaId }, _sum: { monto: true, multa: true } }),
-    prisma.ahorro.groupBy({ by: ["socioId"], where: { rondaId }, _sum: { monto: true } }),
-  ]);
-
-  const aporteMap = Object.fromEntries(aportesPorSocio.map(a => [a.socioId, a]));
-  const ahorroMap = Object.fromEntries(ahorrosPorSocio.map(a => [a.socioId, a]));
-
-  // Cuentas de inversión
-  const cuentasInversion = await prisma.cuentaInversion.findMany({
+  // ── Totales globales ────────────────────────────────────────────────────────
+  const totalAportes = await prisma.aporte.aggregate({
     where: { rondaId },
-  }).catch(() => []);
+    _sum: { monto: true, multa: true },
+  });
+  const totalAhorros = await prisma.ahorro.aggregate({
+    where: { rondaId },
+    _sum: { monto: true },
+  });
 
-  const inversionMap = Object.fromEntries(cuentasInversion.map(c => [c.socioId, c]));
-  const totalFondoInversion = cuentasInversion.reduce((acc, c) => acc + Number(c.montoInvertido), 0);
+  // ── Totales por socio ───────────────────────────────────────────────────────
+  const aportesPorSocio = await prisma.aporte.groupBy({
+    by: ["socioId"],
+    where: { rondaId },
+    _sum: { monto: true, multa: true },
+  });
+  const ahorrosPorSocio = await prisma.ahorro.groupBy({
+    by: ["socioId"],
+    where: { rondaId },
+    _sum: { monto: true },
+  });
 
-  // Préstamos
+  const aporteMap = Object.fromEntries(aportesPorSocio.map((a) => [a.socioId, a]));
+  const ahorroMap = Object.fromEntries(ahorrosPorSocio.map((a) => [a.socioId, a]));
+
+  // Total aportes de la ronda (para calcular proporciones)
+  const totalAportesNum = Number(totalAportes._sum.monto ?? 0);
+
+  // ── Préstamos de la ronda con sus cuotas ────────────────────────────────────
   const prestamos = await prisma.prestamo.findMany({
     where: { rondaId },
+    orderBy: { createdAt: "asc" },
     include: {
       socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } },
-      cuotas: { select: { interes: true, capital: true, cuota: true, pagada: true } },
+      cuotas: { select: { interes: true, pagada: true } },
     },
-    orderBy: { createdAt: "asc" },
   });
 
-  const totalInteresReal = prestamos.reduce((acc, p) =>
-    acc + p.cuotas.filter(c => c.pagada).reduce((a, c) => a + Number(c.interes), 0), 0
-  );
-  const totalInteresProyectado = prestamos.reduce((acc, p) =>
-    acc + p.cuotas.reduce((a, c) => a + Number(c.interes), 0), 0
-  );
+  // Total interés proyectado de todos los préstamos de la ronda
+  const totalInteresRonda = prestamos.reduce((acc, p) => {
+    return acc + p.cuotas.reduce((a, c) => a + Number(c.interes), 0);
+  }, 0);
 
-  const prestamosNormalized = prestamos.map(p => {
-    const totalInteres = p.cuotas.reduce((a, c) => a + Number(c.interes), 0);
-    const cuotasPagadas = p.cuotas.filter(c => c.pagada).length;
+  // Total interés ya cobrado (cuotas pagadas)
+  const totalInteresCobrado = prestamos.reduce((acc, p) => {
+    return acc + p.cuotas.filter((c) => c.pagada).reduce((a, c) => a + Number(c.interes), 0);
+  }, 0);
+
+  // Préstamos normalizados para el frontend
+  const prestamosNormalizados = prestamos.map((p) => {
+    const interesTotal = p.cuotas.reduce((a, c) => a + Number(c.interes), 0);
+    const interesCobrado = p.cuotas.filter((c) => c.pagada).reduce((a, c) => a + Number(c.interes), 0);
     return {
-      id: p.id, estado: p.estado, monto: Number(p.monto),
-      tasaAnual: Number(p.tasaAnual), plazoMeses: p.plazoMeses,
+      id: p.id,
+      socio: p.socio,
+      monto: Number(p.monto),
+      tasaAnual: Number(p.tasaAnual),
+      plazoMeses: p.plazoMeses,
+      fechaInicio: p.fechaInicio,
+      estado: p.estado,
       saldoActual: Number(p.saldoActual),
-      totalInteres: Math.round(totalInteres * 100) / 100,
-      totalAPagar: Math.round((Number(p.monto) + totalInteres) * 100) / 100,
-      cuotasPagadas, totalCuotas: p.cuotas.length, socio: p.socio,
+      interesTotal: Math.round(interesTotal * 100) / 100,
+      interesCobrado: Math.round(interesCobrado * 100) / 100,
     };
   });
 
-  // Si hay inversiones → usar montoInvertido para el %; si no → usar aportes (fallback)
-  const usarInversion = cuentasInversion.length > 0;
-  const baseTotal = usarInversion ? totalFondoInversion : Number(totalAportesAgg._sum.monto ?? 0);
-  const interesParaDistribuir = !ronda.activa ? totalInteresReal : totalInteresProyectado;
-
-  const socios = ronda.participaciones.map(p => {
+  // ── Socios con proporción e interés ganado ──────────────────────────────────
+  const socios = ronda.participaciones.map((p) => {
     const ap = aporteMap[p.socioId]?._sum || {};
     const ah = ahorroMap[p.socioId]?._sum || {};
-    const inv = inversionMap[p.socioId];
-
     const aporteSocio = Number(ap.monto ?? 0);
-    const ahorroSocio = Number(ah.monto ?? 0);
-    const montoInvertido = inv ? Number(inv.montoInvertido) : 0;
-    const interesesAcumulados = inv ? Number(inv.interesesAcumulados) : 0;
 
-    const base = usarInversion ? montoInvertido : aporteSocio;
-    const proporcion = baseTotal > 0 ? base / baseTotal : 0;
-    const pctDisplay = Math.round(proporcion * 10000) / 100;
+    // Proporción: aportes del socio / total aportes ronda
+    const proporcion = totalAportesNum > 0 ? aporteSocio / totalAportesNum : 0;
 
-    // Si ya se calcularon intereses en cuenta_inversion, usarlos; si no, calcular
-    const interesGanado = interesesAcumulados > 0
-      ? interesesAcumulados
-      : Math.round(proporcion * interesParaDistribuir * 100) / 100;
+    // Interés ganado = proporción × total interés proyectado
+    // Solo se muestra si la ronda está cerrada
+    const interesGanado = !ronda.activa
+      ? Math.round(proporcion * totalInteresRonda * 100) / 100
+      : null;
 
     return {
-      id: p.socio.id, nombres: p.socio.nombres, apellidos: p.socio.apellidos,
+      id: p.socio.id,
+      nombres: p.socio.nombres,
+      apellidos: p.socio.apellidos,
       numeroCuenta: p.socio.numeroCuenta,
-      aportes: aporteSocio,
-      ahorros: ahorroSocio,
-      multas: Number(ap.multa ?? 0),
-      montoInvertido,
-      proporcion: pctDisplay,
+      aportes: ap.monto?.toString() ?? "0",
+      multas: ap.multa?.toString() ?? "0",
+      ahorros: ah.monto?.toString() ?? "0",
+      proporcion: Math.round(proporcion * 10000) / 100, // porcentaje con 2 decimales
       interesGanado,
-      totalARecibir: Math.round((montoInvertido + interesGanado) * 100) / 100,
     };
   });
+
+  // ── Fondo de inversión ──────────────────────────────────────────────────────
+  const cuentasInversion = await prisma.cuentaInversion.findMany({
+    where: { rondaId },
+    include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } } },
+    orderBy: { porcentajeParticipacion: "desc" },
+  });
+
+  const fondoTotal = cuentasInversion.reduce((s, c) => s + Number(c.montoInvertido), 0);
 
   return NextResponse.json({
     resumen: {
-      id: ronda.id, nombre: ronda.nombre, activa: ronda.activa,
-      fechaInicio: ronda.fechaInicio, fechaFin: ronda.fechaFin,
+      id: ronda.id,
+      nombre: ronda.nombre,
+      activa: ronda.activa,
+      fechaInicio: ronda.fechaInicio,
+      fechaFin: ronda.fechaFin,
       totalSocios: ronda.participaciones.length,
-      totalAportes: Number(totalAportesAgg._sum.monto ?? 0),
-      totalMultas: Number(totalAportesAgg._sum.multa ?? 0),
-      totalAhorros: Number(totalAhorrosAgg._sum.monto ?? 0),
-      totalFondoInversion,
-      totalInteresGenerado: Math.round(interesParaDistribuir * 100) / 100,
-      totalInteresProyectado: Math.round(totalInteresProyectado * 100) / 100,
-      totalPrestamos: prestamos.length,
+      totalAportes: totalAportes._sum.monto?.toString() ?? "0",
+      totalMultas: totalAportes._sum.multa?.toString() ?? "0",
+      totalAhorros: totalAhorros._sum.monto?.toString() ?? "0",
+      totalInteresProyectado: Math.round(totalInteresRonda * 100) / 100,
+      totalInteresCobrado: Math.round(totalInteresCobrado * 100) / 100,
+      fondoTotal: Math.round(fondoTotal * 100) / 100,
+      totalInversores: cuentasInversion.length,
     },
     socios,
-    prestamos: prestamosNormalized,
+    prestamos: prestamosNormalizados,
+    inversores: cuentasInversion.map(c => ({
+      socio: c.socio,
+      montoInvertido: Number(c.montoInvertido),
+      porcentaje: Number(c.porcentajeParticipacion),
+      interesesAcumulados: Number(c.interesesAcumulados),
+      totalARecibir: Number(c.montoInvertido) + Number(c.interesesAcumulados),
+      devuelto: c.devuelto,
+    })),
   });
 }
