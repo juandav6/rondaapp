@@ -105,7 +105,7 @@ export async function POST(req: Request, context: Context) {
           data: { saldoAhorros: { decrement: new Prisma.Decimal(monto) } },
         });
 
-        // Registrar movimiento
+        // Registrar movimiento con fecha = fecha inicio de la ronda
         await tx.movimientoCuenta.create({
           data: {
             socioId: aporte.socioId,
@@ -113,6 +113,7 @@ export async function POST(req: Request, context: Context) {
             tipo: "INVERSION",
             monto: new Prisma.Decimal(monto),
             nota: `Aporte al fondo de inversión ronda ${ronda.nombre}`,
+            createdAt: ronda.fechaInicio,
           },
         });
       }
