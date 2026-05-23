@@ -36,11 +36,26 @@ async function getKardex(socioId: number) {
   const socio = await prisma.socio.findUnique({ where: { id: socioId } });
   if (!socio) return null;
 
-  // Todos los movimientos de cuenta ordenados por fecha
+  // Todos los movimientos de cuenta ordenados por fecha, con INVERSION antes que AHORRO en misma fecha
   const movimientos = await prisma.movimientoCuenta.findMany({
     where: { socioId },
     include: { ronda: { select: { nombre: true } } },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+
+  // Ordenar: misma fecha → INVERSION primero, luego AHORRO/DEVOLUCION/INTERES, luego RETIRO
+  const TIPO_ORDEN: Record<string, number> = {
+    INVERSION:  1,
+    AHORRO:     2,
+    DEVOLUCION: 3,
+    INTERES:    4,
+    RETIRO:     5,
+  };
+  movimientos.sort((a, b) => {
+    const diffFecha = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (Math.abs(diffFecha) > 86400000) return diffFecha; // fechas distintas → orden normal
+    // Mismo día → ordenar por tipo
+    return (TIPO_ORDEN[a.tipo] ?? 9) - (TIPO_ORDEN[b.tipo] ?? 9);
   });
 
   const TIPO_CFG: Record<string, { esHaber: boolean; concepto: string }> = {
