@@ -119,12 +119,20 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   ];
 
   kpis.forEach(([label, value], i) => {
-    const row = ws1.addRow([label, typeof value === "number" && label.toString().includes("Semana") ? value : value]);
-    styleAlternate(row, 2, i % 2 === 0);
-    if (typeof value === "number" && !label.toString().includes("Semana") && !label.toString().includes("Part")) {
-      row.getCell(2).numFmt = '"$"#,##0.00';
-    }
-  });
+  const row = ws1.addRow([label, value]);
+
+  styleAlternate(row, 2, i % 2 === 0);
+
+  const labelText = label.toString().toLowerCase();
+
+  const esNumeroSinMoneda =
+    labelText.includes("semana") ||
+    labelText.includes("particip");
+
+  if (typeof value === "number" && !esNumeroSinMoneda) {
+    row.getCell(2).numFmt = '"$"#,##0.00';
+  }
+});
 
   // ── HOJA 2: Participantes ───────────────────────────────────────────────────
   const ws2 = wb.addWorksheet("Participantes");
