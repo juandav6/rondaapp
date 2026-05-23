@@ -102,7 +102,6 @@ async function autoAsignarResponsable(rondaId: number, semana: number) {
 /** Genera el Excel del cierre y lo guarda en la ronda */
 async function generarYGuardarExcel(rondaId: number) {
   try {
-    // Cargar datos completos de la ronda para el Excel
     const rondaData = await prisma.ronda.findUnique({
       where: { id: rondaId },
       include: {
@@ -138,14 +137,28 @@ async function generarYGuardarExcel(rondaId: number) {
 
     const excelBuffer = await generarExcel(rondaData);
 
-    // Guardar el Excel en la BD atado a la ronda
-    await prisma.ronda.update({
-      where: { id: rondaId },
-      data: {
-        reporteExcel: Buffer.from(excelBuffer),
-        reporteGeneradoAt: new Date(),
-      },
-    });
+    // Intentar guardar en BD — puede fallar si prisma client no está actualizado aún
+    try {
+      await (prisma.ronda as any).update({
+        where: { id: rondaId },
+        data: {
+          reporteExcel: Buffer.from(excelBuffer),
+          reporteGeneradoAt: new Date(),
+        },
+      });
+    } catch (saveErr: any) {
+      // Si falla por campos desconocidos, usar SQL crudo como fallback
+      if (saveErr?.message?.includes("Unknown argument")) {
+        await prisma.$executeRaw`
+          UPDATE rondas
+          SET reporte_excel = ${Buffer.from(excelBuffer)},
+              reporte_generado_at = NOW()
+          WHERE id = ${rondaId}
+        `;
+      } else {
+        throw saveErr;
+      }
+    }
   } catch (err) {
     console.error("Error generando Excel de cierre:", err);
     // No bloquear el cierre si falla el Excel
@@ -202,10 +215,14 @@ export async function POST(_req: Request, context: Context) {
 
   // ── CIERRE FINAL DE RONDA ─────────────────────────────────────────────────
   if (siguiente > totalSemanas) {
-    // 1. Cerrar la ronda
+    // Calcular fecha fin real: fechaInicio + (totalSemanas * intervaloDiasCobro)
+    const fechaFinReal = new Date(ronda.fechaInicio);
+    fechaFinReal.setDate(fechaFinReal.getDate() + totalSemanas * (ronda.intervaloDiasCobro ?? 7));
+
+    // 1. Cerrar la ronda con la fecha fin calculada
     await prisma.ronda.update({
       where: { id: rondaId },
-      data: { activa: false, fechaFin: new Date() },
+      data: { activa: false, fechaFin: fechaFinReal },
     });
 
     // 2. Devolver inversiones
@@ -228,6 +245,27 @@ export async function POST(_req: Request, context: Context) {
     where: { id: rondaId },
     data: { semanaActual: siguiente },
   });
+
+  // Acumular $1 de interés a todos los express PENDIENTES que ya vencieron
+  const expressVencidos = await (prisma as any).prestamoExpress.findMany({
+    where: {
+      rondaId,
+      estado: "PENDIENTE",
+      semanaVencimiento: { lte: semana }, // ya vencieron
+    },
+  });
+
+  for (const exp of expressVencidos) {
+    const nuevoInteres = Math.round((Number(exp.interesAcumulado) + Number(exp.interesPorSemana)) * 100) / 100;
+    const nuevoTotal = Math.round((Number(exp.principal) + nuevoInteres) * 100) / 100;
+    await (prisma as any).prestamoExpress.update({
+      where: { id: exp.id },
+      data: {
+        interesAcumulado: new (await import("@prisma/client")).Prisma.Decimal(nuevoInteres),
+        total: new (await import("@prisma/client")).Prisma.Decimal(nuevoTotal),
+      },
+    });
+  }
 
   return NextResponse.json({ ok: true, avanzada: true, finalizada: false });
 }
