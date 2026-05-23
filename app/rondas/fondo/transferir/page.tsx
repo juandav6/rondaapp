@@ -45,6 +45,7 @@ export default function TransferirFondoPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [fechaTransferencia, setFechaTransferencia] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [ronda, setRonda] = useState<{ id: number; nombre: string; activa: boolean } | null>(null);
   const [fondoActual, setFondoActual] = useState(0);
@@ -157,7 +158,7 @@ export default function TransferirFondoPage() {
       const res = await fetch(`/api/rondas/${rondaId}/inversion/transferir`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transferencias }),
+        body: JSON.stringify({ transferencias, fecha: fechaTransferencia }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -557,7 +558,7 @@ export default function TransferirFondoPage() {
           <div className="w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-start gap-3 mb-4">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700 text-lg">→</span>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h4 className="text-base font-bold text-gray-900">Confirmar transferencia</h4>
                 <p className="text-sm text-gray-600 mt-1">
                   ¿Transferir <strong className="text-blue-700">{fmt(totalTransferir)}</strong> de ahorros al fondo de inversión?
@@ -568,11 +569,25 @@ export default function TransferirFondoPage() {
                   <div className="flex justify-between border-t pt-1"><span className="text-gray-500">Fondo nuevo</span><span className="font-bold text-blue-700">{fmt(fondoActual + totalTransferir)}</span></div>
                   <p className="text-gray-400 mt-1">Los porcentajes de participación se recalcularán automáticamente.</p>
                 </div>
+
+                {/* Fecha de la transferencia */}
+                <div className="mt-3">
+                  <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                    Fecha de la transferencia
+                    <span className="ml-1 font-normal text-gray-400">— se registrará en el historial del socio</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaTransferencia}
+                    onChange={e => setFechaTransferencia(e.target.value)}
+                    className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setConfirmOpen(false)} className="flex-1 rounded-xl border py-2.5 text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
-              <button onClick={ejecutarTransferencia} disabled={saving}
+              <button onClick={ejecutarTransferencia} disabled={saving || !fechaTransferencia}
                 className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                 {saving ? "Transfiriendo…" : "Confirmar"}
               </button>
