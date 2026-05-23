@@ -12,7 +12,11 @@ const fmt = (n: number) =>
 const fmtDate = (d: Date | string | null) => {
   if (!d) return "—";
   const dt = new Date(d as string);
-  return isNaN(dt.getTime()) ? "—" : new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "2-digit", year: "numeric" }).format(dt);
+  if (isNaN(dt.getTime())) return "—";
+  // Usar UTC para evitar desfase de timezone
+  return new Intl.DateTimeFormat("es-EC", {
+    day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC",
+  }).format(dt);
 };
 
 // Tipo de cada línea del kardex
@@ -45,10 +49,10 @@ async function getKardex(socioId: number) {
 
   // Ordenar: misma fecha → INVERSION primero, luego AHORRO/DEVOLUCION/INTERES, luego RETIRO
   const TIPO_ORDEN: Record<string, number> = {
-    DEVOLUCION: 1,  // primero devuelven el capital anterior
-    INTERES:    2,  // luego los intereses
-    AHORRO:     3,  // luego el ahorro de la semana
-    INVERSION:  4,  // luego sale al nuevo fondo
+    DEVOLUCION: 1,  // retorno capital ronda anterior
+    INTERES:    2,  // intereses ronda anterior
+    INVERSION:  3,  // entrada al nuevo fondo
+    AHORRO:     4,  // ahorro semanal
     RETIRO:     5,
   };
   movimientos.sort((a, b) => {
