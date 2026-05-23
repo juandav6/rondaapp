@@ -69,6 +69,8 @@ export async function POST(_req: Request, context: Context) {
       });
 
       // Movimiento DEVOLUCION = retorno del capital invertido
+      // Fecha = fechaFin de la ronda (cuando se cerró y se distribuyó)
+      const fechaCierre = ronda.fechaFin ?? new Date();
       await tx.movimientoCuenta.create({
         data: {
           socioId: cuenta.socioId,
@@ -76,6 +78,7 @@ export async function POST(_req: Request, context: Context) {
           tipo: "DEVOLUCION",
           monto: new Prisma.Decimal(Number(cuenta.montoInvertido)),
           nota: `Retorno capital fondo · ${ronda.nombre} · $${Number(cuenta.montoInvertido).toFixed(2)}`,
+          createdAt: fechaCierre,
         },
       });
 
@@ -88,6 +91,7 @@ export async function POST(_req: Request, context: Context) {
             tipo: "INTERES",
             monto: new Prisma.Decimal(interesCorrespondiente),
             nota: `Intereses ${ronda.nombre} · ${(pct * 100).toFixed(2)}% participación · $${interesCorrespondiente.toFixed(2)}`,
+            createdAt: fechaCierre,
           },
         });
       }
