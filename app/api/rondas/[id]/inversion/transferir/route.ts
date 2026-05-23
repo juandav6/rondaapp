@@ -18,7 +18,7 @@ export async function GET(_req: Request, ctx: Context) {
 
   try {
     const [ronda, participaciones, cuentasInversion, ahorros, transferenciasYaHechas] = await Promise.all([
-      prisma.ronda.findUnique({ where: { id: rondaId }, select: { id: true, nombre: true, activa: true, semanaActual: true } }),
+      prisma.ronda.findUnique({ where: { id: rondaId }, select: { id: true, nombre: true, activa: true, semanaActual: true, fechaInicio: true, intervaloDiasCobro: true } }),
       prisma.participacion.findMany({
         where: { rondaId },
         include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true, saldoAhorros: true } } },
@@ -222,7 +222,11 @@ export async function POST(req: Request, ctx: Context) {
           data: { saldoAhorros: { decrement: toDecimal(monto) } },
         });
 
-        // Registrar movimiento
+        // Registrar movimiento con fecha = fecha de la semana actual de la ronda
+        const diasTranscurridos = (ronda.semanaActual - 1) * (ronda.intervaloDiasCobro ?? 7);
+        const fechaMovimiento = new Date(ronda.fechaInicio);
+        fechaMovimiento.setDate(fechaMovimiento.getDate() + diasTranscurridos);
+
         await tx.movimientoCuenta.create({
           data: {
             socioId: t.socioId,
@@ -230,6 +234,7 @@ export async function POST(req: Request, ctx: Context) {
             tipo: "INVERSION",
             monto: toDecimal(monto),
             nota: `Transferencia de ahorros al fondo de inversión · Ronda ${ronda.nombre}`,
+            createdAt: fechaMovimiento,
           },
         });
       }
