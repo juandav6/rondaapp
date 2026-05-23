@@ -347,14 +347,17 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       )}
 
       {/* ── Distribución al cierre ── */}
-      {rondaCerrada && resumen.totalInteresGenerado > 0 && (
+      {(rondaCerrada || inversores.length > 0) && inversores.length > 0 && (
         <section className="overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-sm">
           <div className="border-b bg-emerald-50 px-4 py-3">
-            <p className="text-sm font-semibold text-emerald-800">💰 Distribución al cierre</p>
+            <p className="text-sm font-semibold text-emerald-800">💰 {rondaCerrada ? "Distribución al cierre" : "Fondo de inversión"}</p>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-emerald-600">
               <span>Fondo: <strong>{fmt(resumen.totalFondoInversion)}</strong></span>
-              <span>Intereses: <strong>{fmt(resumen.totalInteresGenerado)}</strong></span>
-              <span>Total: <strong>{fmt(resumen.totalFondoInversion + resumen.totalInteresGenerado)}</strong></span>
+              {resumen.totalInteresGenerado > 0 && <>
+                <span>Intereses: <strong>{fmt(resumen.totalInteresGenerado)}</strong></span>
+                <span>Total: <strong>{fmt(resumen.totalFondoInversion + resumen.totalInteresGenerado)}</strong></span>
+              </>}
+              <span>{inversores.length} inversor{inversores.length !== 1 ? "es" : ""}</span>
             </div>
           </div>
 
