@@ -45,10 +45,10 @@ async function getKardex(socioId: number) {
 
   // Ordenar: misma fecha → INVERSION primero, luego AHORRO/DEVOLUCION/INTERES, luego RETIRO
   const TIPO_ORDEN: Record<string, number> = {
-    INVERSION:  1,
-    AHORRO:     2,
-    DEVOLUCION: 3,
-    INTERES:    4,
+    DEVOLUCION: 1,  // primero devuelven el capital anterior
+    INTERES:    2,  // luego los intereses
+    AHORRO:     3,  // luego el ahorro de la semana
+    INVERSION:  4,  // luego sale al nuevo fondo
     RETIRO:     5,
   };
   movimientos.sort((a, b) => {
