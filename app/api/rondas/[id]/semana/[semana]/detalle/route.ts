@@ -29,9 +29,13 @@ export async function GET(
 
     const socioIds = participaciones.map((p) => p.socioId);
 
-    const [aportes, ahorros] = await Promise.all([
+    const [aportes, ahorros, responsable] = await Promise.all([
       prisma.aporte.findMany({ where: { rondaId, semana, socioId: { in: socioIds } } }),
       prisma.ahorro.findMany({ where: { rondaId, semana, socioId: { in: socioIds } } }),
+      prisma.responsableCobroSemana.findFirst({
+        where: { rondaId, semana },
+        include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } } },
+      }),
     ]);
 
     const aporteBySocio = new Map<number, { monto: Prisma.Decimal; multa: Prisma.Decimal }>();
@@ -55,7 +59,18 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ rondaId, semana, rows });
+    return NextResponse.json({
+      rondaId, semana, rows,
+      responsableId: responsable?.socioId ?? null,
+      responsableNombre: responsable ? `${responsable.socio.nombres} ${responsable.socio.apellidos}` : null,
+      socios: participaciones.map(p => ({
+        id: p.socioId,
+        nombres: p.socio.nombres,
+        apellidos: p.socio.apellidos,
+        numeroCuenta: p.socio.numeroCuenta,
+        orden: p.orden,
+      })),
+    });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "Error al obtener detalle semanal" },
@@ -78,6 +93,7 @@ export async function PUT(
 
     const body = await req.json().catch(() => null);
     const updates = Array.isArray(body?.updates) ? body.updates : null;
+    const responsableId = body?.responsableId ?? null;
     if (!updates)
       return NextResponse.json({ error: "updates requerido" }, { status: 400 });
 
@@ -91,28 +107,27 @@ export async function PUT(
         const socioId = Number(u.socioId);
         const aporteSemana = toDecimal(u.aporteSemana);
         const ahorroSemana = toDecimal(u.ahorroSemana);
-        const multaSemana = toDecimal(u.multaSemana ?? 0); // ← nuevo
+        const multaSemana = toDecimal(u.multaSemana ?? 0);
 
-        // Aporte: upsert con multa
         await tx.aporte.upsert({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
-          update: {
-            monto: aporteSemana,
-            multa: multaSemana, // ← actualiza la multa
-          },
-          create: {
-            rondaId, socioId, semana,
-            monto: aporteSemana,
-            multa: multaSemana,
-            observaciones: "",
-          },
+          update: { monto: aporteSemana, multa: multaSemana },
+          create: { rondaId, socioId, semana, monto: aporteSemana, multa: multaSemana, observaciones: "" },
         });
 
-        // Ahorro: upsert
         await tx.ahorro.upsert({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
           update: { monto: ahorroSemana },
           create: { rondaId, socioId, semana, monto: ahorroSemana, observaciones: "" },
+        });
+      }
+
+      // Actualizar responsable de la semana si se proporcionó
+      if (responsableId !== null) {
+        await tx.responsableCobroSemana.upsert({
+          where: { rondaId_semana: { rondaId, semana } },
+          update: { socioId: Number(responsableId) },
+          create: { rondaId, semana, socioId: Number(responsableId) },
         });
       }
     });
