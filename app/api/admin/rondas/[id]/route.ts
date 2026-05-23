@@ -175,9 +175,9 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       }
 
       // 7. Movimientos de cuenta — revertir efecto en saldoAhorros
-      // AHORRO suma, RETIRO resta, DEVOLUCION suma, INTERES suma → al eliminar hacemos lo inverso
+      // AHORRO/DEVOLUCION/INTERES suman al saldo, RETIRO/INVERSION restan → al eliminar hacemos lo inverso
       const movsRonda = await tx.movimientoCuenta.findMany({
-        where: { rondaId, tipo: { in: ["AHORRO", "RETIRO", "DEVOLUCION", "INTERES"] } },
+        where: { rondaId, tipo: { in: ["AHORRO", "RETIRO", "DEVOLUCION", "INTERES", "INVERSION"] } },
         select: { socioId: true, tipo: true, monto: true },
       });
       const deltaMovs = new Map<number, number>();
