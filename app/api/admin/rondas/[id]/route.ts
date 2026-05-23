@@ -174,8 +174,28 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         });
       }
 
-      // 7. Movimientos de cuenta
+      // 7. Movimientos de cuenta — revertir efecto en saldoAhorros
+      // AHORRO suma, RETIRO resta, DEVOLUCION suma, INTERES suma → al eliminar hacemos lo inverso
+      const movsRonda = await tx.movimientoCuenta.findMany({
+        where: { rondaId, tipo: { in: ["AHORRO", "RETIRO", "DEVOLUCION", "INTERES"] } },
+        select: { socioId: true, tipo: true, monto: true },
+      });
+      const deltaMovs = new Map<number, number>();
+      movsRonda.forEach(m => {
+        const efecto = ["AHORRO", "DEVOLUCION", "INTERES"].includes(m.tipo)
+          ? -Number(m.monto)  // sumó al saldo → restamos
+          : +Number(m.monto); // restó del saldo → sumamos
+        deltaMovs.set(m.socioId, (deltaMovs.get(m.socioId) ?? 0) + efecto);
+      });
       await tx.movimientoCuenta.deleteMany({ where: { rondaId } });
+      for (const [socioId, delta] of deltaMovs) {
+        if (Math.abs(delta) > 0.001) {
+          await tx.socio.update({
+            where: { id: socioId },
+            data: { saldoAhorros: { increment: new Prisma.Decimal(delta.toFixed(2)) } },
+          });
+        }
+      }
 
       // 8. Movimientos de caja (multas, intereses express, gastos)
       await (tx as any).movimientoCaja.deleteMany({ where: { rondaId } });
@@ -223,7 +243,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       efectosCadena: [{
         tabla: "rondas",
         registroId: rondaId,
-        descripcion: `Eliminados en cascada: ${resumen.aportes} aportes, ${resumen.ahorros} ahorros, ${resumen.prestamos} préstamos, ${resumen.inversiones} cuentas de inversión, ${resumen.participaciones} participaciones. Saldos de ahorros revertidos.`,
+        descripcion: `Eliminados en cascada: ${resumen.aportes} aportes, ${resumen.ahorros} ahorros, ${resumen.prestamos} préstamos, ${resumen.inversiones} cuentas de inversión, ${resumen.participaciones} participaciones. Saldos de ahorros revertidos (ahorros de ronda + intereses + devoluciones).`,
       }],
     });
 
