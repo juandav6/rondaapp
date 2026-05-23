@@ -211,53 +211,39 @@ export default function HistorialRondasPage() {
                   <td className="px-4 py-3"><StatusBadge activa={r.activa} /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      {/* Si es activa: botón regenerar siempre visible + descargar si existe */}
-                      {r.activa ? (
-                        <div className="flex gap-1.5">
-                          {r.reporteGeneradoAt && (
-                            <a href={`/api/rondas/${r.id}/reporte`} download
-                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-                              title={`Excel generado el ${new Date(r.reporteGeneradoAt).toLocaleDateString("es-EC")}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-                                <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
-                              </svg>
-                              Descargar
-                            </a>
-                          )}
-                          <button onClick={() => regenerarExcel(r.id, r.nombre)} disabled={regenerando === r.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-                            title="Regenerar Excel con datos actualizados">
-                            {regenerando === r.id ? (
-                              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
-                                <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="4"/>
-                              </svg>
-                            ) : (
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-                                <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clipRule="evenodd"/>
-                              </svg>
-                            )}
-                            {regenerando === r.id ? "Generando…" : "Actualizar Excel"}
-                          </button>
-                        </div>
-                      ) : (
-                        /* Ronda cerrada: solo descargar o generar si no existe */
-                        r.reporteGeneradoAt ? (
+                      {/* Botones Excel — disponibles para TODAS las rondas */}
+                      <div className="flex gap-1.5">
+                        {r.reporteGeneradoAt && (
                           <a href={`/api/rondas/${r.id}/reporte`} download
-                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-                            title={`Reporte generado el ${new Date(r.reporteGeneradoAt).toLocaleDateString("es-EC")}`}>
+                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                            title={`Excel generado el ${new Date(r.reporteGeneradoAt).toLocaleDateString("es-EC")}`}>
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
                               <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
                             </svg>
-                            Excel ✓
+                            Descargar
                           </a>
-                        ) : (
-                          <button onClick={() => regenerarExcel(r.id, r.nombre)} disabled={regenerando === r.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50">
-                            {regenerando === r.id ? "Generando…" : "Generar Excel"}
-                          </button>
-                        )
-                      )}
+                        )}
+                        <button onClick={() => regenerarExcel(r.id, r.nombre)} disabled={regenerando === r.id}
+                          className={classNames(
+                            "inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium disabled:opacity-50",
+                            r.activa
+                              ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                              : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                          )}
+                          title={r.activa ? "Regenerar Excel con datos actualizados" : "Generar o regenerar Excel de esta ronda"}>
+                          {regenerando === r.id ? (
+                            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                              <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="4"/>
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                              <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clipRule="evenodd"/>
+                            </svg>
+                          )}
+                          {regenerando === r.id ? "Generando…" : r.reporteGeneradoAt ? "Actualizar Excel" : "Generar Excel"}
+                        </button>
+                      </div>
                       <Link href={`/rondas/${r.id}/resultados`}
                         className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
                         Ver resultados
@@ -306,21 +292,25 @@ export default function HistorialRondasPage() {
               <StatusBadge activa={r.activa} />
             </div>
             <div className="flex gap-2 pt-1">
-              {r.reporteGeneradoAt ? (
+              {r.reporteGeneradoAt && (
                 <a href={`/api/rondas/${r.id}/reporte`} download
                   className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-medium text-emerald-700 hover:bg-emerald-100 flex items-center gap-1">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
                     <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
                   </svg>
-                  Excel ✓
+                  Descargar
                 </a>
-              ) : (
-                <button onClick={() => regenerarExcel(r.id, r.nombre)}
-                  disabled={regenerando === r.id}
-                  className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1">
-                  {regenerando === r.id ? "Generando…" : "Generar Excel"}
-                </button>
               )}
+              <button onClick={() => regenerarExcel(r.id, r.nombre)}
+                disabled={regenerando === r.id}
+                className={classNames(
+                  "rounded-lg border px-3 py-2 text-xs font-medium disabled:opacity-50 flex items-center gap-1",
+                  r.activa
+                    ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                )}>
+                {regenerando === r.id ? "Generando…" : r.reporteGeneradoAt ? "Actualizar Excel" : "Generar Excel"}
+              </button>
               <Link href={`/rondas/${r.id}/resultados`}
                 className="flex-1 rounded-lg bg-blue-600 py-2 text-center text-xs font-medium text-white hover:bg-blue-700">
                 Ver resultados
