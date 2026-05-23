@@ -27,7 +27,15 @@ export default function AdminRondasPage() {
 
   function abrirEditar(r: any) {
     setEditando(r);
-    setForm({ nombre: r.nombre, montoAporte: r.montoAporte, ahorroObjetivoPorSocio: r.ahorroObjetivoPorSocio, semanaActual: r.semanaActual, intervaloDiasCobro: r.intervaloDiasCobro ?? 7 });
+    setForm({
+      nombre: r.nombre,
+      montoAporte: r.montoAporte,
+      ahorroObjetivoPorSocio: r.ahorroObjetivoPorSocio,
+      semanaActual: r.semanaActual,
+      intervaloDiasCobro: r.intervaloDiasCobro ?? 7,
+      fechaInicio: r.fechaInicio ? new Date(r.fechaInicio).toISOString().slice(0, 10) : "",
+      fechaFin: r.fechaFin ? new Date(r.fechaFin).toISOString().slice(0, 10) : "",
+    });
   }
 
   async function guardar() {
@@ -180,6 +188,23 @@ export default function AdminRondasPage() {
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Objetivo ahorro ($)</label>
                   <input type="number" step="0.01" value={form.ahorroObjetivoPorSocio ?? ""} onChange={e => setForm((p: any) => ({ ...p, ahorroObjetivoPorSocio: e.target.value }))}
                     className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Fecha inicio</label>
+                  <input type="date" value={form.fechaInicio ?? ""} onChange={e => setForm((p: any) => ({ ...p, fechaInicio: e.target.value }))}
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">
+                    Fecha fin
+                    {!editando.activa && <span className="ml-1 text-amber-600 font-normal">— corregir si es incorrecta</span>}
+                  </label>
+                  <input type="date" value={form.fechaFin ?? ""} onChange={e => setForm((p: any) => ({ ...p, fechaFin: e.target.value }))}
+                    disabled={editando.activa}
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-gray-100 disabled:text-gray-400"/>
+                  {editando.activa && <p className="text-[10px] text-gray-400 mt-0.5">Se calcula automáticamente al cerrar la ronda</p>}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
