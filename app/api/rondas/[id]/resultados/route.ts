@@ -132,6 +132,7 @@ export async function GET(_req: Request, context: Context) {
       totalAhorros: totalAhorros._sum.monto?.toString() ?? "0",
       totalInteresProyectado: Math.round(totalInteresRonda * 100) / 100,
       totalInteresCobrado: Math.round(totalInteresCobrado * 100) / 100,
+      totalFondoInversion: Math.round(fondoTotal * 100) / 100,
       fondoTotal: Math.round(fondoTotal * 100) / 100,
       totalInversores: cuentasInversion.length,
     },
