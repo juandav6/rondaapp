@@ -139,33 +139,36 @@ export async function DELETE(req: Request) {
       include: { socio: { select: { nombres: true, apellidos: true, saldoAhorros: true } }, ronda: { select: { nombre: true } } },
     });
     if (!mov) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
-    if (!["AHORRO", "RETIRO"].includes(mov.tipo))
-      return NextResponse.json({ error: "Solo se pueden eliminar depósitos y retiros" }, { status: 400 });
 
     const monto = Number(mov.monto);
+    const afectaSaldo = ["AHORRO", "RETIRO"].includes(mov.tipo);
 
     await prisma.$transaction(async (tx) => {
       await tx.movimientoCuenta.delete({ where: { id: Number(id) } });
-      // Revertir el efecto en saldoAhorros
-      const ajuste = mov.tipo === "AHORRO" ? -monto : monto; // si era depósito lo resto, si era retiro lo sumo
-      await tx.socio.update({
-        where: { id: mov.socioId },
-        data: { saldoAhorros: { increment: dec(ajuste) } },
-      });
+      if (afectaSaldo) {
+        // Revertir: si era AHORRO lo restamos, si era RETIRO lo sumamos
+        const ajuste = mov.tipo === "AHORRO" ? -monto : monto;
+        await tx.socio.update({
+          where: { id: mov.socioId },
+          data: { saldoAhorros: { increment: dec(ajuste) } },
+        });
+      }
     });
 
-    const socioAct = await prisma.socio.findUnique({ where: { id: mov.socioId }, select: { saldoAhorros: true } });
+    const socioAct = afectaSaldo
+      ? await prisma.socio.findUnique({ where: { id: mov.socioId }, select: { saldoAhorros: true } })
+      : null;
 
     await registrarBitacora({
       tabla: "movimientos_cuenta", registroId: Number(id), accion: "ELIMINAR",
       camposCambios: {
-        tipo: { antes: mov.tipo, despues: null },
-        monto: { antes: monto, despues: null },
-        nota: { antes: mov.nota, despues: null },
-        socio: { antes: `${mov.socio.nombres} ${mov.socio.apellidos}`, despues: null },
-        ronda: { antes: mov.ronda?.nombre ?? null, despues: null },
+        tipo:       { antes: mov.tipo,   despues: null },
+        monto:      { antes: monto,      despues: null },
+        nota:       { antes: mov.nota,   despues: null },
+        socio:      { antes: `${mov.socio.nombres} ${mov.socio.apellidos}`, despues: null },
+        ronda:      { antes: mov.ronda?.nombre ?? null, despues: null },
       },
-      efectosCadena: [{
+      efectosCadena: afectaSaldo ? [{
         tabla: "socios", registroId: mov.socioId,
         descripcion: `saldoAhorros ajustado por eliminación de ${mov.tipo === "AHORRO" ? "depósito" : "retiro"} de $${monto.toFixed(2)}`,
         camposAfectados: {
@@ -174,10 +177,14 @@ export async function DELETE(req: Request) {
             despues: Number(socioAct?.saldoAhorros ?? 0),
           },
         },
-      }],
+      }] : undefined,
     });
 
-    return NextResponse.json({ ok: true, nuevoSaldo: Number(socioAct?.saldoAhorros ?? 0) });
+    return NextResponse.json({
+      ok: true,
+      nuevoSaldo: Number(socioAct?.saldoAhorros ?? mov.socio.saldoAhorros),
+      afectaSaldo,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Error" }, { status: 500 });
   }
