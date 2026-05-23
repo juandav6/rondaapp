@@ -727,8 +727,6 @@ export default function RondaActualPage() {
         </div>
       )}
 
-      )}
-
       {/* ── Socios parciales ── */}
       {(estado.sociosParciales?.length ?? 0) > 0 && (
         <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
