@@ -34,6 +34,17 @@ type RondaDTO = {
 type EstadoSemana = {
   ronda: RondaDTO; semana: number; totalParticipantes: number; items: Item[];
   totalAportesSemana?: string; totalAhorrosSemana?: string; responsableId?: number | null;
+  sociosParciales?: SocioParcial[];
+};
+type SocioParcial = {
+  socioId: number;
+  socio: { nombres: string; apellidos: string; numeroCuenta: string; saldoAhorros: number };
+  ahorroSemanaActual: number;
+  ahorroRegistradoSemana: boolean;
+  totalAcumulado: number;
+  objetivo: number;
+  ahorroRestante: number;
+  historial: { semana: number; monto: number }[];
 };
 type Toast = { text: string; type: "success" | "error" | "info" | "warning" };
 
@@ -65,6 +76,8 @@ export default function RondaActualPage() {
   const [loadingSemanas, setLoadingSemanas] = useState(false);
   const [editandoSemana, setEditandoSemana] = useState<number | null>(null);
   const [editObs, setEditObs] = useState("");
+  const [showParciales, setShowParciales] = useState(false);
+  const [parcialAhorroInputs, setParcialAhorroInputs] = useState<Record<number, number>>({});
 
   const showToast = (text: string, type: Toast["type"] = "success", ms = 2500) => {
     setToast({ text, type });
@@ -711,6 +724,170 @@ export default function RondaActualPage() {
               );
             })}
           </ul>
+        </div>
+      )}
+
+      )}
+
+      {/* ── Socios parciales ── */}
+      {(estado.sociosParciales?.length ?? 0) > 0 && (
+        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+          <button
+            onClick={() => setShowParciales(p => !p)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-xs font-bold">
+                {estado.sociosParciales!.length}
+              </span>
+              <p className="text-sm font-semibold text-gray-800">Socios con ahorro parcial</p>
+              <span className="text-xs text-gray-400">No participan en la ronda pero aportan ahorros</span>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
+              className={cn("h-4 w-4 text-gray-400 transition-transform", showParciales && "rotate-180")}>
+              <path fillRule="evenodd" d="M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z" clipRule="evenodd"/>
+            </svg>
+          </button>
+
+          {showParciales && (
+            <>
+              {/* Desktop */}
+              <div className="hidden sm:block overflow-x-auto border-t">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Socio</th>
+                      <th className="px-4 py-3 text-right">Ahorro esta semana</th>
+                      <th className="px-4 py-3 text-right">Acumulado</th>
+                      <th className="px-4 py-3 text-right">Objetivo</th>
+                      <th className="px-4 py-3 text-right">Restante</th>
+                      <th className="px-4 py-3 text-center">Registrar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {estado.sociosParciales!.map(sp => {
+                      const input = parcialAhorroInputs[sp.socioId] ?? sp.ahorroSemanaActual;
+                      const pct = sp.objetivo > 0 ? Math.min((sp.totalAcumulado / sp.objetivo) * 100, 100) : 0;
+                      return (
+                        <tr key={sp.socioId} className={cn("border-t hover:bg-gray-50/60", sp.ahorroRegistradoSemana && "bg-emerald-50/30")}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{sp.socio.nombres} {sp.socio.apellidos}</p>
+                            <p className="text-xs font-mono text-gray-400">{sp.socio.numeroCuenta}</p>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {sp.ahorroRegistradoSemana ? (
+                              <span className="text-emerald-600 font-semibold">{fmtMoney(sp.ahorroSemanaActual)} ✓</span>
+                            ) : (
+                              <input type="number" min="0" step="0.01"
+                                value={input || ""}
+                                onChange={e => setParcialAhorroInputs(p => ({ ...p, [sp.socioId]: Number(e.target.value) }))}
+                                className="w-24 rounded border px-2 py-1 text-right text-xs focus:outline-none focus:ring-1 focus:ring-violet-300" />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums">
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="font-semibold text-blue-700">{fmtMoney(sp.totalAcumulado)}</span>
+                              {sp.objetivo > 0 && (
+                                <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-500">{sp.objetivo > 0 ? fmtMoney(sp.objetivo) : "—"}</td>
+                          <td className="px-4 py-3 text-right tabular-nums">
+                            <span className={cn("font-semibold", sp.ahorroRestante === 0 && sp.objetivo > 0 ? "text-emerald-600" : "text-gray-700")}>
+                              {sp.objetivo > 0 ? fmtMoney(sp.ahorroRestante) : "—"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {!sp.ahorroRegistradoSemana && (
+                              <button
+                                disabled={saving === sp.socioId || !input}
+                                onClick={async () => {
+                                  if (!input) return;
+                                  setSaving(sp.socioId);
+                                  try {
+                                    const res = await fetch(`/api/rondas/${estado.ronda.id}/semana/${estado.semana}/ahorros`, {
+                                      method: "POST", headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ socioId: sp.socioId, monto: input }),
+                                    });
+                                    if (!res.ok) throw new Error((await res.json()).error);
+                                    showToast(`Ahorro registrado para ${sp.socio.nombres}`, "success");
+                                    await cargar();
+                                  } catch (e: any) { showToast(e.message, "error"); }
+                                  finally { setSaving(null); }
+                                }}
+                                className="rounded-lg bg-violet-600 px-3 py-1 text-xs text-white hover:bg-violet-700 disabled:opacity-40">
+                                {saving === sp.socioId ? "…" : "Guardar"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Móvil */}
+              <ul className="sm:hidden divide-y border-t">
+                {estado.sociosParciales!.map(sp => {
+                  const input = parcialAhorroInputs[sp.socioId] ?? sp.ahorroSemanaActual;
+                  const pct = sp.objetivo > 0 ? Math.min((sp.totalAcumulado / sp.objetivo) * 100, 100) : 0;
+                  return (
+                    <li key={sp.socioId} className={cn("p-4 space-y-3", sp.ahorroRegistradoSemana && "bg-emerald-50/30")}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-gray-900">{sp.socio.nombres} {sp.socio.apellidos}</p>
+                          <p className="text-xs font-mono text-gray-400">{sp.socio.numeroCuenta}</p>
+                        </div>
+                        {sp.ahorroRegistradoSemana && (
+                          <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-semibold">✓ {fmtMoney(sp.ahorroSemanaActual)}</span>
+                        )}
+                      </div>
+                      {sp.objetivo > 0 && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Progreso</span>
+                            <span className="font-medium">{fmtMoney(sp.totalAcumulado)} / {fmtMoney(sp.objetivo)}</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )}
+                      {!sp.ahorroRegistradoSemana && (
+                        <div className="flex gap-2">
+                          <input type="number" min="0" step="0.01" value={input || ""}
+                            onChange={e => setParcialAhorroInputs(p => ({ ...p, [sp.socioId]: Number(e.target.value) }))}
+                            className="flex-1 rounded-lg border px-3 py-2 text-sm text-right" placeholder="Monto ahorro" />
+                          <button
+                            disabled={saving === sp.socioId || !input}
+                            onClick={async () => {
+                              if (!input) return;
+                              setSaving(sp.socioId);
+                              try {
+                                const res = await fetch(`/api/rondas/${estado.ronda.id}/semana/${estado.semana}/ahorros`, {
+                                  method: "POST", headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ socioId: sp.socioId, monto: input }),
+                                });
+                                if (!res.ok) throw new Error((await res.json()).error);
+                                showToast(`Ahorro registrado`, "success");
+                                await cargar();
+                              } catch (e: any) { showToast(e.message, "error"); }
+                              finally { setSaving(null); }
+                            }}
+                            className="rounded-lg bg-violet-600 px-4 py-2 text-sm text-white disabled:opacity-40">
+                            {saving === sp.socioId ? "…" : "Guardar"}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </div>
       )}
 
