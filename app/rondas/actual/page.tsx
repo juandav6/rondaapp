@@ -248,9 +248,9 @@ export default function RondaActualPage() {
       for (const sp of pendientes) {
         const monto = Number(parcialAhorroInputs[sp.socioId] ?? 0);
         if (monto <= 0) continue;
-        await fetch(`/api/rondas/${estado!.ronda.id}/semana/${estado!.semana}/ahorros`, {
+        await fetch(`/api/rondas/${estado!.ronda.id}/ahorros`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ socioId: sp.socioId, monto }),
+          body: JSON.stringify({ socioId: sp.socioId, semana: estado!.semana, monto }),
         });
       }
       await cargar();
@@ -764,6 +764,8 @@ export default function RondaActualPage() {
         </div>
       )}
 
+      )}
+
       {/* ── Socios parciales (solo ahorro, sin aporte de ronda) ── */}
       {(estado.sociosParciales?.length ?? 0) > 0 && (
         <div className="rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
@@ -893,9 +895,9 @@ export default function RondaActualPage() {
                                   if (!input) return;
                                   setSaving(sp.socioId);
                                   try {
-                                    const res = await fetch(`/api/rondas/${estado.ronda.id}/semana/${estado.semana}/ahorros`, {
+                                    const res = await fetch(`/api/rondas/${estado.ronda.id}/ahorros`, {
                                       method: "POST", headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({ socioId: sp.socioId, monto: input }),
+                                      body: JSON.stringify({ socioId: sp.socioId, semana: estado.semana, monto: input }),
                                     });
                                     if (!res.ok) throw new Error((await res.json()).error);
                                     showToast(`Ahorro registrado — ${sp.socio.nombres}`, "success");
@@ -980,9 +982,9 @@ export default function RondaActualPage() {
                               if (!input) return;
                               setSaving(sp.socioId);
                               try {
-                                const res = await fetch(`/api/rondas/${estado.ronda.id}/semana/${estado.semana}/ahorros`, {
+                                const res = await fetch(`/api/rondas/${estado.ronda.id}/ahorros`, {
                                   method: "POST", headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ socioId: sp.socioId, monto: input }),
+                                  body: JSON.stringify({ socioId: sp.socioId, semana: estado.semana, monto: input }),
                                 });
                                 if (!res.ok) throw new Error((await res.json()).error);
                                 showToast(`Ahorro registrado`, "success");
