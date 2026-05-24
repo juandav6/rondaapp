@@ -49,6 +49,7 @@ function AhorrosRegistroContent() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [nuevaFecha, setNuevaFecha] = useState("");
   const [nuevoMonto, setNuevoMonto] = useState("");
+  const [nuevaNota, setNuevaNota] = useState("");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
 
@@ -134,12 +135,12 @@ function AhorrosRegistroContent() {
       setSaving(true); setError(null); setOkMsg(null);
       const res = await fetch("/api/ahorros/deposito", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ socioId: selectedId, monto, ...(nuevaFecha ? { fecha: nuevaFecha } : {}) }),
+        body: JSON.stringify({ socioId: selectedId, monto, nota: nuevaNota.trim() || undefined, ...(nuevaFecha ? { fecha: nuevaFecha } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Error al registrar");
       setOkMsg("Depósito registrado correctamente");
-      setNuevaFecha(""); setNuevoMonto("");
+      setNuevaFecha(""); setNuevoMonto(""); setNuevaNota("");
       setTimeout(() => setOkMsg(null), 3000);
       await cargarHistorial(selectedId, desde, hasta);
     } catch (e: any) { setError(e?.message); }
@@ -325,6 +326,13 @@ function AhorrosRegistroContent() {
                         {saving ? "Guardando…" : "Registrar depósito"}
                       </button>
                     </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="mb-1 block text-xs font-medium text-gray-600">Comentario (opcional)</label>
+                    <input type="text" placeholder="Descripción del depósito…" value={nuevaNota}
+                      onChange={e => setNuevaNota(e.target.value)}
+                      maxLength={200}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
                   </div>
                   {okMsg && <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">✓ {okMsg}</div>}
                   {error && <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
