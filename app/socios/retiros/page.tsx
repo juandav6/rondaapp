@@ -35,6 +35,7 @@ function RetirosAhorroContent() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
+  const [notaRetiro, setNotaRetiro] = useState("");
   const [hayRondaActiva, setHayRondaActiva] = useState(false);
   const [checkingRonda, setCheckingRonda] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -121,12 +122,12 @@ function RetirosAhorroContent() {
       setLoading(true); setError(null); setOk(null);
       const res = await fetch("/api/ahorros/retiro", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ socioId: selectedId, monto: montoNum, fecha: fechaRetiro }),
+        body: JSON.stringify({ socioId: selectedId, monto: montoNum, fecha: fechaRetiro, nota: notaRetiro.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Error al registrar");
       setOk("Retiro registrado correctamente.");
-      setMontoRetiro("");
+      setMontoRetiro(""); setNotaRetiro("");
       await cargarSaldo(selectedId);
     } catch (e: any) { setError(e?.message); }
     finally { setLoading(false); setTimeout(() => setOk(null), 3000); }
@@ -314,6 +315,14 @@ function RetirosAhorroContent() {
                           </div>
                         </div>
                       )}
+
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-600">Comentario (opcional)</label>
+                        <input type="text" placeholder="Motivo o descripción del retiro…" value={notaRetiro}
+                          onChange={e => setNotaRetiro(e.target.value)} disabled={hayRondaActiva}
+                          maxLength={200}
+                          className="w-full rounded-lg border px-3 py-2.5 text-sm focus:border-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-200 disabled:bg-gray-100" />
+                      </div>
 
                       <button onClick={hacerRetiro} disabled={!puedeRetirar || loading}
                         className={cx("w-full rounded-lg px-4 py-2.5 text-sm font-medium text-white flex items-center justify-center gap-2",
