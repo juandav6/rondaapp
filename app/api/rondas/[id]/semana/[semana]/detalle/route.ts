@@ -121,7 +121,7 @@ export async function PUT(
       for (const u of updates) {
         const socioId = Number(u.socioId);
         const aporteSemana = toDecimal(u.aporteSemana);
-        const ahorroSemana = toDecimal(u.ahorroSemana);
+        const ahorroNuevo = toDecimal(u.ahorroSemana);
         const multaSemana = toDecimal(u.multaSemana ?? 0);
 
         await tx.aporte.upsert({
@@ -130,23 +130,85 @@ export async function PUT(
           create: { rondaId, socioId, semana, monto: aporteSemana, multa: multaSemana, observaciones: "" },
         });
 
+        // Leer ahorro anterior para calcular delta
+        const ahorroAnterior = await tx.ahorro.findUnique({
+          where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
+          select: { monto: true },
+        });
+        const montoAnterior = Number(ahorroAnterior?.monto ?? 0);
+        const montoNuevo = Number(ahorroNuevo);
+        const delta = montoNuevo - montoAnterior;
+
         await tx.ahorro.upsert({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
-          update: { monto: ahorroSemana },
-          create: { rondaId, socioId, semana, monto: ahorroSemana, observaciones: "" },
+          update: { monto: ahorroNuevo },
+          create: { rondaId, socioId, semana, monto: ahorroNuevo, observaciones: "" },
         });
+
+        // Sincronizar MovimientoCuenta tipo AHORRO de esta semana/ronda
+        if (Math.abs(delta) > 0.001) {
+          const movExistente = await tx.movimientoCuenta.findFirst({
+            where: { socioId, rondaId, tipo: "AHORRO", nota: { contains: `semana ${semana}` } },
+          });
+          if (movExistente) {
+            await tx.movimientoCuenta.update({
+              where: { id: movExistente.id },
+              data: { monto: new Prisma.Decimal(montoNuevo) },
+            });
+          } else if (montoNuevo > 0) {
+            await tx.movimientoCuenta.create({
+              data: { socioId, rondaId, tipo: "AHORRO", monto: new Prisma.Decimal(montoNuevo),
+                nota: `Ahorro semana ${semana} · ronda ${rondaId}` },
+            });
+          }
+          // Ajustar saldoAhorros por el delta
+          await tx.socio.update({
+            where: { id: socioId },
+            data: { saldoAhorros: { increment: new Prisma.Decimal(delta.toFixed(2)) } },
+          });
+        }
       }
 
       // Socios parciales: solo ahorro
       for (const u of updatesParciales) {
         const socioId = Number(u.socioId);
         if (!Number.isFinite(socioId)) continue;
-        const ahorroSemana = toDecimal(u.ahorroSemana);
+        const ahorroNuevo = toDecimal(u.ahorroSemana);
+        const montoNuevo = Number(ahorroNuevo);
+
+        const ahorroAnterior = await tx.ahorro.findUnique({
+          where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
+          select: { monto: true },
+        });
+        const montoAnterior = Number(ahorroAnterior?.monto ?? 0);
+        const delta = montoNuevo - montoAnterior;
+
         await tx.ahorro.upsert({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
-          update: { monto: ahorroSemana },
-          create: { rondaId, socioId, semana, monto: ahorroSemana, observaciones: "" },
+          update: { monto: ahorroNuevo },
+          create: { rondaId, socioId, semana, monto: ahorroNuevo, observaciones: "" },
         });
+
+        if (Math.abs(delta) > 0.001) {
+          const movExistente = await tx.movimientoCuenta.findFirst({
+            where: { socioId, rondaId, tipo: "AHORRO", nota: { contains: `semana ${semana}` } },
+          });
+          if (movExistente) {
+            await tx.movimientoCuenta.update({
+              where: { id: movExistente.id },
+              data: { monto: new Prisma.Decimal(montoNuevo) },
+            });
+          } else if (montoNuevo > 0) {
+            await tx.movimientoCuenta.create({
+              data: { socioId, rondaId, tipo: "AHORRO", monto: new Prisma.Decimal(montoNuevo),
+                nota: `Ahorro semana ${semana} · ronda ${rondaId}` },
+            });
+          }
+          await tx.socio.update({
+            where: { id: socioId },
+            data: { saldoAhorros: { increment: new Prisma.Decimal(delta.toFixed(2)) } },
+          });
+        }
       }
 
       // Actualizar responsable de la semana si se proporcionó
