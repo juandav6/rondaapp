@@ -29,12 +29,21 @@ export async function GET(
 
     const socioIds = participaciones.map((p) => p.socioId);
 
-    const [aportes, ahorros, responsable] = await Promise.all([
+    const [aportes, ahorros, responsable, ahorrosParciales] = await Promise.all([
       prisma.aporte.findMany({ where: { rondaId, semana, socioId: { in: socioIds } } }),
       prisma.ahorro.findMany({ where: { rondaId, semana, socioId: { in: socioIds } } }),
       prisma.responsableCobroSemana.findFirst({
         where: { rondaId, semana },
         include: { socio: { select: { id: true, nombres: true, apellidos: true, numeroCuenta: true } } },
+      }),
+      // Socios parciales: tienen ahorro en esta ronda pero NO son participantes
+      prisma.socio.findMany({
+        where: { id: { notIn: socioIds.length > 0 ? socioIds : [-1] } },
+        select: {
+          id: true, nombres: true, apellidos: true, numeroCuenta: true,
+          ahorros: { where: { rondaId, semana }, select: { monto: true } },
+        },
+        orderBy: [{ apellidos: "asc" }, { nombres: "asc" }],
       }),
     ]);
 
@@ -61,14 +70,18 @@ export async function GET(
 
     return NextResponse.json({
       rondaId, semana, rows,
+      rowsParciales: ahorrosParciales.map(s => ({
+        socioId: s.id,
+        numeroCuenta: s.numeroCuenta,
+        nombres: s.nombres,
+        apellidos: s.apellidos,
+        ahorroSemana: Number(s.ahorros[0]?.monto ?? 0),
+      })),
       responsableId: responsable?.socioId ?? null,
       responsableNombre: responsable ? `${responsable.socio.nombres} ${responsable.socio.apellidos}` : null,
       socios: participaciones.map(p => ({
-        id: p.socioId,
-        nombres: p.socio.nombres,
-        apellidos: p.socio.apellidos,
-        numeroCuenta: p.socio.numeroCuenta,
-        orden: p.orden,
+        id: p.socioId, nombres: p.socio.nombres, apellidos: p.socio.apellidos,
+        numeroCuenta: p.socio.numeroCuenta, orden: p.orden,
       })),
     });
   } catch (e: any) {
@@ -93,6 +106,7 @@ export async function PUT(
 
     const body = await req.json().catch(() => null);
     const updates = Array.isArray(body?.updates) ? body.updates : null;
+    const updatesParciales = Array.isArray(body?.updatesParciales) ? body.updatesParciales : [];
     const responsableId = body?.responsableId ?? null;
     if (!updates)
       return NextResponse.json({ error: "updates requerido" }, { status: 400 });
@@ -103,6 +117,7 @@ export async function PUT(
     }
 
     await prisma.$transaction(async (tx) => {
+      // Participantes: aporte + ahorro
       for (const u of updates) {
         const socioId = Number(u.socioId);
         const aporteSemana = toDecimal(u.aporteSemana);
@@ -115,6 +130,18 @@ export async function PUT(
           create: { rondaId, socioId, semana, monto: aporteSemana, multa: multaSemana, observaciones: "" },
         });
 
+        await tx.ahorro.upsert({
+          where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
+          update: { monto: ahorroSemana },
+          create: { rondaId, socioId, semana, monto: ahorroSemana, observaciones: "" },
+        });
+      }
+
+      // Socios parciales: solo ahorro
+      for (const u of updatesParciales) {
+        const socioId = Number(u.socioId);
+        if (!Number.isFinite(socioId)) continue;
+        const ahorroSemana = toDecimal(u.ahorroSemana);
         await tx.ahorro.upsert({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
           update: { monto: ahorroSemana },
