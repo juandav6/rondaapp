@@ -81,6 +81,7 @@ export default function RondaActualPage() {
   const [bulkParcialMonto, setBulkParcialMonto] = useState<number>(0);
   const [bulkParcialConfirmOpen, setBulkParcialConfirmOpen] = useState(false);
   const [savingParciales, setSavingParciales] = useState(false);
+  const [confirmCierreOpen, setConfirmCierreOpen] = useState(false);
 
   const showToast = (text: string, type: Toast["type"] = "success", ms = 2500) => {
     setToast({ text, type });
@@ -658,7 +659,7 @@ export default function RondaActualPage() {
               Ver detalle semanas
             </button>
           </div>
-          <button onClick={cerrarSemana} disabled={cerrando}
+          <button onClick={() => setConfirmCierreOpen(true)} disabled={cerrando}
             className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
             {cerrando ? "Cerrando…" : "Cerrar semana →"}
           </button>
@@ -1071,6 +1072,149 @@ export default function RondaActualPage() {
           </div>
         </div>
       )}
+
+      {/* ── Modal resumen antes de cerrar semana ── */}
+      {confirmCierreOpen && estado && (() => {
+        // Calcular valores del resumen
+        const totalAportesSem = estado.items.reduce((s, it) => s + (it.pagado ? Number(estado.ronda.montoAporte) : 0), 0);
+        const totalMultasSem = estado.items.reduce((s, it) => {
+          const ap = (it as any).aporte;
+          return s + Number(ap?.multa ?? 0);
+        }, 0);
+        const totalAhorrosSem = estado.items.reduce((s, it) => s + Number((it as any).ahorroSemana ?? 0), 0);
+        const totalAhorrosParcSem = (estado.sociosParciales ?? [])
+          .filter(sp => sp.ahorroRegistradoSemana)
+          .reduce((s, sp) => s + sp.ahorroSemanaActual, 0);
+        const socioQueCobraNombre = estado.items.find(it => it.orden === estado.semana)?.socio;
+        const responsableNombre = estado.items.find(it => it.socioId === (estado as any).responsableId)?.socio;
+        const pendientesAhorro = estado.items.filter(it => !(it as any).ahorroRegistradoSemana).length;
+        const pendientesParciales = (estado.sociosParciales ?? []).filter(sp => !sp.ahorroRegistradoSemana).length;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+            <div className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white shadow-xl overflow-hidden">
+              {/* Header */}
+              <div className="bg-emerald-600 px-5 py-4">
+                <h3 className="text-base font-bold text-white">Resumen semana {estado.semana}</h3>
+                <p className="text-xs text-emerald-100 mt-0.5">{estado.ronda.nombre} · Revisa antes de cerrar</p>
+              </div>
+
+              {/* Cuerpo */}
+              <div className="p-5 space-y-3 max-h-[65vh] overflow-y-auto">
+
+                {/* Cobro de ronda */}
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Cobro de ronda</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg bg-white border p-2.5">
+                      <p className="text-[10px] text-gray-400 uppercase">Total aportes</p>
+                      <p className="text-lg font-bold text-blue-700 tabular-nums">{fmtMoney(totalAportesSem)}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {estado.items.filter(it => it.pagado).length}/{estado.items.length} pagaron
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-white border p-2.5">
+                      <p className="text-[10px] text-gray-400 uppercase">Multas</p>
+                      <p className="text-lg font-bold text-red-600 tabular-nums">{fmtMoney(totalMultasSem)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-white border p-2 space-y-0.5">
+                      <p className="text-gray-400">Socio que cobra</p>
+                      <p className="font-semibold text-gray-800">
+                        {socioQueCobraNombre
+                          ? `${socioQueCobraNombre.nombres} ${socioQueCobraNombre.apellidos}`
+                          : <span className="text-gray-400 italic">Sin asignar</span>}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-white border p-2 space-y-0.5">
+                      <p className="text-gray-400">Responsable cobro</p>
+                      <p className="font-semibold text-gray-800">
+                        {responsableNombre
+                          ? `${responsableNombre.nombres} ${responsableNombre.apellidos}`
+                          : (estado as any).responsableId
+                            ? <span className="text-gray-400 italic">ID {(estado as any).responsableId}</span>
+                            : <span className="text-gray-400 italic">Sin asignar</span>}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ahorros */}
+                <div className="rounded-xl bg-teal-50 border border-teal-100 p-3 space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-teal-700">Ahorros semana {estado.semana}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-white border p-2.5">
+                      <p className="text-[10px] text-gray-400 uppercase">Socios participantes</p>
+                      <p className="text-lg font-bold text-teal-700 tabular-nums">{fmtMoney(totalAhorrosSem)}</p>
+                      {pendientesAhorro > 0 && (
+                        <p className="text-[10px] text-amber-600 font-medium">{pendientesAhorro} sin registrar</p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-white border p-2.5">
+                      <p className="text-[10px] text-gray-400 uppercase">Socios parciales</p>
+                      <p className="text-lg font-bold text-violet-700 tabular-nums">{fmtMoney(totalAhorrosParcSem)}</p>
+                      {pendientesParciales > 0 && (
+                        <p className="text-[10px] text-amber-600 font-medium">{pendientesParciales} sin registrar</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Express */}
+                {pendientes.length > 0 && (
+                  <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-indigo-700 mb-2">Préstamos express pendientes</p>
+                    <div className="space-y-1">
+                      {pendientes.map((p: any) => (
+                        <div key={p.socioId} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700">{p.socio?.nombres} {p.socio?.apellidos}</span>
+                          <span className="font-semibold text-indigo-700">{fmtMoney(p.montoAporte)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Observaciones */}
+                <div className="rounded-xl bg-gray-50 border p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Observaciones de la semana</p>
+                  {obsSemana.trim() ? (
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{obsSemana}</p>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Sin observaciones registradas</p>
+                  )}
+                </div>
+
+                {/* Alertas */}
+                {(pendientesAhorro > 0 || pendientesParciales > 0) && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700 space-y-1">
+                    <p className="font-semibold">⚠️ Hay registros pendientes:</p>
+                    {pendientesAhorro > 0 && <p>• {pendientesAhorro} socio{pendientesAhorro > 1 ? "s" : ""} sin ahorro registrado esta semana</p>}
+                    {pendientesParciales > 0 && <p>• {pendientesParciales} socio{pendientesParciales > 1 ? "s" : ""} parcial{pendientesParciales > 1 ? "es" : ""} sin ahorro esta semana</p>}
+                    <p className="text-amber-600">Puedes cerrar igual — los datos pendientes quedarán como no registrados.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="border-t px-5 py-4 flex gap-3">
+                <button
+                  onClick={() => setConfirmCierreOpen(false)}
+                  className="flex-1 rounded-xl border py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  Revisar más
+                </button>
+                <button
+                  onClick={() => { setConfirmCierreOpen(false); cerrarSemana(); }}
+                  disabled={cerrando}
+                  className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                  {cerrando ? "Cerrando…" : "Confirmar cierre →"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal confirmación ahorro masivo parciales */}
       {bulkParcialConfirmOpen && (
