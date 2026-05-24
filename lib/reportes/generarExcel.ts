@@ -663,7 +663,6 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   // ── Sección 2: Ahorros pendientes (objetivo no alcanzado) ─────────────────
   type PendienteAhorro = { socio: string; cuenta: string; objetivo: number; acumulado: number; pendiente: number; tipo: string };
   const pendientesAhorro: PendienteAhorro[] = [];
-  const objetivoAhorro = Number(ronda.ahorroObjetivoPorSocio ?? 0);
 
   if (objetivoAhorro > 0) {
     // Ahorros acumulados por socio participante
