@@ -78,6 +78,9 @@ export default function RondaActualPage() {
   const [editObs, setEditObs] = useState("");
   const [showParciales, setShowParciales] = useState(false);
   const [parcialAhorroInputs, setParcialAhorroInputs] = useState<Record<number, number>>({});
+  const [bulkParcialMonto, setBulkParcialMonto] = useState<number>(0);
+  const [bulkParcialConfirmOpen, setBulkParcialConfirmOpen] = useState(false);
+  const [savingParciales, setSavingParciales] = useState(false);
 
   const showToast = (text: string, type: Toast["type"] = "success", ms = 2500) => {
     setToast({ text, type });
@@ -233,6 +236,30 @@ export default function RondaActualPage() {
       if (inp) inp.value = "";
     } catch (e: any) { showToast(e.message, "error", 4000); }
     finally { setCerrando(false); }
+  }
+
+  async function guardarAhorroParcialTodos() {
+    const pendientes = estado?.sociosParciales?.filter(sp => !sp.ahorroRegistradoSemana) ?? [];
+    if (pendientes.length === 0) { showToast("Todos los socios parciales ya tienen ahorro esta semana", "info"); setBulkParcialConfirmOpen(false); return; }
+    try {
+      setSavingParciales(true);
+      setBulkParcialConfirmOpen(false);
+      for (const sp of pendientes) {
+        const monto = Number(parcialAhorroInputs[sp.socioId] ?? 0);
+        if (monto <= 0) continue;
+        await fetch(`/api/rondas/${estado!.ronda.id}/semana/${estado!.semana}/ahorros`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ socioId: sp.socioId, monto }),
+        });
+      }
+      await cargar();
+      showToast("Ahorros registrados para socios parciales");
+      setBulkParcialMonto(0);
+      setParcialAhorroInputs({});
+      const inp = document.getElementById("bulk-parcial-input") as HTMLInputElement;
+      if (inp) inp.value = "";
+    } catch (e: any) { showToast(e.message, "error", 4000); }
+    finally { setSavingParciales(false); }
   }
 
   async function guardarResponsable() {
@@ -757,9 +784,37 @@ export default function RondaActualPage() {
 
           {showParciales && (
             <>
-              {/* Nota explicativa */}
-              <div className="border-t border-b bg-violet-50/40 px-4 py-2 text-xs text-violet-600">
-                Estos socios no participan en la ronda de aportes. Solo registran su ahorro semanal hacia el objetivo de <strong>{fmtMoney(Number(estado.ronda.ahorroObjetivoPorSocio ?? 0))}</strong>.
+              {/* Nota explicativa + barra bulk */}
+              <div className="border-t border-b bg-violet-50/40 px-4 py-2 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-violet-600">
+                  Solo registran ahorro hacia el objetivo de <strong>{fmtMoney(Number(estado.ronda.ahorroObjetivoPorSocio ?? 0))}</strong>.
+                </p>
+                <div className="flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1.5 shadow-sm">
+                  <span className="text-xs text-gray-500 whitespace-nowrap">Ahorro a todos:</span>
+                  <input
+                    type="number" min="0.01" step="0.01" placeholder="0.00"
+                    id="bulk-parcial-input"
+                    className="w-20 rounded border px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-violet-300"
+                    onChange={e => {
+                      const v = Number(e.target.value || 0);
+                      setBulkParcialMonto(v);
+                      if (v > 0) {
+                        const next: Record<number, number> = {};
+                        estado.sociosParciales!.filter(sp => !sp.ahorroRegistradoSemana).forEach(sp => { next[sp.socioId] = v; });
+                        setParcialAhorroInputs(next);
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (bulkParcialMonto <= 0) { showToast("Ingresa un monto válido", "error"); return; }
+                      setBulkParcialConfirmOpen(true);
+                    }}
+                    disabled={savingParciales || bulkParcialMonto <= 0}
+                    className="rounded bg-violet-600 px-2.5 py-1 text-xs text-white disabled:opacity-50 whitespace-nowrap">
+                    Guardar todos
+                  </button>
+                </div>
               </div>
 
               {/* Desktop */}
@@ -1010,6 +1065,46 @@ export default function RondaActualPage() {
               <button
                 onClick={guardarAhorroTodos}
                 className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+                Sí, registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmación ahorro masivo parciales */}
+      {bulkParcialConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30">
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-start gap-3 mb-4">
+              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clipRule="evenodd"/>
+                </svg>
+              </span>
+              <div>
+                <h4 className="text-base font-semibold text-gray-900">Confirmar ahorro masivo</h4>
+                <p className="text-sm text-gray-500 mt-1">
+                  ¿Registrar{" "}
+                  <strong className="text-violet-700">{fmtMoney(bulkParcialMonto)}</strong>{" "}
+                  de ahorro para{" "}
+                  <strong>{estado?.sociosParciales?.filter(sp => !sp.ahorroRegistradoSemana).length ?? 0} socios parciales</strong>{" "}
+                  en la semana <strong>{estado?.semana}</strong>?
+                </p>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Total: <strong className="text-gray-700">
+                    {fmtMoney(bulkParcialMonto * (estado?.sociosParciales?.filter(sp => !sp.ahorroRegistradoSemana).length ?? 0))}
+                  </strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setBulkParcialConfirmOpen(false)}
+                className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={guardarAhorroParcialTodos}
+                className="flex-1 rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
                 Sí, registrar
               </button>
             </div>
