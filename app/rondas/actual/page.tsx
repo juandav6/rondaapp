@@ -763,7 +763,6 @@ export default function RondaActualPage() {
           </ul>
         </div>
       )}
-
       {/* ── Socios parciales (solo ahorro, sin aporte de ronda) ── */}
       {(estado.sociosParciales?.length ?? 0) > 0 && (
         <div className="rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
