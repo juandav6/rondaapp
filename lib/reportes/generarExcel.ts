@@ -119,23 +119,32 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   ];
 
   kpis.forEach(([label, value], i) => {
-  const row = ws1.addRow([label, value]);
-
-  styleAlternate(row, 2, i % 2 === 0);
-
-  const labelText = label.toString().toLowerCase();
-
-  const esNumeroSinMoneda =
-    labelText.includes("semana") ||
-    labelText.includes("particip");
-
-  if (typeof value === "number" && !esNumeroSinMoneda) {
-    row.getCell(2).numFmt = '"$"#,##0.00';
-  }
-});
+    const row = ws1.addRow([label, typeof value === "number" && label.toString().includes("Semana") ? value : value]);
+    styleAlternate(row, 2, i % 2 === 0);
+    if (typeof value === "number" && !label.toString().includes("Semana") && !label.toString().includes("Part")) {
+      row.getCell(2).numFmt = '"$"#,##0.00';
+    }
+  });
 
   // ── HOJA 2: Participantes ───────────────────────────────────────────────────
   const ws2 = wb.addWorksheet("Participantes");
+
+  // ── Calcular socios parciales (tienen ahorros pero no son participantes) ────
+  const idsParticipantes = new Set(ronda.participaciones.map((p: any) => p.socioId));
+  const ahorrosPorSocioParcial = new Map<number, { socio: any; total: number; ahorros: any[] }>();
+  ronda.ahorros.forEach((a: any) => {
+    if (!idsParticipantes.has(a.socioId)) {
+      if (!ahorrosPorSocioParcial.has(a.socioId)) {
+        ahorrosPorSocioParcial.set(a.socioId, { socio: a.socio, total: 0, ahorros: [] });
+      }
+      const entry = ahorrosPorSocioParcial.get(a.socioId)!;
+      entry.total += Number(a.monto);
+      entry.ahorros.push(a);
+    }
+  });
+  const sociosParciales = Array.from(ahorrosPorSocioParcial.values())
+    .sort((a, b) => a.socio.apellidos.localeCompare(b.socio.apellidos));
+  const objetivoAhorro = Number(ronda.ahorroObjetivoPorSocio ?? 0);
 
   ws2.columns = [
     { header: "Orden", key: "orden", width: 8 },
@@ -183,6 +192,57 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   totalRow2.getCell(5).numFmt = '"$"#,##0.00';
   totalRow2.getCell(6).numFmt = '"$"#,##0.00';
   totalRow2.getCell(7).numFmt = '"$"#,##0.00';
+
+  // ── Sección socios de ahorro parcial en Participantes ───────────────────────
+  if (sociosParciales.length > 0) {
+    ws2.addRow([]);
+    const parcTitleRow = ws2.addRow(["", "", `SOCIOS DE AHORRO PARCIAL (${sociosParciales.length})`, "", "", "", "", "", ""]);
+    ws2.mergeCells(`C${parcTitleRow.number}:I${parcTitleRow.number}`);
+    parcTitleRow.getCell(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFede9fe" } };
+    parcTitleRow.getCell(3).font = { bold: true, color: { argb: "FF5b21b6" }, size: 10 };
+    parcTitleRow.getCell(3).alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+    parcTitleRow.height = 18;
+
+    const parcHeader = ws2.addRow(["", "Cuenta", "Nombres", "Apellidos", "Ahorrado ($)", "Objetivo ($)", "Restante ($)", "% Completado", "Tipo"]);
+    for (let c = 2; c <= 9; c++) {
+      parcHeader.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFede9fe" } };
+      parcHeader.getCell(c).font = { bold: true, color: { argb: "FF5b21b6" }, size: 9 };
+    }
+
+    let totParcAh = 0;
+    sociosParciales.forEach((sp, i) => {
+      totParcAh += sp.total;
+      const restante = Math.max(objetivoAhorro - sp.total, 0);
+      const pct = objetivoAhorro > 0 ? `${((sp.total / objetivoAhorro) * 100).toFixed(1)}%` : "—";
+      const row = ws2.addRow([
+        "",
+        sp.socio.numeroCuenta,
+        sp.socio.nombres,
+        sp.socio.apellidos,
+        sp.total,
+        objetivoAhorro > 0 ? objetivoAhorro : "—",
+        objetivoAhorro > 0 ? restante : "—",
+        pct,
+        "Ahorro parcial",
+      ]);
+      styleAlternate(row, 9, i % 2 === 0);
+      row.getCell(5).numFmt = '"$"#,##0.00';
+      if (objetivoAhorro > 0) {
+        row.getCell(6).numFmt = '"$"#,##0.00';
+        row.getCell(7).numFmt = '"$"#,##0.00';
+        if (restante === 0) {
+          row.getCell(9).font = { color: { argb: "FF15803d" }, bold: true };
+        }
+      }
+      row.getCell(9).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFf5f3ff" } };
+      row.getCell(9).font = { color: { argb: "FF5b21b6" }, italic: true };
+    });
+
+    const parcTotRow = ws2.addRow(["", "", "SUBTOTAL PARCIALES", "", totParcAh, "", "", "", ""]);
+    styleTotalRow(parcTotRow, 9, "FFede9fe");
+    parcTotRow.getCell(5).numFmt = '"$"#,##0.00';
+    parcTotRow.getCell(3).font = { bold: true, color: { argb: "FF5b21b6" } };
+  }
 
   // ── HOJA 3: Detalle Semanal ─────────────────────────────────────────────────
   const ws3 = wb.addWorksheet("Detalle Semanal");
@@ -601,17 +661,18 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   ws6.addRow([]);
 
   // ── Sección 2: Ahorros pendientes (objetivo no alcanzado) ─────────────────
-  type PendienteAhorro = { socio: string; cuenta: string; objetivo: number; acumulado: number; pendiente: number };
+  type PendienteAhorro = { socio: string; cuenta: string; objetivo: number; acumulado: number; pendiente: number; tipo: string };
   const pendientesAhorro: PendienteAhorro[] = [];
   const objetivoAhorro = Number(ronda.ahorroObjetivoPorSocio ?? 0);
 
   if (objetivoAhorro > 0) {
-    // Ahorros acumulados por socio
+    // Ahorros acumulados por socio participante
     const ahorrosPorSocio = new Map<number, number>();
     ronda.ahorros.forEach((a: any) => {
       ahorrosPorSocio.set(a.socioId, (ahorrosPorSocio.get(a.socioId) ?? 0) + Number(a.monto));
     });
 
+    // Participantes bajo objetivo
     for (const p of ronda.participaciones) {
       const acum = ahorrosPorSocio.get(p.socioId) ?? 0;
       if (acum < objetivoAhorro) {
@@ -621,6 +682,21 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
           objetivo: objetivoAhorro,
           acumulado: acum,
           pendiente: objetivoAhorro - acum,
+          tipo: "Participante",
+        });
+      }
+    }
+
+    // Socios parciales bajo objetivo
+    for (const sp of sociosParciales) {
+      if (sp.total < objetivoAhorro) {
+        pendientesAhorro.push({
+          socio: `${sp.socio.nombres} ${sp.socio.apellidos}`,
+          cuenta: sp.socio.numeroCuenta,
+          objetivo: objetivoAhorro,
+          acumulado: sp.total,
+          pendiente: objetivoAhorro - sp.total,
+          tipo: "Ahorro parcial ⭑",
         });
       }
     }
@@ -635,9 +711,8 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   secAh.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
   ws6.getRow(rowNumAh).height = 18;
 
-  const ahHeader = ws6.addRow(["Socio", "Cuenta", "Objetivo ($)", "Ahorrado ($)", "Pendiente ($)", "% Completado", "Estado", ""]);
+  const ahHeader = ws6.addRow(["Socio", "Cuenta", "Objetivo ($)", "Ahorrado ($)", "Pendiente ($)", "% Completado", "Estado", "Tipo"]);
   styleHeader(ahHeader, 8, AMBER);
-  // Ajustar color de fuente para fondo amarillo
   for (let c = 1; c <= 8; c++) {
     ahHeader.getCell(c).font = { bold: true, color: { argb: "FF78350f" }, size: 10 };
   }
@@ -654,10 +729,11 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
     pendientesAhorro.forEach((p, i) => {
       totPendAh += p.pendiente;
       const pct = p.objetivo > 0 ? (p.acumulado / p.objetivo) * 100 : 0;
+      const esParcial = p.tipo === "Ahorro parcial ⭑";
       const row = ws6.addRow([
         p.socio, p.cuenta,
         p.objetivo, p.acumulado, p.pendiente,
-        `${pct.toFixed(1)}%`, "INCOMPLETO", "",
+        `${pct.toFixed(1)}%`, "INCOMPLETO", p.tipo,
       ]);
       styleAlternate(row, 8, i % 2 === 0);
       row.getCell(3).numFmt = '"$"#,##0.00';
@@ -665,6 +741,10 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
       row.getCell(5).numFmt = '"$"#,##0.00';
       row.getCell(5).font = { color: { argb: ROJO }, bold: true };
       row.getCell(7).font = { color: { argb: AMBER }, bold: true };
+      if (esParcial) {
+        row.getCell(8).font = { color: { argb: "FF5b21b6" }, bold: true, italic: true };
+        row.getCell(8).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFf5f3ff" } };
+      }
     });
     const totAhRow = ws6.addRow(["SUBTOTAL AHORROS PENDIENTES", "", "", "", totPendAh, "", "", ""]);
     styleTotalRow(totAhRow, 8, AMBER_CLARO);
@@ -674,7 +754,61 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
 
   ws6.addRow([]);
 
-  // ── Sección 3: Préstamos activos (saldo pendiente) ────────────────────────
+  // ── Sección 3: Socios de ahorro parcial ───────────────────────────────────
+  if (sociosParciales.length > 0) {
+    const rowNumParc = ws6.rowCount + 1;
+    ws6.mergeCells(`A${rowNumParc}:H${rowNumParc}`);
+    const secParc = ws6.getCell(`A${rowNumParc}`);
+    secParc.value = `SOCIOS DE AHORRO PARCIAL (${sociosParciales.length} — no participan en aportes de ronda)`;
+    secParc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFede9fe" } };
+    secParc.font = { bold: true, size: 10, color: { argb: "FF5b21b6" } };
+    secParc.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+    ws6.getRow(rowNumParc).height = 18;
+
+    const parcHeader2 = ws6.addRow(["Socio", "Cuenta", "Ahorrado ($)", "Objetivo ($)", "Restante ($)", "% Completado", "Estado", "Tipo"]);
+    styleHeader(parcHeader2, 8);
+    for (let c = 1; c <= 8; c++) {
+      parcHeader2.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFede9fe" } };
+      parcHeader2.getCell(c).font = { bold: true, color: { argb: "FF5b21b6" }, size: 9 };
+    }
+
+    let totParcCxC = 0;
+    sociosParciales.forEach((sp, i) => {
+      const restante = objetivoAhorro > 0 ? Math.max(objetivoAhorro - sp.total, 0) : 0;
+      const pct = objetivoAhorro > 0 ? (sp.total / objetivoAhorro) * 100 : 0;
+      const cumplido = objetivoAhorro > 0 && restante === 0;
+      totParcCxC += sp.total;
+      const row = ws6.addRow([
+        `${sp.socio.nombres} ${sp.socio.apellidos}`,
+        sp.socio.numeroCuenta,
+        sp.total,
+        objetivoAhorro > 0 ? objetivoAhorro : "—",
+        objetivoAhorro > 0 ? restante : "—",
+        objetivoAhorro > 0 ? `${pct.toFixed(1)}%` : "—",
+        cumplido ? "COMPLETO" : (objetivoAhorro > 0 ? "INCOMPLETO" : "SIN OBJETIVO"),
+        "Ahorro parcial ⭑",
+      ]);
+      styleAlternate(row, 8, i % 2 === 0);
+      row.getCell(3).numFmt = '"$"#,##0.00';
+      if (objetivoAhorro > 0) {
+        row.getCell(4).numFmt = '"$"#,##0.00';
+        row.getCell(5).numFmt = '"$"#,##0.00';
+        if (!cumplido) row.getCell(5).font = { color: { argb: ROJO }, bold: true };
+        row.getCell(7).font = { bold: true, color: { argb: cumplido ? "FF15803d" : AMBER } };
+      }
+      row.getCell(8).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFf5f3ff" } };
+      row.getCell(8).font = { color: { argb: "FF5b21b6" }, italic: true, bold: true };
+    });
+
+    const parcTotRow2 = ws6.addRow(["SUBTOTAL AHORRO PARCIAL", "", totParcCxC, "", "", "", "", ""]);
+    styleTotalRow(parcTotRow2, 8, "FFede9fe");
+    parcTotRow2.getCell(3).numFmt = '"$"#,##0.00';
+    parcTotRow2.getCell(3).font = { bold: true, color: { argb: "FF5b21b6" } };
+
+    ws6.addRow([]);
+  }
+
+  // ── Sección 4: Préstamos activos (saldo pendiente) ────────────────────────
   const prestamosConSaldo = ronda.prestamos.filter((p: any) => p.estado === "ACTIVO" && Number(p.saldoActual) > 0);
 
   const rowNumPr = ws6.rowCount + 1;
