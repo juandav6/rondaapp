@@ -14,7 +14,7 @@ type Resumen = {
 type SocioDetalle = {
   id: number | string; nombres: string; apellidos: string; numeroCuenta: string;
   aportes: number; ahorros: number; multas: number; montoInvertido: number;
-  proporcion: number; interesGanado: number; totalARecibir: number;
+  proporcion: number; interesGanado: number | null; totalARecibir: number | null; orden?: number;
 };
 type PrestamoRonda = {
   id: number; estado: string; monto: number; tasaAnual: number;
@@ -531,17 +531,16 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
             <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 {([
-                  { key: "nombres", label: "Socio" },
-                  { key: "aportes", label: "Aportes" },
-                  { key: "ahorros", label: "Ahorros" },
+                  { key: "nombres",    label: "Socio" },
+                  { key: "aportes",    label: "Aportes" },
+                  { key: "ahorros",    label: "Ahorros" },
+                  { key: "multas",     label: "Multas" },
                   { key: "montoInvertido", label: "Invertido" },
                   { key: "proporcion", label: "% Part." },
-                  { key: "interesGanado", label: "Interés" },
-                  { key: "totalARecibir", label: "Total a recibir" },
                 ] as const).map(c => (
                   <th key={c.key}
                     className={cn("px-4 py-3 cursor-pointer select-none", c.key !== "nombres" && "text-right")}
-                    onClick={() => { if (sortKey === c.key) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortKey(c.key); setSortDir("desc"); } }}>
+                    onClick={() => { if (sortKey === c.key) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortKey(c.key as any); setSortDir("desc"); } }}>
                     {c.label}{sortKey === c.key && <span className="ml-1 text-gray-400">{sortDir === "asc" ? "▲" : "▼"}</span>}
                   </th>
                 ))}
@@ -549,7 +548,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
             </thead>
             <tbody>
               {visible.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">Sin resultados.</td></tr>
+                <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">Sin resultados.</td></tr>
               ) : visible.map(s => (
                 <tr key={s.id} className="border-t hover:bg-gray-50/70">
                   <td className="px-4 py-3">
@@ -558,17 +557,12 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(s.aportes)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(s.ahorros)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-red-600">{Number(s.multas) > 0 ? fmt(s.multas) : <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {s.montoInvertido > 0 ? <span className="font-medium text-blue-700">{fmt(s.montoInvertido)}</span> : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {s.montoInvertido > 0 ? <span className="font-medium text-blue-600">{fmtPct(s.proporcion)}</span> : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {rondaCerrada ? <span className="font-semibold text-amber-700">{fmt(s.interesGanado)}</span> : <span className="text-xs text-gray-400 italic">Al cierre</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {rondaCerrada && s.montoInvertido > 0 ? <span className="font-bold text-emerald-700">{fmt(s.totalARecibir)}</span> : <span className="text-gray-300">—</span>}
                   </td>
                 </tr>
               ))}
@@ -606,18 +600,10 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                       <p className="text-blue-400">Invertido</p>
                       <p className="font-semibold text-blue-700 tabular-nums mt-0.5">{fmt(s.montoInvertido)}</p>
                     </div>
-                    <div className="rounded bg-amber-50 p-2">
-                      <p className="text-amber-500">Interés</p>
-                      <p className="font-semibold text-amber-700 tabular-nums mt-0.5">
-                        {rondaCerrada ? fmt(s.interesGanado) : <span className="text-xs text-gray-400 italic">Al cierre</span>}
-                      </p>
+                    <div className="rounded bg-blue-50 p-2">
+                      <p className="text-blue-400">% Part.</p>
+                      <p className="font-semibold text-blue-600 tabular-nums mt-0.5">{fmtPct(s.proporcion)}</p>
                     </div>
-                    {rondaCerrada && (
-                      <div className="col-span-2 rounded bg-emerald-50 p-2">
-                        <p className="text-emerald-500">Total a recibir</p>
-                        <p className="font-bold text-emerald-700 tabular-nums mt-0.5 text-sm">{fmt(s.totalARecibir)}</p>
-                      </div>
-                    )}
                   </>
                 )}
               </div>
