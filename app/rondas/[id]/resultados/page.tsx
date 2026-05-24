@@ -630,8 +630,10 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       {openSemana != null && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="fixed inset-0 bg-black/30" onClick={closeSemDet} />
-          <div className="relative z-50 w-full sm:max-w-4xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
-            <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="relative z-50 w-full sm:max-w-4xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90vh] sm:max-h-[85vh]">
+
+            {/* Header fijo */}
+            <div className="flex items-start justify-between gap-3 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b shrink-0">
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold">Semana #{openSemana}</h3>
                 <p className="text-xs text-gray-500">Editar aporte y ahorro por socio.</p>
@@ -639,9 +641,12 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
               <button onClick={closeSemDet} className="text-gray-400 hover:text-gray-600 text-lg shrink-0">✕</button>
             </div>
 
+            {/* Contenido scrolleable */}
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
+
             {/* Selector responsable */}
             {semanaSocios.length > 0 && (
-              <div className="mb-4 flex items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 px-3 py-2.5">
+              <div className="flex items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 px-3 py-2.5">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-blue-500 shrink-0">
                   <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd"/>
                 </svg>
@@ -788,8 +793,12 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                 </div>
               )}
 
-            <div className="mt-4 flex justify-end gap-3">
-              <button onClick={closeSemDet} disabled={savingSemDet} className="px-4 py-2 rounded-md border text-sm text-gray-700 hover:bg-gray-50">Cancelar</button>
+            </div>{/* fin contenido scrolleable */}
+
+            {/* Footer fijo */}
+            <div className="border-t px-4 sm:px-6 py-3 flex justify-end gap-3 shrink-0 bg-gray-50 rounded-b-2xl">
+              {errorSemDet && <p className="flex-1 text-xs text-red-600 self-center">{errorSemDet}</p>}
+              <button onClick={closeSemDet} disabled={savingSemDet} className="px-4 py-2 rounded-md border text-sm text-gray-700 hover:bg-gray-50 bg-white">Cancelar</button>
               <button onClick={saveSemDet} disabled={savingSemDet || loadingSemDet}
                 className={cn("px-4 py-2 rounded-md text-sm text-white", savingSemDet ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700")}>
                 {savingSemDet ? "Guardando…" : "Guardar"}
