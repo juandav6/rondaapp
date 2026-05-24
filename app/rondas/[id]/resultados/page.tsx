@@ -64,6 +64,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const PAGE_SIZE = 12;
   const [openSemana, setOpenSemana] = useState<number | null>(null);
   const [semanaRows, setSemanaRows] = useState<SemanaDetalleRow[]>([]);
+  const [semanaRowsParciales, setSemanaRowsParciales] = useState<any[]>([]);
   const [semanaResponsableId, setSemanaResponsableId] = useState<number | null>(null);
   const [semanaSocios, setSemanaSocios] = useState<any[]>([]);
   const [loadingSemDet, setLoadingSemDet] = useState(false);
@@ -120,13 +121,14 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.error || "Error");
       setSemanaRows(Array.isArray(d?.rows) ? d.rows : []);
+      setSemanaRowsParciales(Array.isArray(d?.rowsParciales) ? d.rowsParciales : []);
       setSemanaResponsableId(d?.responsableId ?? null);
       setSemanaSocios(d?.socios ?? []);
     } catch (e: any) { setErrorSemDet(e?.message); }
     finally { setLoadingSemDet(false); }
   }
 
-  function closeSemDet() { setOpenSemana(null); setSemanaRows([]); setErrorSemDet(null); setSavingSemDet(false); setSemanaResponsableId(null); setSemanaSocios([]); }
+  function closeSemDet() { setOpenSemana(null); setSemanaRows([]); setSemanaRowsParciales([]); setErrorSemDet(null); setSavingSemDet(false); setSemanaResponsableId(null); setSemanaSocios([]); }
 
   async function saveSemDet() {
     if (openSemana == null) return;
@@ -136,6 +138,7 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           updates: semanaRows.map(r => ({ socioId: r.socioId, aporteSemana: Number(r.aporteSemana) || 0, ahorroSemana: Number(r.ahorroSemana) || 0, multaSemana: Number(r.multaSemana) || 0 })),
+          updatesParciales: semanaRowsParciales.map(r => ({ socioId: r.socioId, ahorroSemana: Number(r.ahorroSemana) || 0 })),
           responsableId: semanaResponsableId,
         }),
       });
@@ -742,6 +745,47 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                     ))}
                   </div>
                 </>
+              )}
+
+              {/* ── Socios de ahorro parcial ── */}
+              {semanaRowsParciales.length > 0 && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-bold">{semanaRowsParciales.length}</span>
+                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Socios de ahorro parcial</p>
+                  </div>
+                  <div className="rounded-xl border border-violet-200 overflow-hidden">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-violet-50 text-xs text-violet-600 uppercase">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Socio</th>
+                          <th className="px-3 py-2 text-right">Ahorro sem. {openSemana}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {semanaRowsParciales.map((r, idx) => (
+                          <tr key={r.socioId} className={cn("border-t", idx % 2 === 0 ? "bg-white" : "bg-violet-50/30")}>
+                            <td className="px-3 py-2">
+                              <p className="font-medium text-gray-800 text-xs">{r.nombres} {r.apellidos}</p>
+                              <p className="text-[10px] text-gray-400 font-mono">{r.numeroCuenta}</p>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <input
+                                type="number" min="0" step="0.01"
+                                value={r.ahorroSemana || ""}
+                                placeholder="0.00"
+                                onChange={e => setSemanaRowsParciales(prev =>
+                                  prev.map((x, i) => i === idx ? { ...x, ahorroSemana: Number(e.target.value) || 0 } : x)
+                                )}
+                                className="w-24 rounded-lg border border-violet-200 px-2 py-1 text-right text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
 
             <div className="mt-4 flex justify-end gap-3">
