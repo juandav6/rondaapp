@@ -82,20 +82,12 @@ export async function GET(_req: Request, context: Context) {
     };
   });
 
-  // ── Socios con proporción e interés ganado ──────────────────────────────────
+  // ── Socios con aportes y ahorros ───────────────────────────────────────────
   const socios = ronda.participaciones.map((p) => {
     const ap = aporteMap[p.socioId]?._sum || {};
     const ah = ahorroMap[p.socioId]?._sum || {};
     const aporteSocio = Number(ap.monto ?? 0);
-
-    // Proporción: aportes del socio / total aportes ronda
     const proporcion = totalAportesNum > 0 ? aporteSocio / totalAportesNum : 0;
-
-    // Interés ganado = proporción × total interés proyectado
-    // Solo se muestra si la ronda está cerrada
-    const interesGanado = !ronda.activa
-      ? Math.round(proporcion * totalInteresRonda * 100) / 100
-      : null;
 
     return {
       id: p.socio.id,
@@ -105,8 +97,12 @@ export async function GET(_req: Request, context: Context) {
       aportes: ap.monto?.toString() ?? "0",
       multas: ap.multa?.toString() ?? "0",
       ahorros: ah.monto?.toString() ?? "0",
-      proporcion: Math.round(proporcion * 10000) / 100, // porcentaje con 2 decimales
-      interesGanado,
+      proporcion: Math.round(proporcion * 10000) / 100,
+      orden: p.orden,
+      // montoInvertido y interesGanado vienen del fondo, no de participaciones
+      montoInvertido: 0,
+      interesGanado: null,
+      totalARecibir: null,
     };
   });
 
