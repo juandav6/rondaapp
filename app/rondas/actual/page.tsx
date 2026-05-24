@@ -727,78 +727,103 @@ export default function RondaActualPage() {
         </div>
       )}
 
-      {/* ── Socios parciales ── */}
+      )}
+
+      {/* ── Socios parciales (solo ahorro, sin aporte de ronda) ── */}
       {(estado.sociosParciales?.length ?? 0) > 0 && (
-        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-violet-200 bg-white shadow-sm overflow-hidden">
           <button
             onClick={() => setShowParciales(p => !p)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left">
-            <div className="flex items-center gap-2">
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-violet-50/40 transition-colors text-left">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-xs font-bold">
                 {estado.sociosParciales!.length}
               </span>
-              <p className="text-sm font-semibold text-gray-800">Socios con ahorro parcial</p>
-              <span className="text-xs text-gray-400">No participan en la ronda pero aportan ahorros</span>
+              <p className="text-sm font-semibold text-violet-900">Socios de ahorro parcial</p>
+              {(() => {
+                const pendientes = estado.sociosParciales!.filter(sp => !sp.ahorroRegistradoSemana).length;
+                const registrados = estado.sociosParciales!.filter(sp => sp.ahorroRegistradoSemana).length;
+                return (
+                  <div className="flex gap-1.5">
+                    {pendientes > 0 && <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-semibold">{pendientes} pendiente{pendientes !== 1 ? "s" : ""}</span>}
+                    {registrados > 0 && <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-semibold">{registrados} ✓</span>}
+                  </div>
+                );
+              })()}
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
-              className={cn("h-4 w-4 text-gray-400 transition-transform", showParciales && "rotate-180")}>
+              className={cn("h-4 w-4 text-violet-400 transition-transform shrink-0", showParciales && "rotate-180")}>
               <path fillRule="evenodd" d="M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 0 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 1 1 1.06 1.06l-7.5 7.5Z" clipRule="evenodd"/>
             </svg>
           </button>
 
           {showParciales && (
             <>
+              {/* Nota explicativa */}
+              <div className="border-t border-b bg-violet-50/40 px-4 py-2 text-xs text-violet-600">
+                Estos socios no participan en la ronda de aportes. Solo registran su ahorro semanal hacia el objetivo de <strong>{fmtMoney(Number(estado.ronda.ahorroObjetivoPorSocio ?? 0))}</strong>.
+              </div>
+
               {/* Desktop */}
-              <div className="hidden sm:block overflow-x-auto border-t">
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                       <th className="px-4 py-3 text-left">Socio</th>
-                      <th className="px-4 py-3 text-right">Ahorro esta semana</th>
+                      <th className="px-4 py-3 text-right">Sem. {estado.semana}</th>
                       <th className="px-4 py-3 text-right">Acumulado</th>
                       <th className="px-4 py-3 text-right">Objetivo</th>
                       <th className="px-4 py-3 text-right">Restante</th>
-                      <th className="px-4 py-3 text-center">Registrar</th>
+                      <th className="px-4 py-3 text-center">Acción</th>
                     </tr>
                   </thead>
                   <tbody>
                     {estado.sociosParciales!.map(sp => {
-                      const input = parcialAhorroInputs[sp.socioId] ?? sp.ahorroSemanaActual;
+                      const input = parcialAhorroInputs[sp.socioId] ?? 0;
                       const pct = sp.objetivo > 0 ? Math.min((sp.totalAcumulado / sp.objetivo) * 100, 100) : 0;
+                      const cumplido = sp.objetivo > 0 && sp.ahorroRestante === 0;
                       return (
-                        <tr key={sp.socioId} className={cn("border-t hover:bg-gray-50/60", sp.ahorroRegistradoSemana && "bg-emerald-50/30")}>
+                        <tr key={sp.socioId} className={cn(
+                          "border-t hover:bg-gray-50/60",
+                          sp.ahorroRegistradoSemana && "bg-emerald-50/20",
+                          cumplido && "bg-emerald-50/40"
+                        )}>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{sp.socio.nombres} {sp.socio.apellidos}</p>
                             <p className="text-xs font-mono text-gray-400">{sp.socio.numeroCuenta}</p>
                           </td>
                           <td className="px-4 py-3 text-right">
                             {sp.ahorroRegistradoSemana ? (
-                              <span className="text-emerald-600 font-semibold">{fmtMoney(sp.ahorroSemanaActual)} ✓</span>
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
+                                {fmtMoney(sp.ahorroSemanaActual)}
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5"><path fillRule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd"/></svg>
+                              </span>
                             ) : (
                               <input type="number" min="0" step="0.01"
                                 value={input || ""}
+                                placeholder="0.00"
                                 onChange={e => setParcialAhorroInputs(p => ({ ...p, [sp.socioId]: Number(e.target.value) }))}
-                                className="w-24 rounded border px-2 py-1 text-right text-xs focus:outline-none focus:ring-1 focus:ring-violet-300" />
+                                className="w-24 rounded-lg border px-2 py-1.5 text-right text-sm focus:outline-none focus:ring-2 focus:ring-violet-200" />
                             )}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums">
                             <div className="flex flex-col items-end gap-1">
-                              <span className="font-semibold text-blue-700">{fmtMoney(sp.totalAcumulado)}</span>
+                              <span className={cn("font-semibold", cumplido ? "text-emerald-600" : "text-blue-700")}>{fmtMoney(sp.totalAcumulado)}</span>
                               {sp.objetivo > 0 && (
                                 <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                                  <div className={cn("h-full rounded-full", cumplido ? "bg-emerald-500" : "bg-violet-400")} style={{ width: `${pct}%` }} />
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-gray-500">{sp.objetivo > 0 ? fmtMoney(sp.objetivo) : "—"}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-gray-500 text-xs">{sp.objetivo > 0 ? fmtMoney(sp.objetivo) : "—"}</td>
                           <td className="px-4 py-3 text-right tabular-nums">
-                            <span className={cn("font-semibold", sp.ahorroRestante === 0 && sp.objetivo > 0 ? "text-emerald-600" : "text-gray-700")}>
-                              {sp.objetivo > 0 ? fmtMoney(sp.ahorroRestante) : "—"}
+                            <span className={cn("font-semibold text-sm", cumplido ? "text-emerald-600" : "text-gray-700")}>
+                              {cumplido ? "✓ Completo" : sp.objetivo > 0 ? fmtMoney(sp.ahorroRestante) : "—"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {!sp.ahorroRegistradoSemana && (
+                            {!sp.ahorroRegistradoSemana ? (
                               <button
                                 disabled={saving === sp.socioId || !input}
                                 onClick={async () => {
@@ -810,55 +835,82 @@ export default function RondaActualPage() {
                                       body: JSON.stringify({ socioId: sp.socioId, monto: input }),
                                     });
                                     if (!res.ok) throw new Error((await res.json()).error);
-                                    showToast(`Ahorro registrado para ${sp.socio.nombres}`, "success");
+                                    showToast(`Ahorro registrado — ${sp.socio.nombres}`, "success");
+                                    setParcialAhorroInputs(p => ({ ...p, [sp.socioId]: 0 }));
                                     await cargar();
                                   } catch (e: any) { showToast(e.message, "error"); }
                                   finally { setSaving(null); }
                                 }}
-                                className="rounded-lg bg-violet-600 px-3 py-1 text-xs text-white hover:bg-violet-700 disabled:opacity-40">
+                                className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed">
                                 {saving === sp.socioId ? "…" : "Guardar"}
                               </button>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Registrado</span>
                             )}
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
+                  <tfoot className="border-t-2 border-violet-100 bg-violet-50/30">
+                    <tr>
+                      <td className="px-4 py-2 text-xs font-semibold text-violet-700">
+                        Total {estado.sociosParciales!.filter(sp => sp.ahorroRegistradoSemana).length}/{estado.sociosParciales!.length} registrados
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs font-semibold text-emerald-700">
+                        {fmtMoney(estado.sociosParciales!.filter(sp => sp.ahorroRegistradoSemana).reduce((s, sp) => s + sp.ahorroSemanaActual, 0))}
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs font-semibold text-blue-700">
+                        {fmtMoney(estado.sociosParciales!.reduce((s, sp) => s + sp.totalAcumulado, 0))}
+                      </td>
+                      <td colSpan={3} />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
 
               {/* Móvil */}
-              <ul className="sm:hidden divide-y border-t">
+              <ul className="sm:hidden divide-y">
                 {estado.sociosParciales!.map(sp => {
-                  const input = parcialAhorroInputs[sp.socioId] ?? sp.ahorroSemanaActual;
+                  const input = parcialAhorroInputs[sp.socioId] ?? 0;
                   const pct = sp.objetivo > 0 ? Math.min((sp.totalAcumulado / sp.objetivo) * 100, 100) : 0;
+                  const cumplido = sp.objetivo > 0 && sp.ahorroRestante === 0;
                   return (
-                    <li key={sp.socioId} className={cn("p-4 space-y-3", sp.ahorroRegistradoSemana && "bg-emerald-50/30")}>
+                    <li key={sp.socioId} className={cn("p-4 space-y-2.5", sp.ahorroRegistradoSemana && "bg-emerald-50/20")}>
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-medium text-gray-900">{sp.socio.nombres} {sp.socio.apellidos}</p>
+                          <p className="font-medium text-gray-900 text-sm">{sp.socio.nombres} {sp.socio.apellidos}</p>
                           <p className="text-xs font-mono text-gray-400">{sp.socio.numeroCuenta}</p>
                         </div>
                         {sp.ahorroRegistradoSemana && (
-                          <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-semibold">✓ {fmtMoney(sp.ahorroSemanaActual)}</span>
+                          <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-semibold shrink-0">
+                            ✓ {fmtMoney(sp.ahorroSemanaActual)}
+                          </span>
+                        )}
+                        {cumplido && !sp.ahorroRegistradoSemana && (
+                          <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-semibold shrink-0">✓ Objetivo</span>
                         )}
                       </div>
                       {sp.objetivo > 0 && (
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-500">Progreso</span>
-                            <span className="font-medium">{fmtMoney(sp.totalAcumulado)} / {fmtMoney(sp.objetivo)}</span>
+                            <span className={cn("font-medium", cumplido ? "text-emerald-600" : "text-blue-700")}>
+                              {fmtMoney(sp.totalAcumulado)} / {fmtMoney(sp.objetivo)}
+                            </span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                            <div className={cn("h-full rounded-full", cumplido ? "bg-emerald-500" : "bg-violet-400")} style={{ width: `${pct}%` }} />
                           </div>
+                          {!cumplido && <p className="text-xs text-gray-400">Faltan {fmtMoney(sp.ahorroRestante)}</p>}
                         </div>
                       )}
                       {!sp.ahorroRegistradoSemana && (
                         <div className="flex gap-2">
                           <input type="number" min="0" step="0.01" value={input || ""}
                             onChange={e => setParcialAhorroInputs(p => ({ ...p, [sp.socioId]: Number(e.target.value) }))}
-                            className="flex-1 rounded-lg border px-3 py-2 text-sm text-right" placeholder="Monto ahorro" />
+                            className="flex-1 rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-violet-200"
+                            placeholder={`Ahorro sem. ${estado.semana}`} />
                           <button
                             disabled={saving === sp.socioId || !input}
                             onClick={async () => {
@@ -871,6 +923,7 @@ export default function RondaActualPage() {
                                 });
                                 if (!res.ok) throw new Error((await res.json()).error);
                                 showToast(`Ahorro registrado`, "success");
+                                setParcialAhorroInputs(p => ({ ...p, [sp.socioId]: 0 }));
                                 await cargar();
                               } catch (e: any) { showToast(e.message, "error"); }
                               finally { setSaving(null); }
