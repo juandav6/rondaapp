@@ -6,10 +6,11 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { socioId, monto, fecha } = (await req.json()) as {
+    const { socioId, monto, fecha, nota } = (await req.json()) as {
       socioId?: number;
       monto?: number;
-      fecha?: string; // YYYY-MM-DD opcional, por defecto hoy
+      fecha?: string;
+      nota?: string;
     };
 
     const sId = Number(socioId);
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
           rondaId: null,
           tipo: "RETIRO",
           monto: montoDecimal,
-          nota: `Retiro de ahorros · ${fechaLabel}`,
+          nota: nota?.trim() || `Retiro de ahorros · ${fechaLabel}`,
           createdAt: fechaRetiro,
         },
       }),
