@@ -221,6 +221,28 @@ export async function POST(_req: Request, context: Context) {
 
   // ── CIERRE FINAL DE RONDA ─────────────────────────────────────────────────
   if (siguiente > totalSemanas) {
+    // Verificar préstamos activos antes de cerrar
+    const prestamosActivos = await prisma.prestamo.findMany({
+      where: { rondaId, estado: "ACTIVO" },
+      include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+      select: { id: true, monto: true, saldoActual: true, socio: true } as any,
+    });
+
+    // Si hay préstamos activos, devolver advertencia para que el frontend confirme
+    const forzarCierre = req.headers.get("x-forzar-cierre") === "1";
+    if (prestamosActivos.length > 0 && !forzarCierre) {
+      return NextResponse.json({
+        ok: false,
+        requiereConfirmacion: true,
+        prestamosActivos: prestamosActivos.map((p: any) => ({
+          socio: `${p.socio.nombres} ${p.socio.apellidos}`,
+          numeroCuenta: p.socio.numeroCuenta,
+          saldoActual: Number(p.saldoActual),
+        })),
+        mensaje: `Hay ${prestamosActivos.length} préstamo(s) activo(s) con saldo pendiente. Los intereses se calcularán solo con las cuotas pagadas hasta ahora.`,
+      }, { status: 200 });
+    }
+
     // Calcular fecha fin real: fechaInicio + (totalSemanas * intervaloDiasCobro)
     const fechaFinReal = new Date(ronda.fechaInicio);
     fechaFinReal.setDate(fechaFinReal.getDate() + totalSemanas * (ronda.intervaloDiasCobro ?? 7));
