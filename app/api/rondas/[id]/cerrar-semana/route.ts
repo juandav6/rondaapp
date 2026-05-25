@@ -171,7 +171,7 @@ async function generarYGuardarExcel(rondaId: number) {
   }
 }
 
-export async function POST(_req: Request, context: Context) {
+export async function POST(req: Request, context: Context) {
   const { params } = await context;
   const rondaId = Number((await params).id);
 
