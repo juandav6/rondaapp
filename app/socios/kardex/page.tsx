@@ -63,34 +63,89 @@ async function getKardex(socioId: number) {
   });
 
   const TIPO_CFG: Record<string, { esHaber: boolean; concepto: string }> = {
-    AHORRO:     { esHaber: true,  concepto: "Depósito / Ahorro" },
+    AHORRO:     { esHaber: true,  concepto: "Ahorros ronda" },
     RETIRO:     { esHaber: false, concepto: "Retiro" },
     INVERSION:  { esHaber: false, concepto: "Aporte al fondo" },
     DEVOLUCION: { esHaber: true,  concepto: "Devolución capital" },
     INTERES:    { esHaber: true,  concepto: "Intereses ganados" },
   };
 
+  // Agrupar AHORRO por ronda — los demás tipos van como líneas individuales
+  type MovGroup = {
+    id: string; tipo: string; fecha: Date; concepto: string; referencia: string;
+    debe: number; haber: number; saldo: number;
+    detalle?: { fecha: Date; referencia: string; haber: number }[];
+  };
+
+  const grupos: Omit<MovGroup, "saldo">[] = [];
+
+  // Primero agrupar AHORROs por rondaId
+  const ahorrosPorRonda = new Map<string, { rondaNombre: string; total: number; items: { fecha: Date; ref: string; monto: number }[] }>();
+
+  for (const m of movimientos) {
+    if (m.tipo === "AHORRO") {
+      const key = m.rondaId ? String(m.rondaId) : "libre";
+      const nombre = m.ronda?.nombre ?? (m.nota?.includes("·") ? m.nota.split("·")[1]?.trim() : "Depósitos libres") ?? "Depósitos libres";
+      if (!ahorrosPorRonda.has(key)) ahorrosPorRonda.set(key, { rondaNombre: nombre, total: 0, items: [] });
+      const g = ahorrosPorRonda.get(key)!;
+      g.total += Number(m.monto);
+      g.items.push({ fecha: m.createdAt, ref: m.nota ?? nombre, monto: Number(m.monto) });
+    }
+  }
+
+  // Construir líneas: ahorros agrupados + otros tipos individuales
+  const lineasSinSaldo: Omit<MovGroup, "saldo">[] = [];
+
+  // Insertar ahorros agrupados en su posición cronológica (fecha del último ahorro del grupo)
+  for (const [, g] of ahorrosPorRonda) {
+    const fechaRef = g.items[g.items.length - 1].fecha;
+    lineasSinSaldo.push({
+      id: `ahorro-${g.rondaNombre}`,
+      tipo: "AHORRO",
+      fecha: fechaRef,
+      concepto: "Ahorros ronda",
+      referencia: g.rondaNombre,
+      debe: 0,
+      haber: g.total,
+      detalle: g.items.map(it => ({ fecha: it.fecha, referencia: it.ref, haber: it.monto })),
+    });
+  }
+
+  // Líneas individuales (no AHORRO)
+  for (const m of movimientos) {
+    if (m.tipo !== "AHORRO") {
+      const cfg = TIPO_CFG[m.tipo] ?? { esHaber: true, concepto: m.tipo };
+      const monto = Number(m.monto);
+      lineasSinSaldo.push({
+        id: String(m.id),
+        tipo: m.tipo,
+        fecha: m.createdAt,
+        concepto: cfg.concepto,
+        referencia: m.nota ?? (m.ronda?.nombre ?? "—"),
+        debe: cfg.esHaber ? 0 : monto,
+        haber: cfg.esHaber ? monto : 0,
+      });
+    }
+  }
+
+  // Ordenar por fecha + tipo
+  lineasSinSaldo.sort((a, b) => {
+    const diffFecha = new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
+    if (Math.abs(diffFecha) > 86400000) return diffFecha;
+    return (TIPO_ORDEN[a.tipo] ?? 9) - (TIPO_ORDEN[b.tipo] ?? 9);
+  });
+
+  // Calcular saldo acumulado
   let saldoAcum = 0;
-  const lineas: KardexLine[] = movimientos.map(m => {
-    const cfg = TIPO_CFG[m.tipo] ?? { esHaber: true, concepto: m.tipo };
-    const monto = Number(m.monto);
-    const haber = cfg.esHaber ? monto : 0;
-    const debe  = cfg.esHaber ? 0 : monto;
-    saldoAcum = saldoAcum + haber - debe;
-    return {
-      fecha: m.createdAt,
-      concepto: cfg.concepto,
-      referencia: m.nota ?? (m.ronda?.nombre ?? "—"),
-      debe,
-      haber,
-      saldo: saldoAcum,
-    };
+  const lineas: MovGroup[] = lineasSinSaldo.map(l => {
+    saldoAcum = saldoAcum + l.haber - l.debe;
+    return { ...l, saldo: saldoAcum };
   });
 
   return { socio, lineas, saldoFinal: saldoAcum };
 }
 
-function cn(...c: (string | false | null | undefined)[]) { return c.filter(Boolean).join(" "); }
+import { KardexTabla } from "./tabla";
 
 export default async function KardexPage({ searchParams }: { searchParams: Promise<{ socioId?: string }> }) {
   const { socioId } = await searchParams;
@@ -224,61 +279,13 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
               ) : (
                 <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
                   <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-gray-700">Kardex de movimientos</p>
-                    <p className="text-xs text-gray-400">{kardex.lineas.length} registros</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-700">Kardex de movimientos</p>
+                      <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{kardex.lineas.length} registros</span>
+                    </div>
+                    <p className="text-xs text-gray-400">Los ahorros están agrupados por ronda · clic en ▼ para ver por semana</p>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                        <tr>
-                          <th className="px-4 py-3 text-left">Fecha</th>
-                          <th className="px-4 py-3 text-left">Concepto</th>
-                          <th className="px-4 py-3 text-left">Referencia</th>
-                          <th className="px-4 py-3 text-right text-rose-600">Debe (−)</th>
-                          <th className="px-4 py-3 text-right text-emerald-600">Haber (+)</th>
-                          <th className="px-4 py-3 text-right">Saldo</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {kardex.lineas.map((l, i) => (
-                          <tr key={i} className="border-t hover:bg-gray-50/60">
-                            <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fmtDate(l.fecha)}</td>
-                            <td className="px-4 py-3 font-medium text-gray-800">{l.concepto}</td>
-                            <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate">{l.referencia}</td>
-                            <td className="px-4 py-3 text-right tabular-nums">
-                              {l.debe > 0
-                                ? <span className="text-rose-600 font-medium">{fmt(l.debe)}</span>
-                                : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums">
-                              {l.haber > 0
-                                ? <span className="text-emerald-600 font-medium">{fmt(l.haber)}</span>
-                                : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className={cn("px-4 py-3 text-right tabular-nums font-semibold",
-                              l.saldo >= 0 ? "text-teal-700" : "text-rose-700")}>
-                              {fmt(l.saldo)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="border-t-2 border-gray-200 bg-gray-50">
-                        <tr>
-                          <td colSpan={3} className="px-4 py-3 text-sm font-bold text-gray-700">TOTAL</td>
-                          <td className="px-4 py-3 text-right tabular-nums font-bold text-rose-700">
-                            {fmt(kardex.lineas.reduce((s, l) => s + l.debe, 0))}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700">
-                            {fmt(kardex.lineas.reduce((s, l) => s + l.haber, 0))}
-                          </td>
-                          <td className={cn("px-4 py-3 text-right tabular-nums font-bold text-base",
-                            kardex.saldoFinal >= 0 ? "text-teal-700" : "text-rose-700")}>
-                            {fmt(kardex.saldoFinal)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                  <KardexTabla lineas={kardex.lineas as any} />
                 </div>
               )}
             </>
