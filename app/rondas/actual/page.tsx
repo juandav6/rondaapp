@@ -82,6 +82,7 @@ export default function RondaActualPage() {
   const [bulkParcialConfirmOpen, setBulkParcialConfirmOpen] = useState(false);
   const [savingParciales, setSavingParciales] = useState(false);
   const [confirmCierreOpen, setConfirmCierreOpen] = useState(false);
+  const [prestamosActivosAlerta, setPrestamosActivosAlerta] = useState<any[]>([]);
 
   const showToast = (text: string, type: Toast["type"] = "success", ms = 2500) => {
     setToast({ text, type });
@@ -317,11 +318,10 @@ export default function RondaActualPage() {
     } catch (e: any) { showToast(e.message, "error", 4000); }
   }
 
-  async function cerrarSemana() {
+  async function cerrarSemana(forzar = false) {
     if (!estado) return;
     try {
       setCerrando(true);
-      // Guardar observaciones de la semana antes de cerrar
       if (obsSemana.trim()) {
         await fetch(`/api/rondas/${estado.ronda.id}/semanas`, {
           method: "PUT",
@@ -329,9 +329,19 @@ export default function RondaActualPage() {
           body: JSON.stringify({ semana: estado.semana, observaciones: obsSemana }),
         });
       }
-      const res = await fetch(`/api/rondas/${estado.ronda.id}/cerrar-semana`, { method: "POST" });
+      const res = await fetch(`/api/rondas/${estado.ronda.id}/cerrar-semana`, {
+        method: "POST",
+        headers: forzar ? { "x-forzar-cierre": "1" } : {},
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Error");
+
+      // Préstamos activos — mostrar advertencia antes de forzar cierre
+      if (data.requiereConfirmacion) {
+        setPrestamosActivosAlerta(data.prestamosActivos ?? []);
+        return;
+      }
+
       if (data.avanzada) {
         setAhorroInputs({}); setMultasInputs({}); setObsInputs({}); setObsSemana("");
         if (data.finalizada) window.location.href = `/rondas/${estado.ronda.id}/resultados`;
@@ -1082,6 +1092,50 @@ export default function RondaActualPage() {
         </div>
       )}
 
+      {/* ── Modal advertencia préstamos activos al cerrar ronda ── */}
+      {prestamosActivosAlerta.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full sm:max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
+            <div className="bg-amber-500 px-5 py-4">
+              <h3 className="text-base font-bold text-white">⚠️ Préstamos activos pendientes</h3>
+              <p className="text-xs text-amber-100 mt-0.5">Esta es la última semana de la ronda</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-gray-700">
+                Existen <strong>{prestamosActivosAlerta.length} préstamo{prestamosActivosAlerta.length > 1 ? "s" : ""} activo{prestamosActivosAlerta.length > 1 ? "s" : ""}</strong> con saldo pendiente. Si cierras ahora, los intereses se calcularán solo con las cuotas pagadas hasta hoy.
+              </p>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 divide-y divide-amber-100 max-h-48 overflow-y-auto">
+                {prestamosActivosAlerta.map((p: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium text-gray-800">{p.socio}</p>
+                      <p className="text-xs text-gray-400 font-mono">{p.numeroCuenta}</p>
+                    </div>
+                    <span className="font-bold text-amber-700">{fmtMoney(p.saldoActual)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700">
+                💡 <strong>Recomendación:</strong> Cancela o marca como pagados los préstamos antes de cerrar para que los inversores reciban sus intereses correctamente.
+              </div>
+            </div>
+            <div className="border-t px-5 py-4 flex gap-3 bg-gray-50">
+              <button
+                onClick={() => setPrestamosActivosAlerta([])}
+                className="flex-1 rounded-xl border bg-white py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Volver a revisar
+              </button>
+              <button
+                onClick={() => { setPrestamosActivosAlerta([]); cerrarSemana(true); }}
+                disabled={cerrando}
+                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
+                {cerrando ? "Cerrando…" : "Cerrar de todas formas"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Modal resumen antes de cerrar semana ── */}
       {confirmCierreOpen && estado && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
@@ -1200,7 +1254,7 @@ export default function RondaActualPage() {
                 Revisar más
               </button>
               <button
-                onClick={() => { setConfirmCierreOpen(false); cerrarSemana(); }}
+                onClick={() => { setConfirmCierreOpen(false); cerrarSemana(false); }}
                 disabled={cerrando}
                 className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
                 {cerrando ? "Cerrando…" : "Confirmar cierre →"}
