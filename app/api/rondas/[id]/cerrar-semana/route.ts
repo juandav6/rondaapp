@@ -225,7 +225,6 @@ export async function POST(_req: Request, context: Context) {
     const prestamosActivos = await prisma.prestamo.findMany({
       where: { rondaId, estado: "ACTIVO" },
       include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
-      select: { id: true, monto: true, saldoActual: true, socio: true } as any,
     });
 
     // Si hay préstamos activos, devolver advertencia para que el frontend confirme
