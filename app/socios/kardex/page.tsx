@@ -71,13 +71,6 @@ async function getKardex(socioId: number) {
   };
 
   // Agrupar AHORRO por ronda — los demás tipos van como líneas individuales
-  type MovGroup = {
-    id: string; tipo: string; fecha: Date; concepto: string; referencia: string;
-    debe: number; haber: number; saldo: number;
-    detalle?: { fecha: Date; referencia: string; haber: number }[];
-  };
-
-  const grupos: Omit<MovGroup, "saldo">[] = [];
 
   // Primero agrupar AHORROs por rondaId
   const ahorrosPorRonda = new Map<string, { rondaNombre: string; total: number; items: { fecha: Date; ref: string; monto: number }[] }>();
@@ -146,6 +139,8 @@ async function getKardex(socioId: number) {
 }
 
 import { KardexTabla } from "./tabla";
+
+function cn(...c: (string | false | null | undefined)[]) { return c.filter(Boolean).join(" "); }
 
 export default async function KardexPage({ searchParams }: { searchParams: Promise<{ socioId?: string }> }) {
   const { socioId } = await searchParams;
