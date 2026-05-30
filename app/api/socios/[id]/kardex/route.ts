@@ -138,6 +138,12 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
         l.esDetalle ? null : l.saldo,
       ]);
 
+      // Agrupar filas de detalle para que sean colapsables (outline level 1)
+      if (l.esDetalle) {
+        row.outlineLevel = 1;
+        row.hidden = true; // colapsado por defecto
+      }
+
       const bg = l.esGrupo ? "FFf0fdf4" : l.esDetalle ? "FFf9fafb" : i % 2 === 0 ? "FFFFFFFF" : "FFF9FAFB";
       for (let c = 1; c <= 6; c++) {
         const cell = row.getCell(c);
@@ -156,6 +162,9 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       }
       if (l.debe > 0) row.getCell(4).font = { ...row.getCell(4).font, color: { argb: "FFDC2626" } };
     });
+
+    // Configurar outline para que el botón + aparezca arriba (summary row above)
+    ws.properties.outlineProperties = { summaryBelow: false, summaryRight: false };
 
     // Total
     ws.addRow([]);
