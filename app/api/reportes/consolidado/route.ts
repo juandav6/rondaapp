@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     for (const ronda of rondas) {
       const objetivo = Number(ronda.ahorroObjetivoPorSocio ?? 0);
 
-      const [aportes, ahorros, prestamos, express, cuentas, movimientos] = await Promise.all([
+      const [aportes, ahorros, prestamos, express, cuentas, retirosQ, depositosQ] = await Promise.all([
         prisma.aporte.groupBy({
           by: ["socioId"], where: { rondaId: ronda.id },
           _sum: { monto: true, multa: true },
@@ -82,10 +82,32 @@ export async function POST(req: Request) {
           where: { rondaId: ronda.id },
           select: { socioId: true, montoInvertido: true, interesesAcumulados: true },
         }),
-        // Depósitos libres y retiros de esta ronda
+        // Depósitos libres y retiros dentro del rango de fechas de la ronda
         prisma.movimientoCuenta.groupBy({
           by: ["socioId", "tipo"],
-          where: { rondaId: ronda.id, tipo: { in: ["AHORRO", "RETIRO"] }, nota: { contains: "libre" } },
+          where: {
+            tipo: { in: ["RETIRO"] },
+            createdAt: {
+              gte: ronda.fechaInicio,
+              lte: ronda.fechaFin ?? new Date(),
+            },
+          },
+          _sum: { monto: true },
+        }),
+        // Depósitos libres (AHORRO sin rondaId o con nota "libre")
+        prisma.movimientoCuenta.groupBy({
+          by: ["socioId"],
+          where: {
+            tipo: "AHORRO",
+            createdAt: {
+              gte: ronda.fechaInicio,
+              lte: ronda.fechaFin ?? new Date(),
+            },
+            OR: [
+              { rondaId: null },
+              { nota: { contains: "libre" } },
+            ],
+          },
           _sum: { monto: true },
         }),
       ]);
@@ -94,15 +116,8 @@ export async function POST(req: Request) {
       const ahorrosMap  = new Map(ahorros.map(a  => [a.socioId, Number(a._sum.monto ?? 0)]));
       const expressMap  = new Map(express.map(e  => [e.socioId, Number(e._sum.principal ?? 0)]));
       const cuentasMap  = new Map(cuentas.map(c  => [c.socioId, c]));
-
-      // Depósitos libres y retiros por socio
-      const depositosMap = new Map<number, number>();
-      const retirosMap   = new Map<number, number>();
-      movimientos.forEach(m => {
-        const monto = Number(m._sum.monto ?? 0);
-        if (m.tipo === "AHORRO") depositosMap.set(m.socioId, (depositosMap.get(m.socioId) ?? 0) + monto);
-        if (m.tipo === "RETIRO") retirosMap.set(m.socioId,   (retirosMap.get(m.socioId)   ?? 0) + monto);
-      });
+      const retirosMap  = new Map(retirosQ.map(r  => [r.socioId, Number(r._sum.monto ?? 0)]));
+      const depositosMap = new Map(depositosQ.map(d => [d.socioId, Number(d._sum.monto ?? 0)]));
 
       for (const socio of socios) {
         const sid = socio.id;
