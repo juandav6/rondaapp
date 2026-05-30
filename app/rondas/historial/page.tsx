@@ -37,6 +37,11 @@ function StatusBadge({ activa }: { activa: boolean }) {
 
 export default function HistorialRondasPage() {
   const [rondas, setRondas] = useState<Ronda[]>([]);
+  const [showConsolidado, setShowConsolidado] = useState(false);
+  const [socios, setSocios] = useState<{ id: number; nombres: string; apellidos: string; numeroCuenta: string }[]>([]);
+  const [sociosSeleccionados, setSociosSeleccionados] = useState<Set<number>>(new Set());
+  const [loadingSocios, setLoadingSocios] = useState(false);
+  const [generandoConsolidado, setGenerandoConsolidado] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -87,6 +92,41 @@ export default function HistorialRondasPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
   const visible = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+
+  async function abrirConsolidado() {
+    setShowConsolidado(true);
+    if (socios.length > 0) return;
+    setLoadingSocios(true);
+    try {
+      const r = await fetch("/api/admin/socios");
+      const d = await r.json();
+      const lista = Array.isArray(d) ? d : [];
+      setSocios(lista);
+      setSociosSeleccionados(new Set(lista.map((s: any) => s.id)));
+    } catch { } finally { setLoadingSocios(false); }
+  }
+
+  async function exportarConsolidado() {
+    setGenerandoConsolidado(true);
+    try {
+      const todos = sociosSeleccionados.size === socios.length;
+      const res = await fetch("/api/reportes/consolidado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ socioIds: todos ? null : Array.from(sociosSeleccionados) }),
+      });
+      if (!res.ok) throw new Error("Error generando consolidado");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `consolidado-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowConsolidado(false);
+    } catch (e: any) { alert(e.message); }
+    finally { setGenerandoConsolidado(false); }
+  }
 
   function handleSort(key: typeof sortKey) {
     if (key === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -141,6 +181,13 @@ export default function HistorialRondasPage() {
             <h1 className="text-lg sm:text-2xl font-semibold tracking-tight">Historial de rondas</h1>
             <p className="text-xs sm:text-sm text-gray-500">{rondas.length} rondas registradas</p>
           </div>
+          <button onClick={abrirConsolidado}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+              <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
+            </svg>
+            Consolidado Excel
+          </button>
         </div>
       </div>
 
@@ -359,6 +406,96 @@ export default function HistorialRondasPage() {
               <button onClick={confirmDelete} disabled={deleting}
                 className={classNames("rounded-md px-4 py-2 text-sm text-white", deleting ? "bg-red-400" : "bg-red-600 hover:bg-red-700")}>
                 {deleting ? "Eliminando…" : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      )}
+
+      {/* ── Modal Consolidado Excel ── */}
+      {showConsolidado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full sm:max-w-lg bg-white rounded-2xl shadow-xl flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Consolidado Excel</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Selecciona los socios a incluir en el reporte</p>
+              </div>
+              <button onClick={() => setShowConsolidado(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            {/* Controles selección */}
+            <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">
+                  {sociosSeleccionados.size === socios.length
+                    ? "Todos los socios"
+                    : `${sociosSeleccionados.size} seleccionado${sociosSeleccionados.size !== 1 ? "s" : ""}`}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setSociosSeleccionados(new Set(socios.map(s => s.id)))}
+                  className="rounded-lg border px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100">
+                  Todos
+                </button>
+                <button onClick={() => setSociosSeleccionados(new Set())}
+                  className="rounded-lg border px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100">
+                  Ninguno
+                </button>
+              </div>
+            </div>
+
+            {/* Lista socios */}
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {loadingSocios ? (
+                <div className="text-center py-8 text-sm text-gray-400">Cargando socios…</div>
+              ) : (
+                <div className="space-y-1">
+                  {socios.map(s => {
+                    const sel = sociosSeleccionados.has(s.id);
+                    return (
+                      <label key={s.id}
+                        className={classNames(
+                          "flex items-center gap-3 rounded-lg px-3 py-2.5 cursor-pointer border transition-colors",
+                          sel ? "bg-emerald-50 border-emerald-200" : "hover:bg-gray-50 border-transparent"
+                        )}>
+                        <input type="checkbox" checked={sel} onChange={() => {
+                          setSociosSeleccionados(prev => {
+                            const next = new Set(prev);
+                            sel ? next.delete(s.id) : next.add(s.id);
+                            return next;
+                          });
+                        }} className="rounded text-emerald-600 focus:ring-emerald-500" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{s.apellidos}, {s.nombres}</p>
+                          <p className="text-xs text-gray-400 font-mono">{s.numeroCuenta}</p>
+                        </div>
+                        {sel && <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 text-emerald-500 shrink-0"><path fillRule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd"/></svg>}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Info hojas */}
+            <div className="px-5 py-3 border-t bg-blue-50 text-xs text-blue-700">
+              📊 El Excel incluirá <strong>2 hojas</strong>: "Consolidado por ronda" (detalle semana×ronda) y "Resumen por socio" (totales acumulados).
+              {sociosSeleccionados.size === socios.length && " Incluye totales generales de todos los socios."}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t flex gap-3 bg-gray-50 rounded-b-2xl">
+              <button onClick={() => setShowConsolidado(false)}
+                className="flex-1 rounded-xl border bg-white py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={exportarConsolidado}
+                disabled={generandoConsolidado || sociosSeleccionados.size === 0}
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {generandoConsolidado ? "Generando…" : `Exportar Excel (${sociosSeleccionados.size} socios)`}
               </button>
             </div>
           </div>
