@@ -52,12 +52,12 @@ export async function POST(req: Request) {
       });
       // Préstamos normales
       const prestamos = await prisma.prestamo.findMany({
-        where: { rondaId: ronda.id, tipo: "NORMAL" },
+        where: { rondaId: ronda.id },
         select: { socioId: true, monto: true, cuotas: { select: { interes: true, pagada: true } } },
       });
-      // Express
-      const express = await prisma.prestamo.groupBy({
-        by: ["socioId"], where: { rondaId: ronda.id, tipo: "EXPRESS" },
+      // Express (modelo separado)
+      const express = await prisma.prestamoExpress.groupBy({
+        by: ["socioId"], where: { rondaId: ronda.id },
         _sum: { monto: true },
       });
       // Fondo de inversión
