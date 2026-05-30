@@ -72,17 +72,25 @@ async function getKardex(socioId: number) {
 
   // Agrupar AHORRO por ronda — los demás tipos van como líneas individuales
 
-  // Primero agrupar AHORROs por rondaId
+  // Agrupar AHORROs: key = rondaId si existe, sino nombre extraído de la nota
   const ahorrosPorRonda = new Map<string, { rondaNombre: string; total: number; items: { fecha: Date; ref: string; monto: number }[] }>();
 
   for (const m of movimientos) {
     if (m.tipo === "AHORRO") {
-      const key = m.rondaId ? String(m.rondaId) : "libre";
-      const nombre = m.ronda?.nombre ?? (m.nota?.includes("·") ? m.nota.split("·")[1]?.trim() : "Depósitos libres") ?? "Depósitos libres";
-      if (!ahorrosPorRonda.has(key)) ahorrosPorRonda.set(key, { rondaNombre: nombre, total: 0, items: [] });
+      // Nombre de ronda: desde join, o extraído de la nota (ej: "Ahorro semana 1 · RD0006")
+      let rondaNombre = m.ronda?.nombre ?? null;
+      if (!rondaNombre && m.nota) {
+        const match = m.nota.match(/·\s*(RD\d+)/);
+        if (match) rondaNombre = match[1];
+      }
+      // Key único por ronda
+      const key = m.rondaId ? `id-${m.rondaId}` : rondaNombre ? `nombre-${rondaNombre}` : "libre";
+      const label = rondaNombre ?? "Depósitos libres";
+
+      if (!ahorrosPorRonda.has(key)) ahorrosPorRonda.set(key, { rondaNombre: label, total: 0, items: [] });
       const g = ahorrosPorRonda.get(key)!;
       g.total += Number(m.monto);
-      g.items.push({ fecha: m.createdAt, ref: m.nota ?? nombre, monto: Number(m.monto) });
+      g.items.push({ fecha: m.createdAt, ref: m.nota ?? label, monto: Number(m.monto) });
     }
   }
 
@@ -238,6 +246,15 @@ export default async function KardexPage({ searchParams }: { searchParams: Promi
                       className="rounded-lg border px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50">
                       Ver detalle
                     </Link>
+                    <a
+                      href={`/api/socios/${selectedId}/kardex`}
+                      download
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100 flex items-center gap-1.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
+                        <path fillRule="evenodd" d="M12 2.25a.75.75 0 0 1 .75.75v11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 1 1 1.06-1.06l3.22 3.22V3a.75.75 0 0 1 .75-.75Zm-9 13.5a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd"/>
+                      </svg>
+                      Excel
+                    </a>
                   </div>
                 </div>
 
