@@ -411,8 +411,6 @@ export default function HistorialRondasPage() {
           </div>
         </div>
       )}
-      )}
-
       {/* ── Modal Consolidado Excel ── */}
       {showConsolidado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
