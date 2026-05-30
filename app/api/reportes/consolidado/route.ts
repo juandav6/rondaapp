@@ -135,7 +135,7 @@ export async function POST(req: Request) {
 
     // ── Una hoja por socio ───────────────────────────────────────────────────
     for (const socio of socios) {
-      const nombreHoja = `${socio.apellidos.slice(0,15)},${socio.nombres.slice(0,10)}`.replace(/[\\/?*[\]]/g,"");
+      const nombreHoja = `${socio.numeroCuenta}-${socio.apellidos.slice(0,12)}`.replace(/[\\/?*[\]:]/g,"").slice(0, 31);
       const ws = wb.addWorksheet(nombreHoja);
 
       ws.getColumn(1).width = 14; // Ronda
