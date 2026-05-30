@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       // Express (modelo separado)
       const express = await prisma.prestamoExpress.groupBy({
         by: ["socioId"], where: { rondaId: ronda.id },
-        _sum: { monto: true },
+        _sum: { principal: true },
       });
       // Fondo de inversión
       const cuentas = await prisma.cuentaInversion.findMany({
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
       // Indexar por socioId
       const aportesMap = Object.fromEntries(aportes.map(a => [a.socioId, a._sum]));
       const ahorrosMap = Object.fromEntries(ahorros.map(a => [a.socioId, Number(a._sum.monto ?? 0)]));
-      const expressMap = Object.fromEntries(express.map(e => [e.socioId, Number(e._sum.monto ?? 0)]));
+      const expressMap = Object.fromEntries(express.map(e => [e.socioId, Number(e._sum.principal ?? 0)]));
       const cuentasMap = Object.fromEntries(cuentas.map(c => [c.socioId, c]));
 
       for (const fila of filas) {
