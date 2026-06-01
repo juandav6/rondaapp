@@ -10,18 +10,21 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const soloInactivos = searchParams.get("inactivos") === "1";
 
-    const socios = await prisma.socio.findMany({
-      where: soloInactivos
-        ? { activo: false }
-        : { OR: [{ activo: true }, { activo: null }] },
+    const todos = await prisma.socio.findMany({
       orderBy: { numeroCuenta: "asc" },
       select: {
         id: true, numeroCuenta: true, nombres: true, apellidos: true,
-        cedula: true, edad: true, saldoAhorros: true, multas: true, activo: true,
+        cedula: true, edad: true, saldoAhorros: true, multas: true,
         _count: { select: { aportes: true, ahorros: true, prestamos: true } },
       },
     });
-    return NextResponse.json(socios.map(s => ({
+
+    // Filtrar por activo usando el campo directo (post-query hasta que prisma generate corra)
+    const socios = soloInactivos
+      ? todos.filter((s: any) => s.activo === false)
+      : todos.filter((s: any) => s.activo !== false);
+
+    return NextResponse.json(socios.map((s: any) => ({
       ...s, saldoAhorros: Number(s.saldoAhorros),
     })));
   } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
