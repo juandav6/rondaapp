@@ -5,9 +5,15 @@ import { registrarBitacora, diffObjetos } from "@/lib/bitacora";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const soloInactivos = searchParams.get("inactivos") === "1";
+
     const socios = await prisma.socio.findMany({
+      where: soloInactivos
+        ? { activo: false }
+        : { OR: [{ activo: true }, { activo: null }] },
       orderBy: { numeroCuenta: "asc" },
       select: {
         id: true, numeroCuenta: true, nombres: true, apellidos: true,
