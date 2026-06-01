@@ -22,13 +22,32 @@ export async function GET(req: Request) {
   try {
     const where: any = {};
     if (socioId) where.socioId = Number(socioId);
-    if (tipo && tipo !== "TODOS") {
-      where.tipo = tipo;
-    } else if (!tipo) {
-      // Sin parámetro tipo → solo depósitos y retiros por defecto
-      where.tipo = { in: ["AHORRO", "RETIRO"] };
+    if (tipo === "RETIRO") {
+      where.tipo = "RETIRO";
+    } else if (tipo === "AHORRO") {
+      // Solo depósitos libres (sin rondaId o con nota "libre")
+      where.tipo = "AHORRO";
+      where.OR = [
+        { rondaId: null },
+        { nota: { contains: "libre" } },
+        { nota: { contains: "Depósito" } },
+      ];
+    } else if (tipo === "TODOS") {
+      // Todos los tipos de movimiento
+    } else {
+      // Por defecto: solo depósitos libres y retiros (excluye ahorros semanales)
+      where.OR = [
+        { tipo: "RETIRO" },
+        {
+          tipo: "AHORRO",
+          OR: [
+            { rondaId: null },
+            { nota: { contains: "libre" } },
+            { nota: { contains: "Depósito" } },
+          ],
+        },
+      ];
     }
-    // tipo=TODOS → sin filtro de tipo (muestra todos)
 
     const [total, movimientos] = await Promise.all([
       prisma.movimientoCuenta.count({ where }),
