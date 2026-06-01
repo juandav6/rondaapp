@@ -39,7 +39,7 @@ export async function GET(
       // Socios parciales: tienen ahorro en esta ronda pero NO son participantes
       prisma.socio.findMany({
         where: {
-          activo: { not: false },
+          // activo filter pending prisma generate
           id: { notIn: socioIds.length > 0 ? socioIds : [-1] },
         },
         select: {
