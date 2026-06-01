@@ -38,7 +38,10 @@ export async function GET(
       }),
       // Socios parciales: tienen ahorro en esta ronda pero NO son participantes
       prisma.socio.findMany({
-        where: { id: { notIn: socioIds.length > 0 ? socioIds : [-1] } },
+        where: {
+          activo: true,
+          id: { notIn: socioIds.length > 0 ? socioIds : [-1] },
+        },
         select: {
           id: true, nombres: true, apellidos: true, numeroCuenta: true,
           ahorros: { where: { rondaId, semana }, select: { monto: true } },
@@ -150,12 +153,17 @@ export async function PUT(
           const movExistente = await tx.movimientoCuenta.findFirst({
             where: { socioId, rondaId, tipo: "AHORRO", nota: { contains: `semana ${semana}` } },
           });
-          if (movExistente) {
+          if (montoNuevo <= 0) {
+            // Si el nuevo monto es 0, eliminar el movimiento
+            if (movExistente) {
+              await tx.movimientoCuenta.delete({ where: { id: movExistente.id } });
+            }
+          } else if (movExistente) {
             await tx.movimientoCuenta.update({
               where: { id: movExistente.id },
               data: { monto: new Prisma.Decimal(montoNuevo) },
             });
-          } else if (montoNuevo > 0) {
+          } else {
             await tx.movimientoCuenta.create({
               data: { socioId, rondaId, tipo: "AHORRO", monto: new Prisma.Decimal(montoNuevo),
                 nota: `Ahorro semana ${semana} · ronda ${rondaId}` },
@@ -193,12 +201,16 @@ export async function PUT(
           const movExistente = await tx.movimientoCuenta.findFirst({
             where: { socioId, rondaId, tipo: "AHORRO", nota: { contains: `semana ${semana}` } },
           });
-          if (movExistente) {
+          if (montoNuevo <= 0) {
+            if (movExistente) {
+              await tx.movimientoCuenta.delete({ where: { id: movExistente.id } });
+            }
+          } else if (movExistente) {
             await tx.movimientoCuenta.update({
               where: { id: movExistente.id },
               data: { monto: new Prisma.Decimal(montoNuevo) },
             });
-          } else if (montoNuevo > 0) {
+          } else {
             await tx.movimientoCuenta.create({
               data: { socioId, rondaId, tipo: "AHORRO", monto: new Prisma.Decimal(montoNuevo),
                 nota: `Ahorro semana ${semana} · ronda ${rondaId}` },
