@@ -16,6 +16,7 @@ const TIPO_MOV: Record<string,{label:string;color:string;signo:string}> = {
 
 export default function AdminSociosPage() {
   const [socios, setSocios] = useState<any[]>([]);
+  const [filtroInactivos, setFiltroInactivos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [buscar, setBuscar] = useState("");
   const [editando, setEditando] = useState<any|null>(null);
@@ -32,12 +33,13 @@ export default function AdminSociosPage() {
 
   async function cargar() {
     try {
-      const r = await fetch("/api/admin/socios");
+      const url = filtroInactivos ? "/api/admin/socios?inactivos=1" : "/api/admin/socios";
+      const r = await fetch(url);
       setSocios(await r.json());
     } finally { setLoading(false); }
   }
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); }, [filtroInactivos]);
 
   const filtrados = socios.filter(s =>
     `${s.nombres} ${s.apellidos} ${s.numeroCuenta} ${s.cedula}`.toLowerCase().includes(buscar.toLowerCase())
@@ -151,10 +153,27 @@ export default function AdminSociosPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Administrar socios</h1>
-          <p className="text-xs text-gray-400">{socios.length} socios registrados</p>
+          <p className="text-xs text-gray-400">{socios.length} socios {filtroInactivos ? "inactivos" : "activos"}</p>
         </div>
-        <input type="text" placeholder="Buscar nombre, cuenta o cédula…" value={buscar} onChange={e=>setBuscar(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm w-full sm:w-72 focus:outline-none focus:ring-2 focus:ring-violet-200"/>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Toggle activos/inactivos */}
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              onClick={() => setFiltroInactivos(false)}
+              className={cn("px-3 py-2 text-xs font-medium transition-colors",
+                !filtroInactivos ? "bg-emerald-600 text-white" : "text-gray-600 hover:bg-gray-50")}>
+              ✓ Activos
+            </button>
+            <button
+              onClick={() => setFiltroInactivos(true)}
+              className={cn("px-3 py-2 text-xs font-medium transition-colors border-l",
+                filtroInactivos ? "bg-gray-600 text-white" : "text-gray-600 hover:bg-gray-50")}>
+              Inactivos
+            </button>
+          </div>
+          <input type="text" placeholder="Buscar nombre, cuenta o cédula…" value={buscar} onChange={e=>setBuscar(e.target.value)}
+            className="rounded-lg border px-3 py-2 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-violet-200"/>
+        </div>
       </div>
 
       {msg && <div className={cn("rounded-xl p-3 text-sm", msg.ok?"bg-emerald-50 border border-emerald-200 text-emerald-700":"bg-red-50 border border-red-200 text-red-700")}>{msg.text}</div>}
