@@ -11,7 +11,7 @@ export async function GET() {
       orderBy: { numeroCuenta: "asc" },
       select: {
         id: true, numeroCuenta: true, nombres: true, apellidos: true,
-        cedula: true, edad: true, saldoAhorros: true, multas: true,
+        cedula: true, edad: true, saldoAhorros: true, multas: true, activo: true,
         _count: { select: { aportes: true, ahorros: true, prestamos: true } },
       },
     });
