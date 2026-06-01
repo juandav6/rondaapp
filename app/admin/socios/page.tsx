@@ -81,6 +81,24 @@ export default function AdminSociosPage() {
     finally { setSaving(false); }
   }
 
+  async function toggleActivo(s: any) {
+    const accion = s.activo !== false ? "INACTIVAR" : "REACTIVAR";
+    const msg = accion === "INACTIVAR"
+      ? `¿Inactivar a ${s.nombres} ${s.apellidos}?\n\nSe cerrará la cuenta. No aparecerá en ningún listado de procesos futuros.\nSaldo actual: $${Number(s.saldoAhorros).toFixed(2)} (debe ser $0.00)`
+      : `¿Reactivar a ${s.nombres} ${s.apellidos}?`;
+    if (!confirm(msg)) return;
+    try {
+      const res = await fetch(`/api/admin/socios/${s.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion }),
+      });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error); return; }
+      setSocios(prev => prev.map(x => x.id === s.id ? { ...x, activo: d.activo } : x));
+    } catch (e: any) { alert(e.message); }
+  }
+
   async function eliminarSocio(s: any) {
     if (!confirm(`¿ELIMINAR permanentemente a ${s.nombres} ${s.apellidos}?\n\nEsta acción NO se puede deshacer y quedará en bitácora.`)) return;
     try {
@@ -167,10 +185,19 @@ export default function AdminSociosPage() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex gap-1.5 justify-center flex-wrap">
+                      {s.activo === false && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">INACTIVO</span>
+                      )}
                       <button onClick={()=>abrirEditar(s)}
                         className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs text-white hover:bg-violet-700">Editar</button>
                       <button onClick={()=>abrirMovimientos(s)}
                         className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 hover:bg-blue-100">Movimientos</button>
+                      <button onClick={()=>toggleActivo(s)}
+                        className={s.activo === false
+                          ? "rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-100"
+                          : "rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100"}>
+                        {s.activo === false ? "Reactivar" : "Inactivar"}
+                      </button>
                       <button onClick={()=>eliminarSocio(s)}
                         className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100">Eliminar</button>
                     </div>
