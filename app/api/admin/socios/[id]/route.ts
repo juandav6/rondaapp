@@ -112,3 +112,42 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     return NextResponse.json({ ok: true });
   } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
 }
+
+export async function PATCH(req: Request, ctx: Ctx) {
+  const id = Number((await ctx.params).id);
+  try {
+    const { accion } = await req.json();
+    if (!["INACTIVAR", "REACTIVAR"].includes(accion))
+      return NextResponse.json({ error: "Acción inválida" }, { status: 400 });
+
+    const socio = await prisma.socio.findUnique({ where: { id } });
+    if (!socio) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
+    if (accion === "INACTIVAR") {
+      // Solo se puede inactivar si el saldo es 0
+      if (Number(socio.saldoAhorros) !== 0)
+        return NextResponse.json({
+          error: `No se puede inactivar: el socio tiene un saldo de $${Number(socio.saldoAhorros).toFixed(2)}. Debe ser $0.00 para cerrar la cuenta.`,
+        }, { status: 400 });
+
+      // Verificar préstamos activos
+      const prestamosActivos = await prisma.prestamo.count({
+        where: { socioId: id, estado: "ACTIVO" },
+      });
+      if (prestamosActivos > 0)
+        return NextResponse.json({
+          error: `No se puede inactivar: tiene ${prestamosActivos} préstamo(s) activo(s) pendiente(s) de pago.`,
+        }, { status: 400 });
+    }
+
+    const nuevoEstado = accion === "INACTIVAR" ? false : true;
+    await prisma.socio.update({ where: { id }, data: { activo: nuevoEstado } });
+
+    await registrarBitacora({
+      tabla: "socios", registroId: id, accion: "EDITAR",
+      camposCambios: { activo: { antes: socio.activo, despues: nuevoEstado } },
+    });
+
+    return NextResponse.json({ ok: true, activo: nuevoEstado });
+  } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+}
