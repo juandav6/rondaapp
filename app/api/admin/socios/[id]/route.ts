@@ -141,11 +141,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
 
     const nuevoEstado = accion === "INACTIVAR" ? false : true;
-    await prisma.socio.update({ where: { id }, data: { activo: nuevoEstado } });
+    await prisma.$executeRaw`UPDATE socios SET activo = ${nuevoEstado} WHERE id = ${id}`;
 
     await registrarBitacora({
       tabla: "socios", registroId: id, accion: "EDITAR",
-      camposCambios: { activo: { antes: socio.activo, despues: nuevoEstado } },
+      camposCambios: { activo: { antes: (socio as any).activo, despues: nuevoEstado } },
     });
 
     return NextResponse.json({ ok: true, activo: nuevoEstado });
