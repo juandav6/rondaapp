@@ -18,6 +18,7 @@ model Socio {
   multas          Float    @default(0)
   saldoAhorros    Decimal  @default(0) @db.Decimal(12, 2) @map("saldo_ahorros")
   fechaCreacion   DateTime @default(now()) @map("fecha_creacion")
+  activo          Boolean  @default(true)
 
   ahorros                 Ahorro[]
   aportes                 Aporte[]
@@ -314,6 +315,7 @@ model GastoMulta {
   @@map("gastos_multa")
 }
 
+// ── Caja común: multas + intereses express + gastos ──────────────────────────
 model MovimientoCaja {
   id                Int      @id @default(autoincrement())
   rondaId           Int      @map("ronda_id")
