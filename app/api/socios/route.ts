@@ -12,6 +12,7 @@ export async function GET(req: Request) {
   // Socios base
   const socios = await prisma.socio.findMany({
     where: {},
+    select: {
       id: true,
       numeroCuenta: true,
       nombres: true,
