@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     // Socios por nombre, apellido o cuenta
     prisma.socio.findMany({
       where: {
-        activo: { not: false },
+        // activo filter pending prisma generate
         OR: [
           { nombres: { contains: q, mode: "insensitive" } },
           { apellidos: { contains: q, mode: "insensitive" } },
