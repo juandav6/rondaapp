@@ -21,7 +21,7 @@ export default function AdminDepositosPage() {
   const [loading, setLoading] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState<Mov | null>(null);
-  const [form, setForm] = useState<{ monto: number | string; nota: string }>({ monto: "", nota: "" });
+  const [form, setForm] = useState<{ monto: number | string; nota: string; fecha: string }>({ monto: "", nota: "", fecha: "" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -67,7 +67,7 @@ export default function AdminDepositosPage() {
     try {
       const res = await fetch("/api/admin/movimientos-cuenta", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editando.id, monto: Number(form.monto), nota: form.nota }),
+        body: JSON.stringify({ id: editando.id, monto: Number(form.monto), nota: form.nota, fecha: form.fecha || undefined }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
@@ -237,7 +237,7 @@ export default function AdminDepositosPage() {
                         {canEdit ? (
                           <>
                             <button
-                              onClick={() => { setEditando(m); setForm({ monto: m.monto, nota: m.nota ?? "" }); }}
+                              onClick={() => { setEditando(m); setForm({ monto: m.monto, nota: m.nota ?? "", fecha: m.createdAt ? new Date(m.createdAt).toISOString().slice(0,10) : "" }); }}
                               className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">
                               Editar
                             </button>
@@ -288,6 +288,10 @@ export default function AdminDepositosPage() {
                 <span className="font-semibold">{fmt(editando.monto)}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-500">Fecha actual:</span>
+                <span className="font-semibold">{fmtDate(editando.createdAt)}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-500">Saldo actual socio:</span>
                 <span className="font-semibold text-emerald-700">{fmt(editando.socio.saldoAhorros)}</span>
               </div>
@@ -324,6 +328,14 @@ export default function AdminDepositosPage() {
                   value={form.nota}
                   onChange={e => setForm(p => ({ ...p, nota: e.target.value }))}
                   placeholder="Descripción del movimiento…"
+                  className="w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"/>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Fecha del movimiento</label>
+                <input
+                  type="date"
+                  value={form.fecha}
+                  onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"/>
               </div>
             </div>
