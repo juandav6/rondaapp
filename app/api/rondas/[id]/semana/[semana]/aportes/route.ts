@@ -60,7 +60,7 @@ export async function GET(_req: NextRequest, ctx: { params: Params }) {
       // Socios que NO son participantes de la ronda — con sus ahorros acumulados si los tienen
       prisma.socio.findMany({
         where: {
-          activo: true,
+          activo: { not: false },
           id: { notIn: socioIds.length > 0 ? socioIds : [-1] },
         },
         select: {
