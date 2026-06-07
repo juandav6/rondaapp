@@ -2,45 +2,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-
 type CreatePrestamoBody = {
   socioId: number;
   monto: number;
-  tasaAnual: number;      // % mensual plano
-  plazoSemanas: number;   // plazo en semanas
-  fechaInicio: string;    // YYYY-MM-DD
+  tasaAnual: number;
+  plazoSemanas: number;
+  fechaInicio: string;
 };
-
 function isValidDateOnly(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
-
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
 }
-
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
-
 function toDecimal(n: number) {
   return new Prisma.Decimal(round2(n));
 }
-
-/** Semanas completas entre dos fechas */
-function semanasEntre(desde: Date, hasta: Date): number {
-  const diffMs = hasta.getTime() - desde.getTime();
-  if (diffMs <= 0) return 0;
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
-}
-
-/**
- * Cronograma con plazo en SEMANAS.
- * - Cada 4 semanas = cuota mensual completa
- * - Semanas sobrantes = última cuota con interés proporcional
- */
 function buildSchedule(params: {
   principal: number;
   tasaMensualPct: number;
@@ -48,29 +30,23 @@ function buildSchedule(params: {
   startDate: Date;
 }) {
   const { principal: P, tasaMensualPct, plazoSemanas, startDate } = params;
-
   if (plazoSemanas <= 0) throw new Error("plazoSemanas debe ser mayor a 0");
   if (P <= 0) throw new Error("monto debe ser mayor a 0");
   if (tasaMensualPct < 0) throw new Error("tasaAnual no puede ser negativa");
-
   const interesMensual = round2(P * (tasaMensualPct / 100));
   const mesesCompletos = Math.floor(plazoSemanas / 4);
   const semanasRestantes = plazoSemanas % 4;
   const totalCuotas = mesesCompletos + (semanasRestantes > 0 ? 1 : 0);
-
   if (totalCuotas === 0) throw new Error("El plazo no genera cuotas");
-
   const capitalPorCuota = round2(P / totalCuotas);
   let saldo = P;
   let diaAcumulado = 0;
-
   return Array.from({ length: totalCuotas }, (_, i) => {
     const numero = i + 1;
     const esUltima = numero === totalCuotas;
     const esParcial = esUltima && semanasRestantes > 0;
     const diasEstaCuota = esParcial ? semanasRestantes * 7 : 28;
     diaAcumulado += diasEstaCuota;
-
     const capital = esUltima ? round2(saldo) : capitalPorCuota;
     const interes = esParcial
       ? round2(interesMensual * (semanasRestantes / 4))
@@ -88,7 +64,6 @@ function buildSchedule(params: {
     return result;
   });
 }
-
 // ===== GET =====
 export async function GET() {
   try {
@@ -100,7 +75,6 @@ export async function GET() {
         cuotas: { where: { pagada: false }, orderBy: { fechaVenc: "asc" }, take: 1 },
       },
     });
-
     return NextResponse.json({
       prestamos: prestamos.map(p => ({
         id: p.id, socio: p.socio, ronda: p.ronda,
@@ -116,18 +90,15 @@ export async function GET() {
     return NextResponse.json({ error: e?.message ?? "Error" }, { status: 500 });
   }
 }
-
 // ===== POST =====
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<CreatePrestamoBody>;
-
     if (!body?.socioId) throw new Error("socioId es requerido");
     if (!body?.monto || Number(body.monto) <= 0) throw new Error("monto inválido");
     if (body.tasaAnual == null || Number(body.tasaAnual) < 0) throw new Error("tasaAnual inválida");
     if (!body?.plazoSemanas || Number(body.plazoSemanas) <= 0) throw new Error("plazoSemanas inválido");
     if (!body?.fechaInicio || !isValidDateOnly(body.fechaInicio)) throw new Error("fechaInicio debe ser YYYY-MM-DD");
-
     const socioId = Number(body.socioId);
     const monto = Number(body.monto);
     const tasaMensualPct = Number(body.tasaAnual);
@@ -145,7 +116,11 @@ export async function POST(req: Request) {
 
     // ✅ Validación: semanas no pueden exceder el fin de la ronda
     if (rondaActiva.fechaFin) {
-      const maxSemanas = semanasEntre(fechaInicio, rondaActiva.fechaFin);
+      const diffMs = rondaActiva.fechaFin.getTime() - fechaInicio.getTime();
+      const diasRestantes = diffMs / (1000 * 60 * 60 * 24);
+      // Usar Math.round para tolerancia de fechas con horas (e.g. 147.0 días = 21 semanas exactas)
+      // Sumar 0.5 días de tolerancia para evitar rechazo por diferencias de horas
+      const maxSemanas = Math.round((diasRestantes + 0.5) / 7);
       if (plazoSemanas > maxSemanas) {
         throw new Error(
           `El plazo (${plazoSemanas} sem.) excede las semanas restantes de la ronda (${maxSemanas} sem.). ` +
@@ -155,10 +130,6 @@ export async function POST(req: Request) {
     }
 
     const schedule = buildSchedule({ principal: monto, tasaMensualPct, plazoSemanas, startDate: fechaInicio });
-
-    // plazoMeses guardado como número decimal para compatibilidad con el schema
-    const plazoMesesDecimal = Math.round((plazoSemanas / 4) * 100) / 100;
-
     const result = await prisma.$transaction(async (tx) => {
       const prestamo = await tx.prestamo.create({
         data: {
@@ -166,13 +137,12 @@ export async function POST(req: Request) {
           socioId,
           monto: toDecimal(monto),
           tasaAnual: toDecimal(tasaMensualPct),
-          plazoMeses: Math.ceil(plazoSemanas / 4), // redondeado hacia arriba para el campo Int
+          plazoMeses: Math.ceil(plazoSemanas / 4),
           fechaInicio,
           estado: "ACTIVO",
           saldoActual: toDecimal(monto),
         },
       });
-
       await tx.prestamoCuota.createMany({
         data: schedule.map(c => ({
           prestamoId: prestamo.id,
@@ -185,7 +155,6 @@ export async function POST(req: Request) {
           pagada: false,
         })),
       });
-
       return tx.prestamo.findUnique({
         where: { id: prestamo.id },
         include: {
@@ -195,9 +164,7 @@ export async function POST(req: Request) {
         },
       });
     });
-
     if (!result) throw new Error("Error al obtener el préstamo creado");
-
     return NextResponse.json({
       prestamo: {
         ...result,
