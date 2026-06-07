@@ -314,7 +314,6 @@ export default function PrestamosPendientesPage() {
           </div>
         </div>
       )}
-      )}
 
       {/* ── Modal pagar cuota ── */}
       {pagarTarget && (
