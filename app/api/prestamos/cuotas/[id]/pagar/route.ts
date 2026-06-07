@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -11,6 +11,10 @@ export async function POST(
     if (!cuotaId || isNaN(cuotaId)) {
       return NextResponse.json({ error: "ID de cuota inválido" }, { status: 400 });
     }
+
+    // Fecha de pago opcional — si no se envía usa la fecha actual
+    const body = await req.json().catch(() => ({}));
+    const fechaPago = body?.fechaPago ? new Date(body.fechaPago + "T12:00:00Z") : new Date();
 
     const cuota = await prisma.prestamoCuota.findUnique({
       where: { id: cuotaId },
@@ -28,7 +32,7 @@ export async function POST(
       // marcar cuota como pagada
       const cuotaActualizada = await tx.prestamoCuota.update({
         where: { id: cuotaId },
-        data: { pagada: true, fechaPago: new Date() },
+        data: { pagada: true, fechaPago },
       });
 
       // actualizar saldo del préstamo
