@@ -33,6 +33,9 @@ export default function PrestamosPendientesPage() {
   const [cancelTarget, setCancelTarget] = useState<PrestamoPendiente | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [pagarTarget, setPagarTarget] = useState<{ prestamo: PrestamoPendiente; cuotaId: number; monto: number } | null>(null);
+  const [fechaPagoInput, setFechaPagoInput] = useState("");
+  const [pagando, setPagando] = useState(false);
 
   async function fetchPendientes() {
     try {
@@ -46,6 +49,25 @@ export default function PrestamosPendientesPage() {
   }
 
   useEffect(() => { fetchPendientes(); }, []);
+
+  async function pagarCuota() {
+    if (!pagarTarget) return;
+    try {
+      setPagando(true);
+      const res = await fetch(`/api/prestamos/cuotas/${pagarTarget.cuotaId}/pagar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fechaPago: fechaPagoInput || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Error al pagar");
+      setSuccess(`Pago registrado correctamente.`);
+      setTimeout(() => setSuccess(null), 4000);
+      setPagarTarget(null);
+      await fetchPendientes();
+    } catch (e: any) { setError(e?.message); }
+    finally { setPagando(false); }
+  }
 
   async function cancelarPrestamo() {
     if (!cancelTarget) return;
@@ -190,10 +212,10 @@ export default function PrestamosPendientesPage() {
                           <div className="inline-flex gap-1.5">
                             <Link href={`/prestamos/${p.id}`} className="rounded border px-2 py-1 text-xs hover:bg-gray-50">Ver</Link>
                             {p.nextPayment && (
-                              <Link href={`/prestamos/${p.id}?pay=${p.nextPayment.cuotaId}`}
+                              <button onClick={() => { setPagarTarget({ prestamo: p, cuotaId: p.nextPayment!.cuotaId, monto: p.nextPayment!.cuota }); setFechaPagoInput(new Date().toISOString().slice(0,10)); }}
                                 className={cn("rounded px-2 py-1 text-xs text-white font-medium", overdue ? "bg-rose-600" : "bg-blue-600")}>
                                 Pagar
-                              </Link>
+                              </button>
                             )}
                             {puedeCancelar && (
                               <button onClick={() => { setCancelTarget(p); setCancelError(null); }}
@@ -241,10 +263,10 @@ export default function PrestamosPendientesPage() {
                       <Link href={`/prestamos/${p.id}`}
                         className="rounded-md border px-3 py-1.5 text-xs hover:bg-gray-50">Ver</Link>
                       {p.nextPayment && (
-                        <Link href={`/prestamos/${p.id}?pay=${p.nextPayment.cuotaId}`}
+                        <button onClick={() => { setPagarTarget({ prestamo: p, cuotaId: p.nextPayment!.cuotaId, monto: p.nextPayment!.cuota }); setFechaPagoInput(new Date().toISOString().slice(0,10)); }}
                           className={cn("rounded-md px-3 py-1.5 text-xs font-medium text-white", overdue ? "bg-rose-600" : "bg-blue-600")}>
                           Pagar
-                        </Link>
+                        </button>
                       )}
                       {puedeCancelar && (
                         <button onClick={() => { setCancelTarget(p); setCancelError(null); }}
@@ -287,6 +309,52 @@ export default function PrestamosPendientesPage() {
               <button onClick={cancelarPrestamo} disabled={cancelling}
                 className={cn("rounded-md px-4 py-2 text-sm font-medium text-white", cancelling ? "bg-red-400" : "bg-red-600 hover:bg-red-700")}>
                 {cancelling ? "Cancelando…" : "Sí, cancelar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      )}
+
+      {/* ── Modal pagar cuota ── */}
+      {pagarTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Registrar pago</h3>
+            <div className="rounded-lg bg-gray-50 border p-3 mb-4 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Socio</span>
+                <span className="font-medium">{pagarTarget.prestamo.socio.nombres} {pagarTarget.prestamo.socio.apellidos}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Monto cuota</span>
+                <span className="font-bold text-emerald-700">{fmt(pagarTarget.monto)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Vencimiento</span>
+                <span className="font-medium">{fmtDate(pagarTarget.prestamo.nextPayment?.fechaVenc)}</span>
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs font-medium text-gray-600 mb-1 block">
+                Fecha de pago
+              </label>
+              <input
+                type="date"
+                value={fechaPagoInput}
+                onChange={e => setFechaPagoInput(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Por defecto: hoy. Cambia si el pago fue en otra fecha.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setPagarTarget(null)} disabled={pagando}
+                className="flex-1 rounded-xl border py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={pagarCuota} disabled={pagando}
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {pagando ? "Registrando…" : "Confirmar pago"}
               </button>
             </div>
           </div>
