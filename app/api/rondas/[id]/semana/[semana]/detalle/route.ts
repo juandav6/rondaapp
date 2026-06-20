@@ -126,6 +126,7 @@ export async function PUT(
         const aporteSemana = toDecimal(u.aporteSemana);
         const ahorroNuevo = toDecimal(u.ahorroSemana);
         const multaSemana = toDecimal(u.multaSemana ?? 0);
+        const montoNuevo = Number(ahorroNuevo);
 
         await tx.aporte.upsert({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
@@ -133,20 +134,26 @@ export async function PUT(
           create: { rondaId, socioId, semana, monto: aporteSemana, multa: multaSemana, observaciones: "" },
         });
 
-        // Leer ahorro anterior para calcular delta
+        // Solo hacer upsert de ahorro si el monto es mayor a 0
         const ahorroAnterior = await tx.ahorro.findUnique({
           where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
           select: { monto: true },
         });
         const montoAnterior = Number(ahorroAnterior?.monto ?? 0);
-        const montoNuevo = Number(ahorroNuevo);
         const delta = montoNuevo - montoAnterior;
 
-        await tx.ahorro.upsert({
-          where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
-          update: { monto: ahorroNuevo },
-          create: { rondaId, socioId, semana, monto: ahorroNuevo, observaciones: "" },
-        });
+        if (montoNuevo > 0) {
+          await tx.ahorro.upsert({
+            where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
+            update: { monto: ahorroNuevo },
+            create: { rondaId, socioId, semana, monto: ahorroNuevo, observaciones: "" },
+          });
+        } else if (montoAnterior > 0 && ahorroAnterior) {
+          // Si el nuevo es 0 y antes había valor, eliminar el registro
+          await tx.ahorro.delete({
+            where: { rondaId_socioId_semana: { rondaId, socioId, semana } },
+          });
+        }
 
         // Sincronizar MovimientoCuenta tipo AHORRO de esta semana/ronda
         if (Math.abs(delta) > 0.001) {
