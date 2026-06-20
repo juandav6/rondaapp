@@ -20,12 +20,12 @@ export async function GET(req: Request) {
   const limit   = Math.min(100, Number(searchParams.get("limit") ?? 50));
 
   try {
-    const where: any = {};
+    const where: any = { monto: { gt: 0 } }; // nunca mostrar montos cero
     if (socioId) where.socioId = Number(socioId);
     if (tipo === "RETIRO") {
       where.tipo = "RETIRO";
     } else if (tipo === "AHORRO") {
-      // Solo depósitos libres (sin rondaId o con nota "libre")
+      // Solo depósitos libres (sin rondaId o con nota "libre"/"Depósito")
       where.tipo = "AHORRO";
       where.OR = [
         { rondaId: null },
@@ -33,17 +33,21 @@ export async function GET(req: Request) {
         { nota: { contains: "Depósito" } },
       ];
     } else if (tipo === "TODOS") {
-      // Todos los tipos de movimiento
+      // Todos los tipos pero sin monto 0
     } else {
-      // Por defecto: solo depósitos libres y retiros (excluye ahorros semanales)
-      where.OR = [
-        { tipo: "RETIRO" },
+      // Por defecto: solo depósitos libres y retiros
+      where.AND = [
         {
-          tipo: "AHORRO",
           OR: [
-            { rondaId: null },
-            { nota: { contains: "libre" } },
-            { nota: { contains: "Depósito" } },
+            { tipo: "RETIRO" },
+            {
+              tipo: "AHORRO",
+              OR: [
+                { rondaId: null },
+                { nota: { contains: "libre" } },
+                { nota: { contains: "Depósito" } },
+              ],
+            },
           ],
         },
       ];
