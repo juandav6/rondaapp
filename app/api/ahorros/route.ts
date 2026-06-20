@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     const ahorrosRonda = await prisma.ahorro.findMany({
       where: {
         socioId,
+        monto: { gt: 0 },
         ...(hasFecha ? { fecha: fechaFilter } : {}),
       },
       include: { ronda: { select: { id: true, nombre: true } } },
@@ -70,6 +71,7 @@ export async function GET(req: NextRequest) {
     );
 
     // Saldo real del socio (campo saldoAhorros en la tabla socios)
+    // Este es SIEMPRE la fuente de verdad — suma ahorros de rondas + depósitos libres
     const socio = await prisma.socio.findUnique({
       where: { id: socioId },
       select: { saldoAhorros: true },
