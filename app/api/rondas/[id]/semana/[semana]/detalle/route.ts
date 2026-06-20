@@ -158,7 +158,12 @@ export async function PUT(
         // Sincronizar MovimientoCuenta tipo AHORRO de esta semana/ronda
         if (Math.abs(delta) > 0.001) {
           const movExistente = await tx.movimientoCuenta.findFirst({
-            where: { socioId, rondaId, tipo: "AHORRO", nota: { contains: `semana ${semana}` } },
+            where: { socioId, rondaId, tipo: "AHORRO",
+              OR: [
+                { nota: { contains: `semana ${semana} ·` } },
+                { nota: { endsWith: `semana ${semana}` } },
+              ],
+            },
           });
           if (montoNuevo <= 0) {
             // Si el nuevo monto es 0, eliminar el movimiento
@@ -206,7 +211,12 @@ export async function PUT(
 
         if (Math.abs(delta) > 0.001) {
           const movExistente = await tx.movimientoCuenta.findFirst({
-            where: { socioId, rondaId, tipo: "AHORRO", nota: { contains: `semana ${semana}` } },
+            where: { socioId, rondaId, tipo: "AHORRO",
+              OR: [
+                { nota: { contains: `semana ${semana} ·` } },
+                { nota: { endsWith: `semana ${semana}` } },
+              ],
+            },
           });
           if (montoNuevo <= 0) {
             if (movExistente) {
