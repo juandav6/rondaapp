@@ -156,46 +156,50 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   }
 
   async function verRecalculo() {
-    if (!resumen) return;
-    setRecalculando(true);
-    try {
-      // Cargar estado actual del fondo
-      const res = await fetch(`/api/rondas/${resumen.id}/fondo`);
-      const data = await res.json();
-      const inv = data.inversores ?? [];
-
-      // Calcular totales actuales de ahorros por socio desde los movimientos
-      const resAhorros = await fetch(`/api/rondas/${resumen.id}/resultados`);
-      const dataAhorros = await resAhorros.json();
-      const fondoNuevo = dataAhorros.resumen?.fondoTotal ?? data.fondoTotal;
-
-      setRecalcModal({
-        fondoAntes: data.fondoTotal ?? 0,
-        fondoNuevo: fondoNuevo ?? 0,
-        inversoresAntes: inv.map((i: any) => ({
-          socio: i.socio,
-          montoAnterior: i.montoInvertido,
-          montoNuevo: i.montoInvertido,
-          pctAnterior: i.porcentaje,
-          pctNuevo: i.porcentaje,
-        })),
-      });
-    } catch (e: any) { alert(e.message); }
-    finally { setRecalculando(false); }
+    if (!resumen || inversores.length === 0) {
+      alert("No hay datos del fondo de inversión cargados.");
+      return;
+    }
+    // Calcular nuevos porcentajes basados en los montos actuales
+    const fondoTotal = inversores.reduce((s: number, i: any) => s + Number(i.montoInvertido), 0);
+    setRecalcModal({
+      fondoAntes: fondoTotal,
+      fondoNuevo: fondoTotal,
+      inversoresAntes: inversores.map((i: any) => ({
+        socio: i.socio,
+        montoAnterior: Number(i.montoInvertido),
+        montoNuevo: Number(i.montoInvertido),
+        pctAnterior: Number(i.porcentaje),
+        pctNuevo: fondoTotal > 0 ? Math.round((Number(i.montoInvertido) / fondoTotal) * 10000) / 100 : 0,
+      })),
+    });
   }
 
   async function recalcularYCerrar() {
     if (!resumen) return;
     setCerrandoRonda(true);
     try {
-      // 1. Recalcular porcentajes del fondo
-      await fetch(`/api/rondas/${resumen.id}/inversiones/devolver`, { method: "POST" });
-      // 2. Cerrar ronda
-      const res = await fetch(`/api/rondas/${resumen.id}/cerrar-semana`, {
+      // 1. Recalcular porcentajes de participación en el fondo
+      const resRecalc = await fetch(`/api/rondas/${resumen.id}/fondo`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recalcularPorcentajes: true }),
+      });
+      if (!resRecalc.ok) {
+        const e = await resRecalc.json().catch(() => ({}));
+        throw new Error(e.error || "Error recalculando porcentajes");
+      }
+
+      // 2. Cerrar ronda (forzar aunque haya préstamos activos)
+      const resCierre = await fetch(`/api/rondas/${resumen.id}/cerrar-semana`, {
         method: "POST",
         headers: { "x-forzar-cierre": "1" },
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!resCierre.ok) {
+        const e = await resCierre.json().catch(() => ({}));
+        throw new Error(e.error || "Error cerrando ronda");
+      }
+
       setRecalcModal(null);
       setModoEdicion(false);
       await refetchAll();
