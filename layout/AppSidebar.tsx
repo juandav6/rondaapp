@@ -94,6 +94,7 @@ const navItems: NavItem[] = [
       { name: "Multas", path: "/admin/multas" },
       { name: "Secuencias", path: "/admin/secuencias" },
       { name: "Bitácora de cambios", path: "/admin/bitacora" },
+      { name: "Sincronizar movimientos", path: "/admin/sincronizar" },
     ],
   },
 ];
