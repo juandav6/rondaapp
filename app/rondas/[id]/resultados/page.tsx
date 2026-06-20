@@ -63,6 +63,14 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 12;
   const [openSemana, setOpenSemana] = useState<number | null>(null);
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [abriendoRonda, setAbriendoRonda] = useState(false);
+  const [recalcModal, setRecalcModal] = useState<{
+    inversoresAntes: { socio: any; montoAnterior: number; montoNuevo: number; pctAnterior: number; pctNuevo: number }[];
+    fondoAntes: number; fondoNuevo: number;
+  } | null>(null);
+  const [recalculando, setRecalculando] = useState(false);
+  const [cerrandoRonda, setCerrandoRonda] = useState(false);
   const [semanaRows, setSemanaRows] = useState<SemanaDetalleRow[]>([]);
   const [semanaRowsParciales, setSemanaRowsParciales] = useState<any[]>([]);
   const [semanaResponsableId, setSemanaResponsableId] = useState<number | null>(null);
@@ -129,6 +137,71 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
   }
 
   function closeSemDet() { setOpenSemana(null); setSemanaRows([]); setSemanaRowsParciales([]); setErrorSemDet(null); setSavingSemDet(false); setSemanaResponsableId(null); setSemanaSocios([]); }
+
+  async function abrirRonda() {
+    if (!resumen) return;
+    if (!confirm(`¿Reabrir ${resumen.nombre} para edición?\n\nSe reactivará la ronda y podrás editar semanas y recalcular el fondo.`)) return;
+    setAbriendoRonda(true);
+    try {
+      const res = await fetch(`/api/admin/rondas/${resumen.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activa: true, fechaFin: null }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setModoEdicion(true);
+      await refetchAll();
+    } catch (e: any) { alert(e.message); }
+    finally { setAbriendoRonda(false); }
+  }
+
+  async function verRecalculo() {
+    if (!resumen) return;
+    setRecalculando(true);
+    try {
+      // Cargar estado actual del fondo
+      const res = await fetch(`/api/rondas/${resumen.id}/fondo`);
+      const data = await res.json();
+      const inv = data.inversores ?? [];
+
+      // Calcular totales actuales de ahorros por socio desde los movimientos
+      const resAhorros = await fetch(`/api/rondas/${resumen.id}/resultados`);
+      const dataAhorros = await resAhorros.json();
+      const fondoNuevo = dataAhorros.resumen?.fondoTotal ?? data.fondoTotal;
+
+      setRecalcModal({
+        fondoAntes: data.fondoTotal ?? 0,
+        fondoNuevo: fondoNuevo ?? 0,
+        inversoresAntes: inv.map((i: any) => ({
+          socio: i.socio,
+          montoAnterior: i.montoInvertido,
+          montoNuevo: i.montoInvertido,
+          pctAnterior: i.porcentaje,
+          pctNuevo: i.porcentaje,
+        })),
+      });
+    } catch (e: any) { alert(e.message); }
+    finally { setRecalculando(false); }
+  }
+
+  async function recalcularYCerrar() {
+    if (!resumen) return;
+    setCerrandoRonda(true);
+    try {
+      // 1. Recalcular porcentajes del fondo
+      await fetch(`/api/rondas/${resumen.id}/inversiones/devolver`, { method: "POST" });
+      // 2. Cerrar ronda
+      const res = await fetch(`/api/rondas/${resumen.id}/cerrar-semana`, {
+        method: "POST",
+        headers: { "x-forzar-cierre": "1" },
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setRecalcModal(null);
+      setModoEdicion(false);
+      await refetchAll();
+    } catch (e: any) { alert(e.message); }
+    finally { setCerrandoRonda(false); }
+  }
 
   async function saveSemDet() {
     if (openSemana == null) return;
@@ -214,7 +287,24 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
             <Link href="/rondas/historial" className="hidden sm:inline-flex rounded-lg border px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">← Historial</Link>
+            {rondaCerrada && !modoEdicion && (
+              <button onClick={abrirRonda} disabled={abriendoRonda}
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50">
+                {abriendoRonda ? "Abriendo…" : "✏️ Abrir para editar"}
+              </button>
+            )}
+            {modoEdicion && (
+              <>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-700 uppercase tracking-wide">Modo edición</span>
+                <button onClick={verRecalculo} disabled={recalculando}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                  {recalculando ? "Calculando…" : "🔄 Recalcular fondo"}
+                </button>
+              </>
+            )}
+          </div>
             <button onClick={exportCSV} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700">CSV</button>
           </div>
         </div>
@@ -488,7 +578,11 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                         <td className="px-4 py-3 text-right tabular-nums">{fmt(w.totalAhorros)}</td>
                         <td className="px-4 py-3 text-gray-600">{w.responsableNombre || "—"}</td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => openSemDet(w.semana)} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-gray-50">Ver y editar</button>
+                          {(!rondaCerrada || modoEdicion) && (
+                            <button onClick={() => openSemDet(w.semana)} className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-gray-50">
+                              {modoEdicion ? "✏️ Editar" : "Ver y editar"}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -508,10 +602,12 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
                       </div>
                       {w.responsableNombre && <p className="text-xs text-gray-400 mt-0.5">{w.responsableNombre}</p>}
                     </div>
-                    <button onClick={() => openSemDet(w.semana)}
-                      className="shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-gray-50">
-                      Ver
-                    </button>
+                    {(!rondaCerrada || modoEdicion) && (
+                      <button onClick={() => openSemDet(w.semana)}
+                        className="shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-gray-50">
+                        {modoEdicion ? "✏️ Editar" : "Ver"}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -802,6 +898,76 @@ export default function ResultadosPage({ params }: { params: { id: string } }) {
               <button onClick={saveSemDet} disabled={savingSemDet || loadingSemDet}
                 className={cn("px-4 py-2 rounded-md text-sm text-white", savingSemDet ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700")}>
                 {savingSemDet ? "Guardando…" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal recalcular fondo ── */}
+      {recalcModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full sm:max-w-lg bg-white rounded-2xl shadow-xl flex flex-col max-h-[85vh]">
+            <div className="px-5 py-4 border-b bg-amber-50">
+              <h3 className="text-base font-bold text-amber-900">🔄 Recalcular fondo de inversión</h3>
+              <p className="text-xs text-amber-700 mt-0.5">Revisa los cambios antes de recalcular y cerrar la ronda</p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Resumen fondo */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-gray-50 border p-3">
+                  <p className="text-[10px] text-gray-500 uppercase font-semibold">Fondo original</p>
+                  <p className="text-lg font-bold text-gray-800 tabular-nums">{fmt(recalcModal.fondoAntes)}</p>
+                </div>
+                <div className="rounded-xl bg-blue-50 border border-blue-200 p-3">
+                  <p className="text-[10px] text-blue-600 uppercase font-semibold">Fondo actual</p>
+                  <p className="text-lg font-bold text-blue-700 tabular-nums">{fmt(recalcModal.fondoNuevo)}</p>
+                </div>
+              </div>
+
+              {/* Tabla inversores */}
+              <div className="rounded-xl border overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 border-b">
+                  <p className="text-xs font-semibold text-gray-700">Inversores y porcentajes</p>
+                </div>
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-gray-500">Socio</th>
+                      <th className="px-3 py-2 text-right text-gray-500">Invertido</th>
+                      <th className="px-3 py-2 text-right text-gray-500">% Antes</th>
+                      <th className="px-3 py-2 text-right text-gray-500">% Nuevo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recalcModal.inversoresAntes.map((inv, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-2 font-medium text-gray-800">{inv.socio.nombres} {inv.socio.apellidos}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(inv.montoAnterior)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">{inv.pctAnterior.toFixed(2)}%</td>
+                        <td className={cn("px-3 py-2 text-right tabular-nums font-semibold",
+                          inv.pctNuevo !== inv.pctAnterior ? "text-blue-700" : "text-gray-600")}>
+                          {inv.pctNuevo.toFixed(2)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+                ⚠️ Al confirmar se recalcularán los intereses y se cerrará la ronda definitivamente. Esta acción no se puede deshacer.
+              </div>
+            </div>
+
+            <div className="border-t px-5 py-4 flex gap-3 bg-gray-50">
+              <button onClick={() => setRecalcModal(null)} disabled={cerrandoRonda}
+                className="flex-1 rounded-xl border bg-white py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={recalcularYCerrar} disabled={cerrandoRonda}
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                {cerrandoRonda ? "Procesando…" : "Recalcular y cerrar ronda →"}
               </button>
             </div>
           </div>
