@@ -181,7 +181,7 @@ export default function AdminSociosPage() {
       {/* Tabla */}
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[640px] w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3 text-left">Cuenta</th>
@@ -231,7 +231,7 @@ export default function AdminSociosPage() {
       {/* Modal editar */}
       {editando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">Editar socio</h3>
             <p className="text-xs text-gray-400 mb-4">Cuenta: {editando.numeroCuenta}</p>
             <div className="space-y-3">
@@ -283,7 +283,7 @@ export default function AdminSociosPage() {
       {/* Modal movimientos del socio */}
       {verMovs && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[85vh]">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[85vh]">
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b">
               <div>
@@ -311,7 +311,7 @@ export default function AdminSociosPage() {
               ) : movimientos.length === 0 ? (
                 <div className="p-8 text-center text-sm text-gray-400">Sin movimientos de cuenta registrados</div>
               ) : (
-                <table className="min-w-full text-sm">
+                <table className="min-w-[640px] w-full text-sm">
                   <thead className="bg-gray-50 text-xs uppercase text-gray-500 sticky top-0">
                     <tr>
                       <th className="px-4 py-3 text-left">Fecha</th>

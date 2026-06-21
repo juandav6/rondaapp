@@ -76,6 +76,7 @@ function PayModal({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fechaPago, setFechaPago] = useState(() => new Date().toISOString().slice(0, 10));
   const overdue = daysOverdue(cuota.fechaVenc);
 
   async function handlePay() {
@@ -84,6 +85,8 @@ function PayModal({
       setError(null);
       const res = await fetch(`/api/prestamos/cuotas/${cuota.id}/pagar`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fechaPago }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Error al registrar pago");
@@ -101,7 +104,7 @@ function PayModal({
       style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden animate-in">
+      <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden animate-in">
         {/* header */}
         <div
           className="px-6 py-5"
@@ -148,7 +151,7 @@ function PayModal({
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: "Capital", value: fmtMoney(cuota.capital) },
               { label: "Interés", value: fmtMoney(cuota.interes) },
@@ -168,6 +171,12 @@ function PayModal({
             <span className="text-sm font-semibold text-gray-900">
               {fmtMoney(cuota.saldo)}
             </span>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-600 mb-1.5 block">Fecha de pago</label>
+            <input type="date" value={fechaPago} onChange={e => setFechaPago(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
           </div>
 
           {error && (
@@ -297,9 +306,9 @@ export default function PrestamoDetallePage() {
         />
       )}
 
-      <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="p-3 sm:p-6 max-w-5xl mx-auto space-y-4 sm:space-y-6">
         {/* breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
           <Link href="/prestamos/pendientes" className="hover:text-gray-800">
             Préstamos
           </Link>
@@ -461,7 +470,7 @@ export default function PrestamoDetallePage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[700px] text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left">#</th>

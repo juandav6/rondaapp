@@ -110,7 +110,7 @@ export default function AdminAportesPage() {
 
       {/* Filtros */}
       <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-end">
           <div className="flex-1 min-w-[180px]">
             <label className="text-xs font-medium text-gray-600 mb-1 block">Ronda *</label>
             <select value={rondaId??""} onChange={e=>{setRondaId(e.target.value?Number(e.target.value):null);setRegistros([]);setSemana("");}}
@@ -119,7 +119,7 @@ export default function AdminAportesPage() {
               {rondas.map((r:any)=><option key={r.id} value={r.id}>{r.nombre}{r.activa?" ✓":""}</option>)}
             </select>
           </div>
-          <div className="w-36">
+          <div className="w-full sm:w-36">
             <label className="text-xs font-medium text-gray-600 mb-1 block">Semana (opcional)</label>
             <select value={semana} onChange={e=>setSemana(e.target.value?Number(e.target.value):"")}
               disabled={!rondaId}
@@ -129,7 +129,7 @@ export default function AdminAportesPage() {
             </select>
           </div>
           <button onClick={buscar} disabled={!rondaId || loading}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-40">
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-40">
             {loading?"Buscando…":"Buscar"}
           </button>
         </div>
@@ -151,10 +151,10 @@ export default function AdminAportesPage() {
               </p>
             </div>
             <input type="text" placeholder="Buscar socio…" value={busqueda} onChange={e=>setBusqueda(e.target.value)}
-              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 w-48"/>
+              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 w-full sm:w-48"/>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[600px] text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left">Socio</th>
@@ -185,9 +185,13 @@ export default function AdminAportesPage() {
                         <button onClick={()=>{
                           setEditando(item);
                           setForm(tab==="aportes" ? {monto: item.monto, multa: item.multa} : {monto: item.monto});
-                        }} className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">Editar</button>
+                        }} className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">
+                          <span className="sm:hidden">✎</span><span className="hidden sm:inline">Editar</span>
+                        </button>
                         <button onClick={()=>eliminar(item)}
-                          className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100">Eliminar</button>
+                          className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100">
+                          <span className="sm:hidden">✕</span><span className="hidden sm:inline">Eliminar</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -210,7 +214,7 @@ export default function AdminAportesPage() {
       {/* Modal editar */}
       {editando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-sm rounded-2xl bg-white p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">
               Editar {tab==="ahorros"?"ahorro":"aporte"} · Semana {editando.semana}
             </h3>

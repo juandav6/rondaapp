@@ -263,7 +263,7 @@ export default function AdminBackupsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[600px] text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left">Nombre</th>
@@ -330,7 +330,7 @@ export default function AdminBackupsPage() {
       {/* Modal crear backup */}
       {crearOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-sm rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">Crear backup manual</h3>
             <p className="text-xs text-gray-400 mb-4">
               Ronda: {rondas.find((r) => r.id === rondaId)?.nombre ?? "—"}
@@ -353,7 +353,7 @@ export default function AdminBackupsPage() {
             <div className="rounded-lg bg-gray-50 border p-3 mt-3 text-xs text-gray-500">
               Se guardara una copia completa de todos los datos de la ronda en este momento.
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
               <button
                 onClick={() => {
                   setCrearOpen(false);
@@ -378,9 +378,9 @@ export default function AdminBackupsPage() {
       {/* Modal ver detalle */}
       {detalle && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col max-h-[85vh]">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl bg-white shadow-xl flex flex-col max-h-[85vh]">
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b">
               <div>
                 <h3 className="text-base font-semibold">Detalle del snapshot</h3>
                 <p className="text-xs text-gray-400 mt-0.5">{detalle.nombre}</p>
@@ -400,7 +400,7 @@ export default function AdminBackupsPage() {
             </div>
 
             {/* Cuerpo */}
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
               {loadingDetalle ? (
                 <div className="space-y-2">
                   {[...Array(6)].map((_, i) => (
@@ -410,7 +410,7 @@ export default function AdminBackupsPage() {
               ) : detalle.resumen ? (
                 <div className="space-y-4">
                   {/* Info general */}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-xs text-gray-400">Ronda</p>
                       <p className="font-medium text-gray-900">{detalle.rondaNombre ?? "—"}</p>

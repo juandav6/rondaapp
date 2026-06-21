@@ -139,7 +139,7 @@ export default function AdminUsuariosPage() {
       {/* Tabla */}
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[600px] text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3 text-left">ID</th>
@@ -193,7 +193,7 @@ export default function AdminUsuariosPage() {
       {/* Modal crear/editar */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">{modal === "crear" ? "Crear usuario" : "Editar usuario"}</h3>
             <p className="text-xs text-gray-400 mb-4">
               {modal === "crear" ? "Completa los datos del nuevo usuario" : `Editando usuario #${editandoId}`}
@@ -243,7 +243,7 @@ export default function AdminUsuariosPage() {
                 Los usuarios con rol ADMIN tienen acceso completo al panel de administracion.
               </div>
             )}
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
               <button onClick={() => setModal(null)} className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700">Cancelar</button>
               <button onClick={guardar} disabled={saving}
                 className="flex-1 rounded-lg bg-violet-600 py-2.5 text-sm text-white disabled:opacity-50 hover:bg-violet-700">

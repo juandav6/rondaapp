@@ -193,7 +193,7 @@ export default function AdminPrestamosPage() {
       {prestamos.length>0 && (
         <>
           {/* Filtros buscador + estado */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
             <div className="flex gap-1 flex-wrap">
               {["TODOS","ACTIVO","CANCELADO","PAGADO"].map(e => {
                 const count = e === "TODOS" ? prestamos.length : prestamos.filter(p=>p.estado===e).length;
@@ -212,7 +212,7 @@ export default function AdminPrestamosPage() {
               })}
             </div>
             <input type="text" placeholder="Buscar socio…" value={busqueda} onChange={e=>setBusqueda(e.target.value)}
-              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200 w-44"/>
+              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200 w-full sm:w-44"/>
           </div>
 
           <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
@@ -310,8 +310,8 @@ export default function AdminPrestamosPage() {
                           {verCuotas===p.id?"▲ Ocultar cuotas":"▼ Ver cuotas"}
                         </button>
                         {verCuotas===p.id && (
-                          <div className="mt-2 rounded-xl border overflow-hidden">
-                            <table className="min-w-full text-xs">
+                          <div className="mt-2 rounded-xl border overflow-x-auto">
+                            <table className="min-w-[640px] text-xs">
                               <thead className="bg-gray-50 text-gray-500 uppercase text-[10px]">
                                 <tr>
                                   <th className="px-3 py-2 text-center">#</th>

@@ -120,8 +120,8 @@ export default function AdminDepositosPage() {
 
       {/* Filtros */}
       <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end">
+          <div className="flex-1 min-w-0 sm:min-w-[200px]">
             <label className="text-xs font-medium text-gray-600 mb-1 block">Socio (opcional)</label>
             <select value={socioId ?? ""} onChange={e => setSocioId(e.target.value ? Number(e.target.value) : null)}
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
@@ -148,7 +148,7 @@ export default function AdminDepositosPage() {
             </div>
           </div>
           <button onClick={buscar} disabled={loading}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-40">
+            className="w-full sm:w-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-40">
             {loading ? "Buscando…" : "Buscar"}
           </button>
         </div>
@@ -156,7 +156,7 @@ export default function AdminDepositosPage() {
 
       {/* KPIs */}
       {movimientos.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
             <p className="text-[10px] text-emerald-600 font-semibold uppercase">Depósitos</p>
             <p className="text-lg font-bold text-emerald-700 tabular-nums">{fmt(totalDepositos)}</p>
@@ -180,13 +180,13 @@ export default function AdminDepositosPage() {
       {/* Tabla */}
       {movimientos.length > 0 && (
         <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-          <div className="border-b bg-gray-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="border-b bg-gray-50 px-4 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <p className="text-sm font-semibold text-gray-700">{filtrados.length} movimiento{filtrados.length !== 1 ? "s" : ""}</p>
             <input type="text" placeholder="Buscar socio…" value={busqueda} onChange={e => setBusqueda(e.target.value)}
-              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 w-48"/>
+              className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 w-full sm:w-48"/>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-center">Tipo</th>

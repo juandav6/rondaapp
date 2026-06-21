@@ -332,6 +332,7 @@ export async function PUT(req: Request) {
       // Edición normal de campos
       const cambiosData: any = {};
       if (datos.fechaVenc !== undefined) cambiosData.fechaVenc = new Date(datos.fechaVenc);
+      if (datos.fechaPago !== undefined) cambiosData.fechaPago = datos.fechaPago ? new Date(datos.fechaPago + "T12:00:00Z") : null;
       if (datos.cuota !== undefined) cambiosData.cuota = dec(Number(datos.cuota));
       if (datos.interes !== undefined) cambiosData.interes = dec(Number(datos.interes));
       if (datos.capital !== undefined) cambiosData.capital = dec(Number(datos.capital));

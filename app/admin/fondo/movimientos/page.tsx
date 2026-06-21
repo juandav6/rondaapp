@@ -104,8 +104,8 @@ export default function AdminFondoMovimientosPage() {
 
       {/* Filtros */}
       <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end">
+          <div className="flex-1 min-w-0 sm:min-w-[180px]">
             <label className="text-xs font-medium text-gray-600 mb-1 block">Socio</label>
             <select value={filtroSocio ?? ""} onChange={e => setFiltroSocio(e.target.value ? Number(e.target.value) : null)}
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200">
@@ -115,7 +115,7 @@ export default function AdminFondoMovimientosPage() {
               ))}
             </select>
           </div>
-          <div className="flex-1 min-w-[160px]">
+          <div className="flex-1 min-w-0 sm:min-w-[160px]">
             <label className="text-xs font-medium text-gray-600 mb-1 block">Ronda</label>
             <select value={filtroRonda ?? ""} onChange={e => setFiltroRonda(e.target.value ? Number(e.target.value) : null)}
               className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200">
@@ -127,7 +127,7 @@ export default function AdminFondoMovimientosPage() {
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Tipo</label>
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap">
               {[
                 { key: "TODOS",     label: "Todos" },
                 { key: "INVERSION", label: "📤 Inversión" },
@@ -143,7 +143,7 @@ export default function AdminFondoMovimientosPage() {
             </div>
           </div>
           <button onClick={buscar} disabled={loading}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-40 h-[38px]">
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-40 h-[38px]">
             {loading ? "…" : "Buscar"}
           </button>
         </div>
@@ -151,7 +151,7 @@ export default function AdminFondoMovimientosPage() {
 
       {/* KPIs */}
       {movimientos.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="rounded-xl bg-blue-50 border border-blue-100 p-3">
             <p className="text-[10px] text-blue-600 font-semibold uppercase">Total invertido</p>
             <p className="text-lg font-bold text-blue-700 tabular-nums">{fmt(totInv)}</p>
@@ -177,7 +177,7 @@ export default function AdminFondoMovimientosPage() {
             <p className="text-sm font-semibold text-gray-700">{movimientos.length} movimiento{movimientos.length !== 1 ? "s" : ""}</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-center">Tipo</th>

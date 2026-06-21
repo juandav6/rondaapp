@@ -146,7 +146,8 @@ export default function AdminRondasPage() {
       )}
 
       <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-        <table className="min-w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="min-w-[600px] text-sm">
           <thead className="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3 text-left">Ronda</th>
@@ -167,7 +168,7 @@ export default function AdminRondasPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <div className="flex gap-1.5 justify-center">
+                  <div className="flex gap-1.5 justify-center flex-wrap">
                     <button onClick={() => abrirEditar(r)}
                       className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">Editar</button>
                     {r.semanaActual > 1 && (
@@ -191,12 +192,13 @@ export default function AdminRondasPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Modal editar */}
       {editando && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">Editar ronda</h3>
             <p className="text-xs text-gray-400 mb-4">ID #{editando.id} · {editando.activa ? "🟢 Activa" : "⚪ Cerrada"}</p>
 
@@ -206,7 +208,7 @@ export default function AdminRondasPage() {
                 <input type="text" value={form.nombre ?? ""} onChange={e => setForm((p: any) => ({ ...p, nombre: e.target.value }))}
                   className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"/>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Fecha inicio</label>
                   <input type="date" value={form.fechaInicio ?? ""} onChange={e => setForm((p: any) => ({ ...p, fechaInicio: e.target.value }))}
@@ -233,7 +235,7 @@ export default function AdminRondasPage() {
             <div className="rounded-lg bg-gray-50 border p-3 mt-3 text-xs text-gray-500">
               📋 Cambios registrados en bitácora con fecha y hora.
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
               <button onClick={() => setEditando(null)} className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700">Cancelar</button>
               <button onClick={guardar} disabled={saving} className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm text-white disabled:opacity-50">
                 {saving ? "Guardando…" : "Guardar cambios"}

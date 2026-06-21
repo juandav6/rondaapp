@@ -73,7 +73,7 @@ export default function AdminConfigPage() {
 
       {msg && <div className={cn("rounded-xl p-3 text-sm", msg.ok?"bg-emerald-50 border border-emerald-200 text-emerald-700":"bg-red-50 border border-red-200 text-red-700")}>{msg.text}</div>}
 
-      <div className="rounded-xl border bg-white shadow-sm p-5 max-w-lg">
+      <div className="rounded-xl border bg-white shadow-sm p-4 sm:p-5 w-full max-w-lg">
         <div className="space-y-4">
           {/* Email Admin */}
           <div>
@@ -121,7 +121,7 @@ export default function AdminConfigPage() {
           )}
         </div>
 
-        <div className="mt-5 flex gap-2">
+        <div className="mt-5 flex flex-col sm:flex-row gap-2">
           <button onClick={cargar} disabled={saving}
             className="rounded-lg border px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
             Recargar

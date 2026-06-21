@@ -82,8 +82,8 @@ export default function AdminExpressCajaPage() {
       {msg && <div className={cn("rounded-xl p-3 text-sm", msg.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700")}>{msg.text}</div>}
 
       {/* Filtro */}
-      <div className="rounded-xl border bg-white p-4 shadow-sm flex gap-3 flex-wrap">
-        <div className="flex-1 min-w-[200px]">
+      <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-3 flex-wrap">
+        <div className="flex-1 min-w-0 sm:min-w-[200px]">
           <label className="text-xs font-medium text-gray-600 mb-1 block">Ronda</label>
           <select value={rondaId ?? ""} onChange={e => setRondaId(e.target.value ? Number(e.target.value) : null)}
             className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-200">
@@ -93,7 +93,7 @@ export default function AdminExpressCajaPage() {
         </div>
         <div className="flex items-end">
           <button onClick={buscar} disabled={!rondaId || loading}
-            className="rounded-lg bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600 disabled:opacity-40">
+            className="w-full sm:w-auto rounded-lg bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600 disabled:opacity-40">
             {loading ? "Buscando…" : "Buscar"}
           </button>
         </div>
@@ -114,7 +114,7 @@ export default function AdminExpressCajaPage() {
       {tab === "express" && express.length > 0 && (
         <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left">Socio</th>
@@ -165,7 +165,7 @@ export default function AdminExpressCajaPage() {
       {tab === "caja" && movCaja.length > 0 && (
         <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left">Tipo</th>

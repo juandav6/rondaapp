@@ -169,7 +169,7 @@ export default function AdminParticipacionesPage() {
       ) : (
         <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[600px] text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-center">Orden</th>
@@ -225,7 +225,7 @@ export default function AdminParticipacionesPage() {
       {/* Modal agregar participante */}
       {modalAgregar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
             <h3 className="text-base font-semibold mb-1">Agregar participante</h3>
             <p className="text-xs text-gray-400 mb-4">Selecciona un socio y asigna su orden en la ronda</p>
             <div className="space-y-3">
@@ -260,7 +260,7 @@ export default function AdminParticipacionesPage() {
                   className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"/>
               </div>
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
               <button onClick={() => setModalAgregar(false)} className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700">Cancelar</button>
               <button onClick={agregarParticipante} disabled={saving || !socioSel}
                 className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm text-white disabled:opacity-50 hover:bg-emerald-700">

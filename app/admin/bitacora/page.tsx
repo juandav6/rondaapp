@@ -59,11 +59,11 @@ export default function AdminBitacoraPage() {
   function renderCambios(cambios: any) {
     if (!cambios || typeof cambios !== "object") return null;
     return Object.entries(cambios).map(([campo, vals]: [string, any]) => (
-      <div key={campo} className="flex items-start gap-2 text-xs">
+      <div key={campo} className="flex items-start gap-2 text-xs flex-wrap">
         <span className="font-medium text-gray-600 shrink-0">{campo}:</span>
-        <span className="text-red-500 line-through">{String(vals.antes ?? "—")}</span>
+        <span className="text-red-500 line-through break-all">{String(vals.antes ?? "—")}</span>
         <span className="text-gray-400">→</span>
-        <span className="text-emerald-600 font-medium">{String(vals.despues ?? "—")}</span>
+        <span className="text-emerald-600 font-medium break-all">{String(vals.despues ?? "—")}</span>
       </div>
     ));
   }
@@ -79,7 +79,7 @@ export default function AdminBitacoraPage() {
 
       {/* Filtros */}
       <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Módulo</label>
             <select value={filtroTabla} onChange={e => setFiltroTabla(e.target.value)}
@@ -110,7 +110,7 @@ export default function AdminBitacoraPage() {
           </div>
         </div>
         <button onClick={() => cargar(1)} disabled={loading}
-          className="mt-3 rounded-lg bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-900 disabled:opacity-40">
+          className="mt-3 w-full sm:w-auto rounded-lg bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-900 disabled:opacity-40">
           {loading ? "Buscando…" : "Aplicar filtros"}
         </button>
       </div>
@@ -158,7 +158,7 @@ export default function AdminBitacoraPage() {
                   </div>
 
                   {detalle?.id === b.id && (
-                    <div className="mt-3 rounded-xl border bg-gray-50 p-4 space-y-3">
+                    <div className="mt-3 rounded-xl border bg-gray-50 p-4 space-y-3 overflow-x-auto">
                       {/* Cambios directos */}
                       <div>
                         <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Cambios realizados</p>
@@ -191,7 +191,7 @@ export default function AdminBitacoraPage() {
                         </div>
                       )}
 
-                      <div className="border-t pt-2 flex gap-4 text-xs text-gray-400">
+                      <div className="border-t pt-2 flex flex-col sm:flex-row gap-1 sm:gap-4 text-xs text-gray-400">
                         <span>Usuario: {b.usuario}</span>
                         <span>ID registro: #{b.registroId}</span>
                       </div>
