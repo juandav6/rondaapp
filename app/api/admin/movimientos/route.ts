@@ -284,6 +284,73 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: true, cambios });
     }
 
+    // ── Editar PrestamoCuota ────────────────────────────────────────────────
+    if (tipo === "cuota") {
+      const cuota = await prisma.prestamoCuota.findUnique({
+        where: { id: Number(id) },
+        include: { prestamo: true },
+      });
+      if (!cuota) return NextResponse.json({ error: "Cuota no encontrada" }, { status: 404 });
+
+      // Acción especial: revertir pago
+      if (datos.accion === "revertir_pago") {
+        if (!cuota.pagada) return NextResponse.json({ error: "La cuota no está pagada" }, { status: 400 });
+
+        await prisma.$transaction(async (tx) => {
+          await tx.prestamoCuota.update({
+            where: { id: Number(id) },
+            data: { pagada: false, fechaPago: null },
+          });
+          await tx.prestamo.update({
+            where: { id: cuota.prestamoId },
+            data: {
+              saldoActual: { increment: dec(Number(cuota.capital)) },
+              estado: "ACTIVO",
+            },
+          });
+          // Revertir MovimientoFondo asociado
+          await tx.movimientoFondo.deleteMany({ where: { cuotaId: Number(id) } });
+          // Revertir saldo fondo
+          await tx.ronda.update({
+            where: { id: cuota.prestamo.rondaId },
+            data: { saldoFondoDisponible: { decrement: dec(Number(cuota.capital)) } },
+          });
+        });
+
+        efectos.push({
+          tabla: "prestamos", registroId: cuota.prestamoId,
+          descripcion: `Pago revertido cuota #${cuota.numero}. Saldo préstamo incrementado en $${Number(cuota.capital).toFixed(2)}`,
+        });
+        await registrarBitacora({
+          tabla: "prestamo_cuotas", registroId: Number(id), accion: "EDITAR",
+          camposCambios: { pagada: { antes: true, despues: false }, accion: { antes: null, despues: "revertir_pago" } },
+          efectosCadena: efectos,
+        });
+        return NextResponse.json({ ok: true, efectos });
+      }
+
+      // Edición normal de campos
+      const cambiosData: any = {};
+      if (datos.fechaVenc !== undefined) cambiosData.fechaVenc = new Date(datos.fechaVenc);
+      if (datos.cuota !== undefined) cambiosData.cuota = dec(Number(datos.cuota));
+      if (datos.interes !== undefined) cambiosData.interes = dec(Number(datos.interes));
+      if (datos.capital !== undefined) cambiosData.capital = dec(Number(datos.capital));
+      if (datos.saldo !== undefined) cambiosData.saldo = dec(Number(datos.saldo));
+
+      if (Object.keys(cambiosData).length === 0) {
+        return NextResponse.json({ error: "No hay campos para editar" }, { status: 400 });
+      }
+
+      await prisma.prestamoCuota.update({ where: { id: Number(id) }, data: cambiosData });
+
+      const cambios = diffObjetos(
+        { cuota: Number(cuota.cuota), interes: Number(cuota.interes), capital: Number(cuota.capital) },
+        { cuota: datos.cuota ?? Number(cuota.cuota), interes: datos.interes ?? Number(cuota.interes), capital: datos.capital ?? Number(cuota.capital) }
+      );
+      await registrarBitacora({ tabla: "prestamo_cuotas", registroId: Number(id), accion: "EDITAR", camposCambios: cambios });
+      return NextResponse.json({ ok: true, cambios });
+    }
+
     return NextResponse.json({ error: `tipo '${tipo}' no reconocido` }, { status: 400 });
   } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
 }
@@ -369,8 +436,59 @@ export async function DELETE(req: Request) {
     else if (tipo === "express") {
       const exp = await (prisma as any).prestamoExpress.findUnique({ where: { id: Number(id) } });
       if (!exp) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
-      await (prisma as any).prestamoExpress.delete({ where: { id: Number(id) } });
-      await registrarBitacora({ tabla: "prestamos_express", registroId: Number(id), accion: "ELIMINAR", camposCambios: { id: { antes: id, despues: null } } });
+      await prisma.$transaction(async (tx) => {
+        await tx.aporte.updateMany({
+          where: { prestamoExpressId: Number(id) },
+          data: { prestamoExpressId: null },
+        });
+        await (tx as any).prestamoExpress.delete({ where: { id: Number(id) } });
+      });
+      efectos.push({ tabla: "aportes", registroId: Number(id), descripcion: "FK prestamoExpressId limpiada en aportes vinculados" });
+      await registrarBitacora({ tabla: "prestamos_express", registroId: Number(id), accion: "ELIMINAR", camposCambios: { id: { antes: id, despues: null }, principal: { antes: Number(exp.principal), despues: null }, estado: { antes: exp.estado, despues: null } }, efectosCadena: efectos });
+    }
+
+    else if (tipo === "cuentaInversion") {
+      const cuenta = await prisma.cuentaInversion.findUnique({
+        where: { id: Number(id) },
+        include: { socio: { select: { id: true, nombres: true, apellidos: true, saldoAhorros: true } } },
+      });
+      if (!cuenta) return NextResponse.json({ error: "Cuenta de inversión no encontrada" }, { status: 404 });
+      if (!cuenta.devuelto) {
+        return NextResponse.json({ error: "No se puede eliminar una inversión no devuelta. Primero cierre la ronda o devuelva manualmente." }, { status: 400 });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // Eliminar movimientos INVERSION asociados
+        await tx.movimientoCuenta.deleteMany({
+          where: { socioId: cuenta.socioId, rondaId: cuenta.rondaId, tipo: "INVERSION" },
+        });
+        // Eliminar la cuenta
+        await tx.cuentaInversion.delete({ where: { id: Number(id) } });
+        // Recalcular % de los demás inversores
+        const restantes = await tx.cuentaInversion.findMany({ where: { rondaId: cuenta.rondaId } });
+        const totalFondo = restantes.reduce((s, c) => s + Number(c.montoInvertido), 0);
+        for (const c of restantes) {
+          const pct = totalFondo > 0 ? r2((Number(c.montoInvertido) / totalFondo) * 100) : 0;
+          await tx.cuentaInversion.update({ where: { id: c.id }, data: { porcentajeParticipacion: dec(pct) } });
+        }
+        await tx.ronda.update({
+          where: { id: cuenta.rondaId },
+          data: { saldoFondoDisponible: dec(totalFondo) },
+        });
+      });
+
+      efectos.push({
+        tabla: "cuenta_inversion", registroId: cuenta.rondaId,
+        descripcion: `Inversión de ${cuenta.socio.nombres} ${cuenta.socio.apellidos} eliminada. Porcentajes recalculados.`,
+      });
+      await registrarBitacora({
+        tabla: "cuenta_inversion", registroId: Number(id), accion: "ELIMINAR",
+        camposCambios: {
+          socio: { antes: `${cuenta.socio.nombres} ${cuenta.socio.apellidos}`, despues: null },
+          montoInvertido: { antes: Number(cuenta.montoInvertido), despues: null },
+        },
+        efectosCadena: efectos,
+      });
     }
 
     else {

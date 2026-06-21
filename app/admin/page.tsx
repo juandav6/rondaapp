@@ -23,16 +23,21 @@ export default function AdminPage() {
   }, []);
 
   const modulos = [
-    { href: "/admin/socios",    icon: "👥", label: "Socios",              desc: "Editar datos, ver historial completo, eliminar socios sin dependencias",                    color: "bg-violet-50 border-violet-200 text-violet-700" },
-    { href: "/admin/rondas",    icon: "📅", label: "Rondas",              desc: "Editar nombre, montos, semana actual. Eliminar respetando orden cronológico",               color: "bg-blue-50 border-blue-200 text-blue-700" },
+    { href: "/admin/socios",    icon: "👥", label: "Socios",              desc: "Editar datos, ver historial completo, eliminar socios con cascada completa",                color: "bg-violet-50 border-violet-200 text-violet-700" },
+    { href: "/admin/rondas",    icon: "📅", label: "Rondas",              desc: "Editar, eliminar, revertir última semana. Cascada completa con recálculo de saldos",        color: "bg-blue-50 border-blue-200 text-blue-700" },
+    { href: "/admin/participaciones", icon: "👤", label: "Participaciones", desc: "Agregar o quitar socios de rondas. Cambiar orden de participación",                        color: "bg-purple-50 border-purple-200 text-purple-700" },
     { href: "/admin/aportes",    icon: "💵", label: "Aportes y ahorros",   desc: "Editar y eliminar aportes/ahorros por semana. Ahorros recalculan saldo del socio",          color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
     { href: "/admin/depositos",  icon: "🏦", label: "Depósitos y retiros", desc: "Editar y eliminar depósitos y retiros. Recalcula saldo de ahorros automáticamente",          color: "bg-teal-50 border-teal-200 text-teal-700" },
-    { href: "/admin/prestamos", icon: "💳", label: "Préstamos",           desc: "Editar monto, tasa, plazo. Recalcula tabla de amortización automáticamente",               color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
-    { href: "/admin/fondo",             icon: "📈", label: "Fondo de inversión",     desc: "Editar montos invertidos por socio. Recalcula % de participación de todos los inversores",   color: "bg-blue-50 border-blue-200 text-blue-700" },
+    { href: "/admin/prestamos", icon: "💳", label: "Préstamos",           desc: "Editar monto/tasa/plazo, revertir pagos de cuotas. Recalcula amortización y fondo",         color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
+    { href: "/admin/fondo",             icon: "📈", label: "Fondo de inversión",     desc: "Editar montos invertidos, eliminar inversiones. Recalcula % de participación",              color: "bg-blue-50 border-blue-200 text-blue-700" },
     { href: "/admin/fondo/movimientos", icon: "🔄", label: "Transferencias de fondo", desc: "Ver y corregir fechas de inversiones, devoluciones e intereses de todas las rondas",            color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
     { href: "/admin/express",   icon: "⚡", label: "Express y caja",      desc: "Editar préstamos express y movimientos de caja. Cambiar estados pendiente/cobrado",         color: "bg-amber-50 border-amber-200 text-amber-700" },
     { href: "/admin/multas",      icon: "⚠️", label: "Multas",              desc: "Ver, editar, cobrar y eliminar multas. Cambiar estado pendiente/cobrado",                   color: "bg-orange-50 border-orange-200 text-orange-700" },
+    { href: "/admin/backups",     icon: "💾", label: "Backups",             desc: "Crear, ver y restaurar snapshots por ronda. Backup automático al cerrar semana",            color: "bg-sky-50 border-sky-200 text-sky-700" },
+    { href: "/admin/usuarios",    icon: "🔐", label: "Usuarios",            desc: "Gestionar usuarios del sistema. Crear, editar roles, vincular a socios",                   color: "bg-rose-50 border-rose-200 text-rose-700" },
+    { href: "/admin/sincronizar", icon: "🔍", label: "Reconciliación",      desc: "Diagnosticar y corregir discrepancias en saldos, fondo de inversión y caja",               color: "bg-lime-50 border-lime-200 text-lime-700" },
     { href: "/admin/secuencias",  icon: "🔢", label: "Secuencias",          desc: "Forzar el próximo número de cuenta (CTA) o código de ronda (RD). Útil al eliminar registros", color: "bg-cyan-50 border-cyan-200 text-cyan-700" },
+    { href: "/admin/config",      icon: "⚙️", label: "Configuración",       desc: "Configurar emails de reportes, activar/desactivar envío automático",                      color: "bg-stone-50 border-stone-200 text-stone-700" },
     { href: "/admin/bitacora",    icon: "📋", label: "Bitácora",            desc: "Historial de todos los cambios con fecha, hora, valores anteriores y efectos en cascada",   color: "bg-gray-50 border-gray-200 text-gray-700" },
   ];
 

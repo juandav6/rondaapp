@@ -100,6 +100,11 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await tx.movimientoFondo.deleteMany({ where: { prestamoId: id } });
+      const cuotaIds = prestamo.cuotas.map(c => c.id);
+      if (cuotaIds.length > 0) {
+        await tx.movimientoFondo.deleteMany({ where: { cuotaId: { in: cuotaIds } } });
+      }
       await tx.prestamoCuota.deleteMany({ where: { prestamoId: id } });
       await tx.prestamo.delete({ where: { id } });
     });

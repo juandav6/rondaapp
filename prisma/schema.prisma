@@ -67,6 +67,7 @@ model Ronda {
   gastosMulta        GastoMulta[]
   ingresosMulta      IngresoMulta[]
   movimientosCaja    MovimientoCaja[]
+  snapshots          SnapshotRonda[]
 
   @@map("rondas")
 }
@@ -351,6 +352,20 @@ model Bitacora {
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@map("bitacora")
+}
+
+model SnapshotRonda {
+  id        Int      @id @default(autoincrement())
+  rondaId   Int      @map("ronda_id")
+  semana    Int
+  nombre    String
+  datos     Json
+  tipo      String   @default("MANUAL") // MANUAL | AUTO_CIERRE | AUTO_SEMANA
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ronda Ronda @relation(fields: [rondaId], references: [id])
+
+  @@map("snapshots_ronda")
 }
 
 model ConfigReporte {

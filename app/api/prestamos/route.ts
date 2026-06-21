@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { crearMovimientoFondo } from "@/lib/movimiento-fondo";
 type CreatePrestamoBody = {
   socioId: number;
   monto: number;
@@ -155,6 +156,20 @@ export async function POST(req: Request) {
           pagada: false,
         })),
       });
+
+      // Registrar salida del fondo y actualizar saldo disponible
+      await crearMovimientoFondo(tx, {
+        rondaId: rondaActiva.id,
+        tipo: "PRESTAMO_OTORGADO",
+        monto,
+        prestamoId: prestamo.id,
+        nota: `Préstamo otorgado a socio #${socioId}`,
+      });
+      await tx.ronda.update({
+        where: { id: rondaActiva.id },
+        data: { saldoFondoDisponible: { decrement: toDecimal(monto) } },
+      });
+
       return tx.prestamo.findUnique({
         where: { id: prestamo.id },
         include: {

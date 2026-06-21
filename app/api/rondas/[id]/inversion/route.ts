@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { crearMovimientoFondo } from "@/lib/movimiento-fondo";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -118,6 +119,22 @@ export async function POST(req: Request, context: Context) {
         });
       }
     }
+
+    // Registrar aporte inicial al fondo y actualizar saldos
+    await crearMovimientoFondo(tx, {
+      rondaId,
+      tipo: "APORTE_INICIAL",
+      monto: totalFondo,
+      nota: `Fondo de inversión creado con ${aportes.length} inversores`,
+    });
+
+    await tx.ronda.update({
+      where: { id: rondaId },
+      data: {
+        saldoFondoDisponible: new Prisma.Decimal(totalFondo),
+        fondoTotalHistorico: new Prisma.Decimal(totalFondo),
+      },
+    });
   });
 
   // Recalcular porcentajes exactos con el total real

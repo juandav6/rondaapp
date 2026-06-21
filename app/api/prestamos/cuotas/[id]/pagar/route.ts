@@ -1,6 +1,7 @@
 // app/api/prestamos/cuotas/[id]/pagar/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { crearMovimientoFondo } from "@/lib/movimiento-fondo";
 
 export async function POST(
   req: Request,
@@ -18,7 +19,7 @@ export async function POST(
 
     const cuota = await prisma.prestamoCuota.findUnique({
       where: { id: cuotaId },
-      include: { prestamo: true },
+      include: { prestamo: { include: { ronda: { select: { id: true } } } } },
     });
 
     if (!cuota) {
@@ -28,17 +29,18 @@ export async function POST(
       return NextResponse.json({ error: "Esta cuota ya fue pagada" }, { status: 400 });
     }
 
+    const capitalNum = Number(cuota.capital);
+    const interesNum = Number(cuota.interes);
+    const rondaId = cuota.prestamo.ronda.id;
+
     const result = await prisma.$transaction(async (tx) => {
-      // marcar cuota como pagada
       const cuotaActualizada = await tx.prestamoCuota.update({
         where: { id: cuotaId },
         data: { pagada: true, fechaPago },
       });
 
-      // actualizar saldo del préstamo
-      const nuevoSaldo = Number(cuota.prestamo.saldoActual) - Number(cuota.capital);
+      const nuevoSaldo = Number(cuota.prestamo.saldoActual) - capitalNum;
 
-      // verificar si quedan cuotas pendientes
       const cuotasPendientes = await tx.prestamoCuota.count({
         where: { prestamoId: cuota.prestamoId, pagada: false, id: { not: cuotaId } },
       });
@@ -51,6 +53,34 @@ export async function POST(
           saldoActual: Math.max(0, nuevoSaldo),
           estado: nuevoEstado,
         },
+      });
+
+      // Registrar movimientos del fondo: capital recuperado + interés cobrado
+      if (capitalNum > 0) {
+        await crearMovimientoFondo(tx, {
+          rondaId,
+          tipo: "CUOTA_CAPITAL",
+          monto: capitalNum,
+          prestamoId: cuota.prestamoId,
+          cuotaId,
+          nota: `Capital cuota #${cuota.numero}`,
+        });
+      }
+      if (interesNum > 0) {
+        await crearMovimientoFondo(tx, {
+          rondaId,
+          tipo: "CUOTA_INTERES",
+          monto: interesNum,
+          prestamoId: cuota.prestamoId,
+          cuotaId,
+          nota: `Interés cuota #${cuota.numero}`,
+        });
+      }
+
+      // Actualizar saldo disponible del fondo (el capital regresa)
+      await tx.ronda.update({
+        where: { id: rondaId },
+        data: { saldoFondoDisponible: { increment: capitalNum } },
       });
 
       return { cuotaActualizada, prestamoActualizado };

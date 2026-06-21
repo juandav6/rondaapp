@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { generarExcel } from "@/lib/reportes/generarExcel";
+import { crearMovimientoFondo } from "@/lib/movimiento-fondo";
+import { crearSnapshot } from "@/lib/snapshots";
 
 export const runtime = "nodejs"; // requerido para generarExcel (exceljs)
 
@@ -81,6 +83,14 @@ async function devolverInversiones(rondaId: number, fechaFin: Date) {
           },
         });
       }
+
+      // Registrar devolución en el fondo
+      await crearMovimientoFondo(tx, {
+        rondaId,
+        tipo: "DEVOLUCION_CIERRE",
+        monto: totalADevolver,
+        nota: `Devolución capital+intereses socio #${cuenta.socioId}`,
+      });
     }
   });
 
@@ -218,6 +228,16 @@ export async function POST(req: Request, context: Context) {
 
   const totalSemanas = participantes.length;
   const siguiente = semana + 1;
+
+  // Crear snapshot automático antes de avanzar
+  try {
+    await prisma.$transaction(async (tx) => {
+      const tipoSnap = siguiente > participantes.length ? "AUTO_CIERRE" : "AUTO_SEMANA";
+      await crearSnapshot(tx, rondaId, `Auto · semana ${semana}`, tipoSnap);
+    }, { timeout: 30000 });
+  } catch (snapErr) {
+    console.error("Error creando snapshot automático:", snapErr);
+  }
 
   // ── CIERRE FINAL DE RONDA ─────────────────────────────────────────────────
   if (siguiente > totalSemanas) {

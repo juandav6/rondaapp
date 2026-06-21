@@ -59,6 +59,33 @@ export default function AdminRondasPage() {
     finally { setSaving(false); }
   }
 
+  async function revertirSemana(r: any) {
+    const semanaRevertir = r.semanaActual - 1;
+    if (r.semanaActual <= 1) { showMsg("No hay semana que revertir (semanaActual = 1)", false); return; }
+    const esCierreFinal = !r.activa;
+    const lineas = [
+      `¿Revertir la semana ${semanaRevertir} de "${r.nombre}"?`,
+      ``,
+      `Se ELIMINARÁN todos los datos de esa semana:`,
+      `  • Aportes registrados en semana ${semanaRevertir}`,
+      `  • Ahorros registrados (se ajustarán los saldos)`,
+      `  • Responsable asignado`,
+      `  • Intereses express acumulados`,
+      esCierreFinal ? `\n⚠️ ADEMÁS se revertirá el CIERRE FINAL:\n  • La ronda se reactivará\n  • Las devoluciones de inversión se revertirán\n  • El reporte Excel se eliminará` : ``,
+      `\nEsta acción NO se puede deshacer.`,
+    ].filter(Boolean).join("\n");
+    if (!confirm(lineas)) return;
+    if (esCierreFinal && !confirm("⚠️ Confirmación adicional: estás revirtiendo un CIERRE FINAL. ¿Continuar?")) return;
+    try {
+      const res = await fetch(`/api/admin/rondas/${r.id}/revertir-semana`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      const resumen = d.resumen ?? {};
+      showMsg(`Semana ${semanaRevertir} revertida. Eliminados: ${resumen.aportesEliminados ?? 0} aportes, ${resumen.ahorrosEliminados ?? 0} ahorros, ${resumen.expressRevertidos ?? 0} express revertidos.`, true);
+      await cargar();
+    } catch (e: any) { showMsg(e.message, false); }
+  }
+
   async function eliminar(r: any) {
     const lineas = [
       `⚠️ ¿ELIMINAR PERMANENTEMENTE la ronda "${r.nombre}"?`,
@@ -143,6 +170,12 @@ export default function AdminRondasPage() {
                   <div className="flex gap-1.5 justify-center">
                     <button onClick={() => abrirEditar(r)}
                       className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700">Editar</button>
+                    {r.semanaActual > 1 && (
+                      <button onClick={() => revertirSemana(r)}
+                        className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100">
+                        Revertir sem.
+                      </button>
+                    )}
                     <button onClick={() => eliminar(r)}
                       className={cn(
                         "rounded-lg border px-2.5 py-1 text-xs hover:bg-red-100",
