@@ -32,6 +32,8 @@ export default function AdminPrestamosPage() {
   const [verCuotas, setVerCuotas] = useState<number|null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("TODOS");
+  const [editandoCuota, setEditandoCuota] = useState<any|null>(null);
+  const [formCuota, setFormCuota] = useState<any>({});
 
   const showMsg = (text:string, ok:boolean, efectos?:any[]) => { setMsg({text,ok,efectos}); setTimeout(()=>setMsg(null),5000); };
   const cerrarModal = () => { setModal(null); setActivo(null); setSaving(false); };
@@ -140,6 +142,38 @@ export default function AdminPrestamosPage() {
       showMsg(`Cuota #${ultima.numero} eliminada. Saldo recalculado.`, true);
       await buscar();
     } catch(e:any) { showMsg(e.message,false); }
+  }
+
+  async function guardarCuota() {
+    if (!editandoCuota) return;
+    if (!confirm(`¿Cambiar la fecha de pago de la cuota #${editandoCuota.numero}?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/movimientos", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "cuota", id: editandoCuota.id, datos: { fechaPago: formCuota.fechaPago } }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      showMsg(`Fecha de pago actualizada para cuota #${editandoCuota.numero}`, true);
+      setEditandoCuota(null);
+      await buscar();
+    } catch (e: any) { showMsg(e.message, false); }
+    finally { setSaving(false); }
+  }
+
+  async function revertirPago(cuota: any) {
+    if (!confirm(`¿Revertir el pago de la cuota #${cuota.numero}?\n\nLa cuota volverá a estado PENDIENTE.\nEl saldo del préstamo se incrementará en ${fmt(cuota.capital)}.\nLos movimientos de fondo asociados se eliminarán.\n\nQuedará en bitácora.`)) return;
+    try {
+      const res = await fetch("/api/admin/movimientos", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "cuota", id: cuota.id, datos: { accion: "revertir_pago" } }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      showMsg(`Pago revertido cuota #${cuota.numero}`, true, d.efectos);
+      await buscar();
+    } catch (e: any) { showMsg(e.message, false); }
   }
 
   const ESTADO_CFG: Record<string,{bg:string;text:string}> = {
@@ -321,6 +355,8 @@ export default function AdminPrestamosPage() {
                                   <th className="px-3 py-2 text-right">Saldo</th>
                                   <th className="px-3 py-2 text-center">Estado</th>
                                   <th className="px-3 py-2 text-right">Vence</th>
+                                  <th className="px-3 py-2 text-right">Fecha pago</th>
+                                  <th className="px-3 py-2 text-center">Acciones</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -339,6 +375,27 @@ export default function AdminPrestamosPage() {
                                     </td>
                                     <td className="px-3 py-1.5 text-right text-gray-400">
                                       {toISO(c.fechaVenc) || "—"}
+                                    </td>
+                                    <td className="px-3 py-1.5 text-right text-gray-400">
+                                      {c.pagada && c.fechaPago ? toISO(c.fechaPago) : "—"}
+                                    </td>
+                                    <td className="px-3 py-1.5 text-center">
+                                      <div className="flex gap-1 justify-center">
+                                        {c.pagada && (
+                                          <>
+                                            <button onClick={()=>{setEditandoCuota(c);setFormCuota({fechaPago:toISO(c.fechaPago)});}}
+                                              className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] text-blue-700 hover:bg-blue-100"
+                                              title="Cambiar fecha de pago">
+                                              Fecha
+                                            </button>
+                                            <button onClick={()=>revertirPago(c)}
+                                              className="rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-700 hover:bg-amber-100"
+                                              title="Revertir pago">
+                                              Revertir
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
                                     </td>
                                   </tr>
                                 ))}
@@ -471,6 +528,30 @@ export default function AdminPrestamosPage() {
               <button onClick={cerrarModal} className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700">No eliminar</button>
               <button onClick={eliminar} disabled={saving} className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm text-white disabled:opacity-50">
                 {saving?"Eliminando…":"Eliminar permanentemente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal Editar fecha de pago de cuota ── */}
+      {editandoCuota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-sm rounded-2xl bg-white p-4 sm:p-5 shadow-xl">
+            <h3 className="text-base font-semibold mb-1">Cambiar fecha de pago</h3>
+            <p className="text-xs text-gray-400 mb-4">Cuota #{editandoCuota.numero} · {fmt(editandoCuota.cuota)}</p>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Fecha de pago</label>
+              <input type="date" value={formCuota.fechaPago ?? ""} onChange={e => setFormCuota({ ...formCuota, fechaPago: e.target.value })}
+                className="w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              {editandoCuota.fechaPago && (
+                <p className="mt-1 text-xs text-gray-400">Actual: {toISO(editandoCuota.fechaPago)}</p>
+              )}
+            </div>
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              <button onClick={() => setEditandoCuota(null)} className="flex-1 rounded-lg border py-2.5 text-sm text-gray-700">Cancelar</button>
+              <button onClick={guardarCuota} disabled={saving || !formCuota.fechaPago}
+                className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm text-white disabled:opacity-50">
+                {saving ? "Guardando…" : "Guardar fecha"}
               </button>
             </div>
           </div>
