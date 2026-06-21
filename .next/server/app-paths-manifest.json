@@ -1,8 +1,0 @@
-{
-  "/_not-found/page": "app/_not-found/page.js",
-  "/page": "app/page.js",
-  "/rondas/registro_ronda/page": "app/rondas/registro_ronda/page.js",
-  "/rondas/actual/page": "app/rondas/actual/page.js",
-  "/api/rondas/[id]/semana/[semana]/aportes/route": "app/api/rondas/[id]/semana/[semana]/aportes/route.js",
-  "/api/rondas/route": "app/api/rondas/route.js"
-}
