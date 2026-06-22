@@ -54,11 +54,11 @@ export async function GET(_req: Request, context: Ctx) {
     ] = await Promise.all([
       prisma.aporte.findMany({
         where: { rondaId },
-        select: { socioId: true, semana: true, monto: true, multa: true },
+        select: { id: true, socioId: true, semana: true, monto: true, multa: true },
       }),
       prisma.ahorro.findMany({
         where: { rondaId },
-        select: { socioId: true, semana: true, monto: true },
+        select: { id: true, socioId: true, semana: true, monto: true },
       }),
       prisma.prestamoExpress.findMany({
         where: { rondaId },
@@ -107,18 +107,19 @@ export async function GET(_req: Request, context: Ctx) {
 
     // ── 3. Build lookup maps ────────────────────────────────────────────────
     // Aportes: key = "socioId-semana"
-    const aporteMap = new Map<string, { monto: number; multa: number }>();
+    const aporteMap = new Map<string, { id: number; monto: number; multa: number }>();
     for (const a of aportes) {
       aporteMap.set(`${a.socioId}-${a.semana}`, {
+        id: a.id,
         monto: Number(a.monto),
         multa: Number(a.multa),
       });
     }
 
     // Ahorros: key = "socioId-semana"
-    const ahorroMap = new Map<string, number>();
+    const ahorroMap = new Map<string, { id: number; monto: number }>();
     for (const a of ahorros) {
-      ahorroMap.set(`${a.socioId}-${a.semana}`, Number(a.monto));
+      ahorroMap.set(`${a.socioId}-${a.semana}`, { id: a.id, monto: Number(a.monto) });
     }
 
     // Prestamos Express: key = "socioId-semana" (puede haber varios, tomamos el primero)
@@ -254,7 +255,7 @@ export async function GET(_req: Request, context: Ctx) {
         const caja = cajaMap.get(key) ?? [];
 
         const aporteVal = aporte?.monto ?? null;
-        const ahorroVal = ahorro ?? null;
+        const ahorroVal = ahorro?.monto ?? null;
 
         if (aporteVal !== null) totalAportes += aporteVal;
         if (ahorroVal !== null) totalAhorros += ahorroVal;
@@ -262,8 +263,10 @@ export async function GET(_req: Request, context: Ctx) {
 
         semanas[String(s)] = {
           aporte: aporteVal,
+          aporteId: aporte?.id ?? null,
           multa,
           ahorro: ahorroVal,
+          ahorroId: ahorro?.id ?? null,
           express,
           movimientosCaja: caja,
         };

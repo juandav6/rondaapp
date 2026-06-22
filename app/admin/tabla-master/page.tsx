@@ -106,11 +106,12 @@ export default function TablaMasterPage() {
     finally { setLoading(false); }
   }
 
-  async function editarValor(tipo: string, socioId: number, semana: number, monto: number) {
+  async function editarValor(tipo: string, recordId: number | null, monto: number) {
+    if (!recordId) { showMsg("No existe registro para editar. El registro debe existir primero.", false); return; }
     try {
       const res = await fetch("/api/admin/movimientos", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, id: socioId, datos: { monto }, semana, rondaId }),
+        body: JSON.stringify({ tipo, id: recordId, datos: { monto } }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       showMsg("Valor actualizado", true);
@@ -152,6 +153,14 @@ export default function TablaMasterPage() {
     if (key === "aportes") return s.aporte ?? null;
     if (key === "multas") return s.multa ?? null;
     if (key === "express") return s.express ?? null;
+    return null;
+  }
+
+  function getRecordId(socio: any, sem: number, key: ColKey): number | null {
+    const s = socio.semanas?.[String(sem)];
+    if (!s) return null;
+    if (key === "ahorros") return s.ahorroId ?? null;
+    if (key === "aportes") return s.aporteId ?? null;
     return null;
   }
 
@@ -347,9 +356,10 @@ export default function TablaMasterPage() {
                           const val = getVal(socio, sem, g.key);
                           const editable = g.key === "ahorros" || g.key === "aportes";
                           if (editable) {
+                            const recId = getRecordId(socio, sem, g.key);
                             return (
                               <EditCell key={`${sem}-${g.key}`} value={val}
-                                onSave={(v) => editarValor(g.key === "ahorros" ? "ahorro" : "aporte", socio.socioId, sem, v)}
+                                onSave={(v) => editarValor(g.key === "ahorros" ? "ahorro" : "aporte", recId, v)}
                                 bgClass={cn(g.cellBg, "border-r border-gray-100") as string} />
                             );
                           }
