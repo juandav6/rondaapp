@@ -44,7 +44,7 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: true, cambios });
     }
 
-    // ── Editar Ahorro → recalcular saldoAhorros del socio ────────────────────
+    // ── Editar Ahorro → recalcular saldoAhorros + actualizar kardex ─────────
     if (tipo === "ahorro") {
       const antes = await prisma.ahorro.findUnique({ where: { id: Number(id) } });
       if (!antes) return NextResponse.json({ error: "Ahorro no encontrado" }, { status: 404 });
@@ -58,10 +58,33 @@ export async function PUT(req: Request) {
           where: { id: Number(id) },
           data: { monto: dec(montoNuevo) },
         });
+
         if (diff !== 0) {
+          // Ajustar saldoAhorros
           await tx.socio.update({
             where: { id: antes.socioId },
             data: { saldoAhorros: { increment: dec(diff) } },
+          });
+        }
+
+        // Actualizar el MovimientoCuenta correspondiente en el kardex
+        const movKardex = await tx.movimientoCuenta.findFirst({
+          where: {
+            socioId: antes.socioId,
+            rondaId: antes.rondaId,
+            tipo: "AHORRO",
+            nota: { contains: `semana ${antes.semana}` },
+          },
+          orderBy: { id: "asc" },
+        });
+        if (movKardex) {
+          await tx.movimientoCuenta.update({
+            where: { id: movKardex.id },
+            data: { monto: dec(montoNuevo) },
+          });
+          efectos.push({
+            tabla: "movimientos_cuenta", registroId: movKardex.id,
+            descripcion: `Movimiento AHORRO en kardex actualizado de $${montoAntes.toFixed(2)} a $${montoNuevo.toFixed(2)}`,
           });
         }
       });
