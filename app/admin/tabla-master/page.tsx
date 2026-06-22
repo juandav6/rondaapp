@@ -118,6 +118,18 @@ export default function TablaMasterPage() {
     } catch (e: any) { showMsg(e.message, false); }
   }
 
+  async function editarInversion(cuentaId: number, montoInvertido: number) {
+    try {
+      const res = await fetch("/api/admin/movimientos", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "cuentaInversion", id: cuentaId, datos: { montoInvertido } }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      showMsg("Inversión actualizada · % recalculados", true);
+      cargar();
+    } catch (e: any) { showMsg(e.message, false); }
+  }
+
   const semanaKeys = data ? Array.from({ length: data.totalSemanas }, (_, i) => i + 1) : [];
   const activeGroups = COL_GROUPS.filter(g => visibles[g.key]);
   const colsPerWeek = activeGroups.length;
@@ -319,7 +331,12 @@ export default function TablaMasterPage() {
                       {/* Inversión cells */}
                       {visibles.inversion && (
                         <>
-                          <ReadCell value={socio.inversion?.montoInvertido ?? null} bgClass="bg-indigo-50/50 border-r border-indigo-100" />
+                          {socio.inversion?.id ? (
+                            <EditCell value={socio.inversion.montoInvertido} bgClass="bg-indigo-50/50 border-r border-indigo-100"
+                              onSave={(v) => editarInversion(socio.inversion.id, v)} />
+                          ) : (
+                            <ReadCell value={null} bgClass="bg-indigo-50/50 border-r border-indigo-100" />
+                          )}
                           <ReadCell value={socio.inversion ? `${socio.inversion.porcentaje}%` : null} bgClass="bg-indigo-50/50 border-r border-indigo-100" />
                         </>
                       )}

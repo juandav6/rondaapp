@@ -206,6 +206,7 @@ export async function GET(_req: Request, context: Ctx) {
     const inversionMap = new Map<
       number,
       {
+        id: number;
         montoInvertido: number;
         porcentaje: number;
         intereses: number;
@@ -213,6 +214,7 @@ export async function GET(_req: Request, context: Ctx) {
     >();
     for (const ci of cuentasInversion) {
       inversionMap.set(ci.socioId, {
+        id: ci.id,
         montoInvertido: Number(ci.montoInvertido),
         porcentaje: Number(ci.porcentajeParticipacion),
         intereses: Number(ci.interesesAcumulados),
