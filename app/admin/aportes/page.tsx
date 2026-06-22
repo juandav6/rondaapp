@@ -154,7 +154,7 @@ export default function AdminAportesPage() {
               className="rounded-lg border px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 w-full sm:w-48"/>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-[600px] text-sm">
+            <table className="min-w-[600px] w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-left">Socio</th>

@@ -345,7 +345,7 @@ export default function AdminPrestamosPage() {
                         </button>
                         {verCuotas===p.id && (
                           <div className="mt-2 rounded-xl border overflow-x-auto">
-                            <table className="min-w-[640px] text-xs">
+                            <table className="min-w-[640px] w-full text-xs">
                               <thead className="bg-gray-50 text-gray-500 uppercase text-[10px]">
                                 <tr>
                                   <th className="px-3 py-2 text-center">#</th>

@@ -169,7 +169,7 @@ export default function AdminParticipacionesPage() {
       ) : (
         <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-[600px] text-sm">
+            <table className="min-w-[600px] w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3 text-center">Orden</th>

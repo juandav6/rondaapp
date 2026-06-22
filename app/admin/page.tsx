@@ -23,6 +23,7 @@ export default function AdminPage() {
   }, []);
 
   const modulos = [
+    { href: "/admin/tabla-master", icon: "📊", label: "Tabla Master",      desc: "Vista completa de ronda: todos los socios, semanas, aportes, ahorros, multas, express. Editable", color: "bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 text-indigo-700" },
     { href: "/admin/socios",    icon: "👥", label: "Socios",              desc: "Editar datos, ver historial completo, eliminar socios con cascada completa",                color: "bg-violet-50 border-violet-200 text-violet-700" },
     { href: "/admin/rondas",    icon: "📅", label: "Rondas",              desc: "Editar, eliminar, revertir última semana. Cascada completa con recálculo de saldos",        color: "bg-blue-50 border-blue-200 text-blue-700" },
     { href: "/admin/participaciones", icon: "👤", label: "Participaciones", desc: "Agregar o quitar socios de rondas. Cambiar orden de participación",                        color: "bg-purple-50 border-purple-200 text-purple-700" },
