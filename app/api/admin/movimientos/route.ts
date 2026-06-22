@@ -250,6 +250,7 @@ export async function PUT(req: Request) {
           // 4. Recalcular % de todos los inversores
           const todasCuentas = await tx.cuentaInversion.findMany({
             where: { rondaId: cuenta.rondaId },
+            include: { socio: { select: { id: true, nombres: true, saldoAhorros: true } } },
           });
           const totalFondo = r2(todasCuentas.reduce((s, c) => s + Number(c.montoInvertido), 0));
 
@@ -261,7 +262,64 @@ export async function PUT(req: Request) {
             });
           }
 
-          // 5. Actualizar saldoFondoDisponible
+          // 5. Si la ronda está cerrada (inversiones devueltas), redistribuir intereses
+          const hayDevueltas = todasCuentas.some(c => c.devuelto);
+          if (hayDevueltas) {
+            const cuotasPagadas = await tx.prestamoCuota.findMany({
+              where: { prestamo: { rondaId: cuenta.rondaId }, pagada: true },
+              select: { interes: true },
+            });
+            const totalInteresReal = r2(cuotasPagadas.reduce((s, c) => s + Number(c.interes), 0));
+
+            for (const c of todasCuentas) {
+              const nuevoPct = totalFondo > 0 ? Number(c.montoInvertido) / totalFondo : 0;
+              const nuevoInteres = r2(nuevoPct * totalInteresReal);
+              const interesAntes = Number(c.interesesAcumulados);
+              const diffInteres = r2(nuevoInteres - interesAntes);
+
+              await tx.cuentaInversion.update({
+                where: { id: c.id },
+                data: { interesesAcumulados: dec(nuevoInteres) },
+              });
+
+              // Actualizar MovimientoCuenta INTERES de este socio
+              const movInteres = await tx.movimientoCuenta.findFirst({
+                where: { socioId: c.socioId, rondaId: cuenta.rondaId, tipo: "INTERES" },
+                orderBy: { id: "desc" },
+              });
+
+              if (nuevoInteres > 0 && movInteres) {
+                await tx.movimientoCuenta.update({
+                  where: { id: movInteres.id },
+                  data: { monto: dec(nuevoInteres) },
+                });
+              } else if (nuevoInteres === 0 && movInteres) {
+                await tx.movimientoCuenta.delete({ where: { id: movInteres.id } });
+              }
+
+              // Ajustar saldoAhorros por la diferencia de intereses
+              if (diffInteres !== 0) {
+                await tx.socio.update({
+                  where: { id: c.socioId },
+                  data: { saldoAhorros: { increment: dec(diffInteres) } },
+                });
+              }
+
+              if (c.id !== Number(id) && diffInteres !== 0) {
+                efectos.push({
+                  tabla: "socios", registroId: c.socioId,
+                  descripcion: `Intereses redistribuidos para ${c.socio.nombres}: $${interesAntes.toFixed(2)} → $${nuevoInteres.toFixed(2)} (${diffInteres > 0 ? "+" : ""}$${diffInteres.toFixed(2)})`,
+                });
+              }
+            }
+
+            efectos.push({
+              tabla: "cuenta_inversion", registroId: cuenta.rondaId,
+              descripcion: `Intereses redistribuidos entre ${todasCuentas.filter(c => Number(c.montoInvertido) > 0).length} inversores activos. Total interés: $${totalInteresReal.toFixed(2)}`,
+            });
+          }
+
+          // 6. Actualizar saldoFondoDisponible
           await tx.ronda.update({
             where: { id: cuenta.rondaId },
             data: { saldoFondoDisponible: dec(totalFondo) },
