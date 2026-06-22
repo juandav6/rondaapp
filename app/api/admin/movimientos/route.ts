@@ -168,21 +168,20 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: true, cambios, efectos });
     }
 
-    // ── Editar CuentaInversion → recalcular % de todos los socios ────────────
+    // ── Editar CuentaInversion → recalcular %, ajustar saldo y kardex ───────
     if (tipo === "cuentaInversion") {
       const cuenta = await prisma.cuentaInversion.findUnique({
         where: { id: Number(id) },
-        include: { socio: { select: { nombres: true, apellidos: true } } },
+        include: { socio: { select: { id: true, nombres: true, apellidos: true, saldoAhorros: true } } },
       });
       if (!cuenta) return NextResponse.json({ error: "Cuenta de inversión no encontrada" }, { status: 404 });
 
       const montoAntes = Number(cuenta.montoInvertido);
       const montoNuevo = datos.montoInvertido !== undefined ? r2(Number(datos.montoInvertido)) : montoAntes;
       const interesesNuevo = datos.interesesAcumulados !== undefined ? r2(Number(datos.interesesAcumulados)) : Number(cuenta.interesesAcumulados);
+      const diffMonto = r2(montoAntes - montoNuevo);
 
-      // Recalcular porcentajes de todos los inversores de la ronda
       await prisma.$transaction(async (tx) => {
-        // Actualizar el monto de esta cuenta
         await tx.cuentaInversion.update({
           where: { id: Number(id) },
           data: {
@@ -192,13 +191,68 @@ export async function PUT(req: Request) {
         });
 
         if (datos.montoInvertido !== undefined && montoNuevo !== montoAntes) {
-          // Obtener todas las cuentas actualizadas
+          // 1. Ajustar saldoAhorros del socio (si bajó la inversión, devolver la diferencia)
+          if (diffMonto !== 0) {
+            await tx.socio.update({
+              where: { id: cuenta.socioId },
+              data: { saldoAhorros: { increment: dec(diffMonto) } },
+            });
+            const socioAct = await tx.socio.findUnique({ where: { id: cuenta.socioId }, select: { saldoAhorros: true } });
+            efectos.push({
+              tabla: "socios", registroId: cuenta.socioId,
+              descripcion: `saldoAhorros ${diffMonto > 0 ? "incrementado" : "decrementado"} $${Math.abs(diffMonto).toFixed(2)} por ajuste de inversión`,
+              camposAfectados: { saldoAhorros: { antes: Number(cuenta.socio.saldoAhorros), despues: Number(socioAct?.saldoAhorros ?? 0) } },
+            });
+          }
+
+          // 2. Actualizar el MovimientoCuenta tipo INVERSION para reflejar el nuevo monto
+          const movInversion = await tx.movimientoCuenta.findFirst({
+            where: { socioId: cuenta.socioId, rondaId: cuenta.rondaId, tipo: "INVERSION" },
+            orderBy: { id: "asc" },
+          });
+          if (movInversion) {
+            await tx.movimientoCuenta.update({
+              where: { id: movInversion.id },
+              data: { monto: dec(montoNuevo) },
+            });
+            efectos.push({
+              tabla: "movimientos_cuenta", registroId: movInversion.id,
+              descripcion: `Movimiento INVERSION actualizado de $${montoAntes.toFixed(2)} a $${montoNuevo.toFixed(2)}`,
+            });
+          }
+
+          // 3. Si la inversión ya fue devuelta, ajustar el MovimientoCuenta DEVOLUCION
+          if (cuenta.devuelto) {
+            const movDevolucion = await tx.movimientoCuenta.findFirst({
+              where: { socioId: cuenta.socioId, rondaId: cuenta.rondaId, tipo: "DEVOLUCION" },
+              orderBy: { id: "desc" },
+            });
+            if (movDevolucion) {
+              await tx.movimientoCuenta.update({
+                where: { id: movDevolucion.id },
+                data: { monto: dec(montoNuevo) },
+              });
+              efectos.push({
+                tabla: "movimientos_cuenta", registroId: movDevolucion.id,
+                descripcion: `Movimiento DEVOLUCION actualizado de $${montoAntes.toFixed(2)} a $${montoNuevo.toFixed(2)}`,
+              });
+            }
+
+            // Ajustar saldo por la diferencia en la devolución también
+            if (diffMonto !== 0) {
+              await tx.socio.update({
+                where: { id: cuenta.socioId },
+                data: { saldoAhorros: { decrement: dec(diffMonto) } },
+              });
+            }
+          }
+
+          // 4. Recalcular % de todos los inversores
           const todasCuentas = await tx.cuentaInversion.findMany({
             where: { rondaId: cuenta.rondaId },
           });
           const totalFondo = r2(todasCuentas.reduce((s, c) => s + Number(c.montoInvertido), 0));
 
-          // Recalcular % de cada inversor
           for (const c of todasCuentas) {
             const pct = totalFondo > 0 ? r2((Number(c.montoInvertido) / totalFondo) * 100) : 0;
             await tx.cuentaInversion.update({
@@ -207,19 +261,16 @@ export async function PUT(req: Request) {
             });
           }
 
-          // Actualizar saldoFondoDisponible de la ronda
+          // 5. Actualizar saldoFondoDisponible
           await tx.ronda.update({
             where: { id: cuenta.rondaId },
             data: { saldoFondoDisponible: dec(totalFondo) },
           });
 
           efectos.push({
-            tabla: "cuenta_inversion",
-            registroId: cuenta.rondaId,
-            descripcion: `Porcentajes de participación recalculados para ${todasCuentas.length} inversores. Fondo total: $${totalFondo.toFixed(2)}`,
-            camposAfectados: {
-              saldoFondoDisponible: { antes: montoAntes, despues: totalFondo },
-            },
+            tabla: "cuenta_inversion", registroId: cuenta.rondaId,
+            descripcion: `% recalculados para ${todasCuentas.length} inversores. Fondo: $${totalFondo.toFixed(2)}`,
+            camposAfectados: { saldoFondoDisponible: { antes: montoAntes, despues: totalFondo } },
           });
         }
       });
