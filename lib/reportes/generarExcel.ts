@@ -121,7 +121,7 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   kpis.forEach(([label, value], i) => {
     const row = ws1.addRow([label, typeof value === "number" && label.toString().includes("Semana") ? value : value]);
     styleAlternate(row, 2, i % 2 === 0);
-    if (typeof value === "number" && !label.toString().includes("Semana") && !label.toString().includes("Part")) {
+    if (typeof value === "number" && !label.toString().toLowerCase().includes("semana") && !label.toString().toLowerCase().includes("part")) {
       row.getCell(2).numFmt = '"$"#,##0.00';
     }
   });
