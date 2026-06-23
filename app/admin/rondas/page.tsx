@@ -210,6 +210,18 @@ export default function AdminRondasPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Monto aporte semanal ($)</label>
+                  <input type="number" step="0.01" min="0" value={form.montoAporte ?? ""} onChange={e => setForm((p: any) => ({ ...p, montoAporte: e.target.value }))}
+                    className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Objetivo ahorro por socio ($)</label>
+                  <input type="number" step="0.01" min="0" value={form.ahorroObjetivoPorSocio ?? ""} onChange={e => setForm((p: any) => ({ ...p, ahorroObjetivoPorSocio: e.target.value }))}
+                    className="w-full rounded-lg border px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-200"/>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Fecha inicio</label>
                   <input type="date" value={form.fechaInicio ?? ""} onChange={e => setForm((p: any) => ({ ...p, fechaInicio: e.target.value }))}
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"/>
