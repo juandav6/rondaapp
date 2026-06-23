@@ -55,7 +55,9 @@ export default function TransferirFondoPage() {
   const [totalDisponible, setTotalDisponible] = useState(0);
   const [inputs, setInputs] = useState<Record<number, string>>({});
   const [resultado, setResultado] = useState<ResultadoTransferencia | null>(null);
-  const [tab, setTab] = useState<"transferir" | "resultado">("transferir");
+  const [tab, setTab] = useState<"transferir" | "resultado" | "historial">("transferir");
+  const [historial, setHistorial] = useState<any[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   const showToast = (text: string, type: Toast["type"] = "success") => {
     setToast({ text, type });
@@ -92,6 +94,19 @@ export default function TransferirFondoPage() {
   }
 
   useEffect(() => { cargar(); }, []);
+
+  async function cargarHistorial() {
+    if (!rondaId) return;
+    setLoadingHistorial(true);
+    try {
+      const res = await fetch(`/api/admin/movimientos-cuenta?tipo=TODOS&limit=500`);
+      const d = await res.json();
+      const movs = (d.movimientos ?? []).filter((m: any) =>
+        ["INVERSION", "DEVOLUCION", "INTERES"].includes(m.tipo) && m.ronda?.id === rondaId
+      );
+      setHistorial(movs);
+    } catch {} finally { setLoadingHistorial(false); }
+  }
 
   // Total a transferir según inputs
   const totalTransferir = useMemo(() =>
@@ -236,11 +251,11 @@ export default function TransferirFondoPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl border bg-gray-50 p-1">
-        {(["transferir", "resultado"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
+        {(["transferir", "resultado", "historial"] as const).map(t => (
+          <button key={t} onClick={() => { setTab(t); if (t === "historial" && historial.length === 0) cargarHistorial(); }}
             className={cn("flex-1 rounded-lg py-2 text-xs sm:text-sm font-medium transition-colors",
               tab === t ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-            {t === "transferir" ? "Seleccionar montos" : resultado ? "Resultado de transferencia ✓" : "Resultado"}
+            {t === "transferir" ? "Transferir" : t === "resultado" ? (resultado ? "Resultado ✓" : "Resultado") : "Historial"}
           </button>
         ))}
       </div>
@@ -549,6 +564,101 @@ export default function TransferirFondoPage() {
             className="rounded-xl border px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Nueva transferencia
           </button>
+        </div>
+      )}
+
+      {/* Tab historial */}
+      {tab === "historial" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Historial de movimientos del fondo</h2>
+            <button onClick={cargarHistorial} disabled={loadingHistorial}
+              className="rounded-lg border px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">
+              {loadingHistorial ? "Cargando..." : "Actualizar"}
+            </button>
+          </div>
+
+          {loadingHistorial && <div className="rounded-xl border bg-white p-8 text-center text-sm text-gray-400">Cargando historial...</div>}
+
+          {!loadingHistorial && historial.length === 0 && (
+            <div className="rounded-xl border bg-white p-8 text-center text-sm text-gray-400">
+              No hay movimientos de fondo registrados en esta ronda
+            </div>
+          )}
+
+          {!loadingHistorial && historial.length > 0 && (() => {
+            const tipoCfg: Record<string, { label: string; color: string; bg: string; signo: string }> = {
+              INVERSION:  { label: "Inversión",  color: "text-blue-700",    bg: "bg-blue-50",    signo: "→" },
+              DEVOLUCION: { label: "Devolución", color: "text-emerald-700", bg: "bg-emerald-50", signo: "←" },
+              INTERES:    { label: "Interés",    color: "text-amber-700",   bg: "bg-amber-50",   signo: "+" },
+            };
+            const totalInv = historial.filter(m => m.tipo === "INVERSION").reduce((s: number, m: any) => s + m.monto, 0);
+            const totalDev = historial.filter(m => m.tipo === "DEVOLUCION").reduce((s: number, m: any) => s + m.monto, 0);
+            const totalInt = historial.filter(m => m.tipo === "INTERES").reduce((s: number, m: any) => s + m.monto, 0);
+
+            return (
+              <>
+                {/* Resumen */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                    <p className="text-[10px] text-blue-600 font-medium uppercase">Total invertido</p>
+                    <p className="text-lg font-bold text-blue-800 tabular-nums">{fmt(totalInv)}</p>
+                    <p className="text-[10px] text-blue-500">{historial.filter(m => m.tipo === "INVERSION").length} movimientos</p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-[10px] text-emerald-600 font-medium uppercase">Total devuelto</p>
+                    <p className="text-lg font-bold text-emerald-800 tabular-nums">{fmt(totalDev)}</p>
+                    <p className="text-[10px] text-emerald-500">{historial.filter(m => m.tipo === "DEVOLUCION").length} movimientos</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-[10px] text-amber-600 font-medium uppercase">Total intereses</p>
+                    <p className="text-lg font-bold text-amber-800 tabular-nums">{fmt(totalInt)}</p>
+                    <p className="text-[10px] text-amber-500">{historial.filter(m => m.tipo === "INTERES").length} movimientos</p>
+                  </div>
+                </div>
+
+                {/* Tabla */}
+                <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[500px] w-full text-sm">
+                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-4 py-3 text-left">Fecha</th>
+                          <th className="px-4 py-3 text-left">Socio</th>
+                          <th className="px-4 py-3 text-center">Tipo</th>
+                          <th className="px-4 py-3 text-right">Monto</th>
+                          <th className="px-4 py-3 text-left">Nota</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historial.map((m: any, i: number) => {
+                          const cfg = tipoCfg[m.tipo] ?? { label: m.tipo, color: "text-gray-600", bg: "bg-gray-50", signo: "·" };
+                          const fecha = new Date(m.createdAt);
+                          const fmtD = new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "short", year: "numeric" }).format(fecha);
+                          return (
+                            <tr key={m.id} className={cn("border-t", i % 2 === 1 && "bg-gray-50/40")}>
+                              <td className="px-4 py-2.5 text-gray-600 text-xs">{fmtD}</td>
+                              <td className="px-4 py-2.5">
+                                <p className="font-medium text-gray-800 text-xs">{m.socio?.nombres} {m.socio?.apellidos}</p>
+                                <p className="text-[10px] text-gray-400 font-mono">{m.socio?.numeroCuenta}</p>
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold", cfg.bg, cfg.color)}>
+                                  {cfg.signo} {cfg.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-right tabular-nums font-medium">{fmt(m.monto)}</td>
+                              <td className="px-4 py-2.5 text-xs text-gray-500 truncate max-w-[200px]">{m.nota ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
