@@ -122,9 +122,9 @@ export async function POST(req: Request) {
       // Usar Math.round para tolerancia de fechas con horas (e.g. 147.0 días = 21 semanas exactas)
       // Sumar 0.5 días de tolerancia para evitar rechazo por diferencias de horas
       const maxSemanas = Math.round((diasRestantes + 0.5) / 7);
-      if (plazoSemanas > maxSemanas) {
+      if (plazoSemanas > maxSemanas + 1) {
         throw new Error(
-          `El plazo (${plazoSemanas} sem.) excede las semanas restantes de la ronda (${maxSemanas} sem.). ` +
+          `El plazo (${plazoSemanas} sem.) excede el máximo permitido (${maxSemanas + 1} sem. = ${maxSemanas} restantes + 1 extra). ` +
           `La ronda termina el ${rondaActiva.fechaFin.toISOString().slice(0, 10)}.`
         );
       }
