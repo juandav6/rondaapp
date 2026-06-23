@@ -287,7 +287,7 @@ export default function TablaMasterPage() {
 
                   {/* Transferencias header (if visible) */}
                   {visibles.transferencias && (
-                    <th colSpan={3} className="bg-purple-100 border border-purple-200 px-2 py-1.5 text-center text-xs font-bold text-purple-800">
+                    <th colSpan={5} className="bg-purple-100 border border-purple-200 px-2 py-1.5 text-center text-xs font-bold text-purple-800">
                       Transferencias de Fondo
                     </th>
                   )}
@@ -324,7 +324,9 @@ export default function TablaMasterPage() {
                   {/* Transferencias sub-headers */}
                   {visibles.transferencias && (
                     <>
-                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Inversión</th>
+                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Inv. Inicial</th>
+                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Transf. (+)</th>
+                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-800 min-w-[80px] font-bold">Total Inv.</th>
                       <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Devolución</th>
                       <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Intereses</th>
                     </>
@@ -369,15 +371,15 @@ export default function TablaMasterPage() {
 
                       {/* Transferencias cells */}
                       {visibles.transferencias && (() => {
-                        const trans = socio.transferencias ?? [];
-                        const invTotal = trans.filter((t: any) => t.tipo === "INVERSION").reduce((s: number, t: any) => s + t.monto, 0);
-                        const devTotal = trans.filter((t: any) => t.tipo === "DEVOLUCION").reduce((s: number, t: any) => s + t.monto, 0);
-                        const intTotal = trans.filter((t: any) => t.tipo === "INTERES").reduce((s: number, t: any) => s + t.monto, 0);
+                        const t = socio.transferencias ?? {};
+                        const transfIntermedias = (t.transferenciasIntermedias ?? []).reduce((s: number, x: any) => s + x.monto, 0);
                         return (
                           <>
-                            <ReadCell value={invTotal || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
-                            <ReadCell value={devTotal || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
-                            <ReadCell value={intTotal || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
+                            <ReadCell value={t.inversionInicial || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
+                            <ReadCell value={transfIntermedias || null} bgClass="bg-purple-50/40 border-r border-purple-100" />
+                            <ReadCell value={t.totalInvertido || null} bgClass="bg-purple-100/60 border-r border-purple-200" />
+                            <ReadCell value={t.devolucion || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
+                            <ReadCell value={t.intereses || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
                           </>
                         );
                       })()}
@@ -425,17 +427,25 @@ export default function TablaMasterPage() {
                   )}
 
                   {visibles.transferencias && (() => {
-                    const allTrans = data.socios.flatMap((s: any) => s.transferencias ?? []);
+                    const all = data.socios.map((s: any) => s.transferencias ?? {});
+                    const sumField = (f: string) => all.reduce((s: number, t: any) => s + (t[f] ?? 0), 0);
+                    const sumTransf = all.reduce((s: number, t: any) => s + (t.transferenciasIntermedias ?? []).reduce((a: number, x: any) => a + x.monto, 0), 0);
                     return (
                       <>
                         <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
-                          {fmt(allTrans.filter((t: any) => t.tipo === "INVERSION").reduce((s: number, t: any) => s + t.monto, 0))}
+                          {fmt(sumField("inversionInicial"))}
                         </td>
                         <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
-                          {fmt(allTrans.filter((t: any) => t.tipo === "DEVOLUCION").reduce((s: number, t: any) => s + t.monto, 0))}
+                          {fmt(sumTransf)}
+                        </td>
+                        <td className="bg-purple-200 border-r border-purple-300 px-1 py-2 text-right text-xs font-extrabold tabular-nums text-purple-900">
+                          {fmt(sumField("totalInvertido"))}
                         </td>
                         <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
-                          {fmt(allTrans.filter((t: any) => t.tipo === "INTERES").reduce((s: number, t: any) => s + t.monto, 0))}
+                          {fmt(sumField("devolucion"))}
+                        </td>
+                        <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
+                          {fmt(sumField("intereses"))}
                         </td>
                       </>
                     );
@@ -465,6 +475,56 @@ export default function TablaMasterPage() {
 
       {loading && <div className="rounded-xl border bg-white p-12 text-center text-sm text-gray-400">Cargando datos...</div>}
       {!loading && data && data.socios.length === 0 && <div className="rounded-xl border bg-white p-8 text-center text-sm text-gray-400">No hay socios en esta ronda</div>}
+
+      {/* Historial de transferencias */}
+      {data && visibles.transferencias && (() => {
+        const allHistorial = data.socios.flatMap((s: any) =>
+          (s.transferencias?.historial ?? []).map((h: any) => ({ ...h, socio: `${s.nombres} ${s.apellidos}`, cuenta: s.numeroCuenta }))
+        ).sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+        if (allHistorial.length === 0) return null;
+        const fmtD = (iso: string) => new Date(iso).toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" });
+        const tipoCfg: Record<string, { label: string; color: string }> = {
+          INVERSION: { label: "Inversión", color: "text-blue-700 bg-blue-50" },
+          DEVOLUCION: { label: "Devolución", color: "text-emerald-700 bg-emerald-50" },
+          INTERES: { label: "Interés", color: "text-amber-700 bg-amber-50" },
+        };
+        return (
+          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+            <div className="border-b bg-purple-50 px-4 py-3">
+              <h2 className="text-sm font-semibold text-purple-800">Historial de transferencias de fondo ({allHistorial.length})</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-[500px] w-full text-xs">
+                <thead className="bg-gray-50 text-[10px] uppercase text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Fecha</th>
+                    <th className="px-3 py-2 text-left">Socio</th>
+                    <th className="px-3 py-2 text-center">Tipo</th>
+                    <th className="px-3 py-2 text-right">Monto</th>
+                    <th className="px-3 py-2 text-left">Nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allHistorial.map((h: any, i: number) => {
+                    const cfg = tipoCfg[h.tipo] ?? { label: h.tipo, color: "text-gray-600 bg-gray-50" };
+                    return (
+                      <tr key={h.id} className={i % 2 === 0 ? "" : "bg-gray-50/40"}>
+                        <td className="px-3 py-1.5 text-gray-600">{fmtD(h.fecha)}</td>
+                        <td className="px-3 py-1.5 font-medium text-gray-800">{h.socio}</td>
+                        <td className="px-3 py-1.5 text-center">
+                          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", cfg.color)}>{cfg.label}</span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(h.monto)}</td>
+                        <td className="px-3 py-1.5 text-gray-500 truncate max-w-[200px]">{h.nota ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Summary cards */}
       {data && data.socios.length > 0 && (

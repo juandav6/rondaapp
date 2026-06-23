@@ -229,18 +229,39 @@ export async function GET(_req: Request, context: Ctx) {
     }
 
     // Transferencias de fondo (INVERSION/DEVOLUCION/INTERES) por socio
-    const transferenciasMap = new Map<number, Array<{
-      id: number; tipo: string; monto: number; nota: string | null; fecha: string;
-    }>>();
+    // Separar inversión inicial (primera) de transferencias intermedias (subsiguientes)
+    const transferenciasMap = new Map<number, {
+      inversionInicial: number;
+      transferenciasIntermedias: Array<{ id: number; monto: number; nota: string | null; fecha: string }>;
+      totalInvertido: number;
+      devolucion: number;
+      intereses: number;
+      historial: Array<{ id: number; tipo: string; monto: number; nota: string | null; fecha: string }>;
+    }>();
+
     for (const m of movimientosFondo) {
-      if (!transferenciasMap.has(m.socioId)) transferenciasMap.set(m.socioId, []);
-      transferenciasMap.get(m.socioId)!.push({
-        id: m.id,
-        tipo: m.tipo,
-        monto: Number(m.monto),
-        nota: m.nota,
-        fecha: m.createdAt.toISOString(),
-      });
+      if (!transferenciasMap.has(m.socioId)) {
+        transferenciasMap.set(m.socioId, {
+          inversionInicial: 0, transferenciasIntermedias: [], totalInvertido: 0,
+          devolucion: 0, intereses: 0, historial: [],
+        });
+      }
+      const entry = transferenciasMap.get(m.socioId)!;
+      const mov = { id: m.id, tipo: m.tipo, monto: Number(m.monto), nota: m.nota, fecha: m.createdAt.toISOString() };
+      entry.historial.push(mov);
+
+      if (m.tipo === "INVERSION") {
+        if (entry.totalInvertido === 0 && entry.transferenciasIntermedias.length === 0) {
+          entry.inversionInicial = Number(m.monto);
+        } else {
+          entry.transferenciasIntermedias.push(mov);
+        }
+        entry.totalInvertido += Number(m.monto);
+      } else if (m.tipo === "DEVOLUCION") {
+        entry.devolucion += Number(m.monto);
+      } else if (m.tipo === "INTERES") {
+        entry.intereses += Number(m.monto);
+      }
     }
 
     // ── 4. Build socios array ───────────────────────────────────────────────
@@ -308,7 +329,10 @@ export async function GET(_req: Request, context: Ctx) {
         },
         prestamos: prestamosBySocio.get(socio.id) ?? [],
         inversion: inversionMap.get(socio.id) ?? null,
-        transferencias: transferenciasMap.get(socio.id) ?? [],
+        transferencias: transferenciasMap.get(socio.id) ?? {
+          inversionInicial: 0, transferenciasIntermedias: [], totalInvertido: 0,
+          devolucion: 0, intereses: 0, historial: [],
+        },
       };
     });
 
