@@ -64,6 +64,19 @@ export async function POST(_req: NextRequest, ctx: { params: Params }) {
   if (!rondaData)
     return NextResponse.json({ error: "Ronda no encontrada" }, { status: 404 });
 
+  // Depósitos y retiros libres en el rango de fechas de la ronda
+  const fechaFin = rondaData.fechaFin ?? new Date();
+  const depositosRetiros = await prisma.movimientoCuenta.findMany({
+    where: {
+      tipo: { in: ["AHORRO", "RETIRO"] },
+      rondaId: null,
+      createdAt: { gte: rondaData.fechaInicio, lte: fechaFin },
+    },
+    include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+    orderBy: [{ socioId: "asc" }, { createdAt: "asc" }],
+  });
+  (rondaData as any).depositosRetiros = depositosRetiros;
+
   try {
     const excelBuffer = await generarExcel(rondaData);
 

@@ -82,6 +82,20 @@ export async function GET(_req: NextRequest, ctx: { params: Params }) {
     });
 
     if (!rondaData) return NextResponse.json({ error: "No se pudo cargar la ronda" }, { status: 500 });
+
+    // Depósitos y retiros libres en el rango de fechas de la ronda
+    const fechaFin = rondaData.fechaFin ?? new Date();
+    const depositosRetiros = await prisma.movimientoCuenta.findMany({
+      where: {
+        tipo: { in: ["AHORRO", "RETIRO"] },
+        rondaId: null,
+        createdAt: { gte: rondaData.fechaInicio, lte: fechaFin },
+      },
+      include: { socio: { select: { nombres: true, apellidos: true, numeroCuenta: true } } },
+      orderBy: [{ socioId: "asc" }, { createdAt: "asc" }],
+    });
+    (rondaData as any).depositosRetiros = depositosRetiros;
+
     excelBuffer = Buffer.from(await generarExcel(rondaData));
   }
 

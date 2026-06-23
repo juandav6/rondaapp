@@ -1005,6 +1005,140 @@ export async function generarExcel(ronda: any): Promise<Buffer> {
   grandTotRow.getCell(4).font = { bold: true, size: 11, color: { argb: VERDE } };
   grandTotRow.height = 22;
 
+  // ── HOJA 7: Depósitos y Retiros (libres, en rango de fechas de la ronda) ──
+  const depositosRetiros: any[] = (ronda as any).depositosRetiros ?? [];
+  if (depositosRetiros.length > 0 || true) {
+    const ws7 = wb.addWorksheet("Depósitos y Retiros");
+    const fechaFinRonda = ronda.fechaFin ? fmtDate(new Date(ronda.fechaFin)) : "Activa";
+
+    ws7.mergeCells("A1:H1");
+    const titleDR = ws7.getCell("A1");
+    titleDR.value = `Depósitos y Retiros Libres · ${ronda.nombre} · ${fmtDate(fechaInicio)} al ${fechaFinRonda}`;
+    titleDR.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0d9488" } };
+    titleDR.font = { bold: true, size: 12, color: { argb: BLANCO } };
+    titleDR.alignment = { horizontal: "center", vertical: "middle" };
+    ws7.getRow(1).height = 24;
+
+    ws7.mergeCells("A2:H2");
+    const subtDR = ws7.getCell("A2");
+    subtDR.value = "Movimientos de ahorro libre (depósitos y retiros sin ronda) realizados entre las fechas de inicio y fin de la ronda";
+    subtDR.font = { size: 9, italic: true, color: { argb: "FF6b7280" } };
+    subtDR.alignment = { horizontal: "center" };
+    ws7.getRow(2).height = 16;
+
+    ws7.addRow([]);
+
+    ws7.columns = [
+      { key: "socio", width: 28 },
+      { key: "cuenta", width: 12 },
+      { key: "tipo", width: 14 },
+      { key: "fecha", width: 14 },
+      { key: "deposito", width: 16 },
+      { key: "retiro", width: 16 },
+      { key: "nota", width: 24 },
+      { key: "saldo", width: 16 },
+    ];
+
+    const headerDR = ws7.getRow(4);
+    headerDR.values = ["Socio", "Cuenta", "Tipo", "Fecha", "Depósito ($)", "Retiro ($)", "Nota", "Saldo parcial ($)"];
+    styleHeader(headerDR, 8, "FF0d9488");
+
+    // Agrupar por socio
+    const porSocio = new Map<number, { socio: any; movs: any[] }>();
+    for (const m of depositosRetiros) {
+      if (!porSocio.has(m.socioId)) {
+        porSocio.set(m.socioId, { socio: m.socio, movs: [] });
+      }
+      porSocio.get(m.socioId)!.movs.push(m);
+    }
+
+    let grandDepositos = 0;
+    let grandRetiros = 0;
+    let rowIdx = 0;
+
+    for (const [, { socio, movs }] of porSocio) {
+      let socioDepositos = 0;
+      let socioRetiros = 0;
+      let saldoParcial = 0;
+
+      for (const m of movs) {
+        const monto = Number(m.monto);
+        const esDeposito = m.tipo === "AHORRO";
+        if (esDeposito) {
+          socioDepositos += monto;
+          saldoParcial += monto;
+        } else {
+          socioRetiros += monto;
+          saldoParcial -= monto;
+        }
+
+        const row = ws7.addRow([
+          `${socio.nombres} ${socio.apellidos}`,
+          socio.numeroCuenta,
+          esDeposito ? "Depósito" : "Retiro",
+          fmtDate(new Date(m.createdAt)),
+          esDeposito ? monto : 0,
+          esDeposito ? 0 : monto,
+          m.nota ?? "",
+          saldoParcial,
+        ]);
+        styleAlternate(row, 8, rowIdx % 2 === 0);
+        row.getCell(5).numFmt = '"$"#,##0.00';
+        row.getCell(6).numFmt = '"$"#,##0.00';
+        row.getCell(8).numFmt = '"$"#,##0.00';
+
+        if (esDeposito) {
+          row.getCell(3).font = { color: { argb: "FF15803d" }, bold: true };
+          row.getCell(5).font = { color: { argb: "FF15803d" } };
+        } else {
+          row.getCell(3).font = { color: { argb: ROJO }, bold: true };
+          row.getCell(6).font = { color: { argb: ROJO } };
+        }
+        rowIdx++;
+      }
+
+      // Subtotal por socio
+      grandDepositos += socioDepositos;
+      grandRetiros += socioRetiros;
+      const subRow = ws7.addRow([
+        "", "", `Subtotal ${socio.nombres}`, "",
+        socioDepositos, socioRetiros, "",
+        socioDepositos - socioRetiros,
+      ]);
+      for (let c = 1; c <= 8; c++) {
+        subRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFe0f2f1" } };
+        subRow.getCell(c).font = { bold: true, size: 9 };
+        subRow.getCell(c).border = { top: { style: "thin", color: { argb: "FF0d9488" } } };
+      }
+      subRow.getCell(5).numFmt = '"$"#,##0.00';
+      subRow.getCell(6).numFmt = '"$"#,##0.00';
+      subRow.getCell(8).numFmt = '"$"#,##0.00';
+      subRow.height = 17;
+      rowIdx++;
+    }
+
+    // Total general
+    ws7.addRow([]);
+    const totalDR = ws7.addRow([
+      "TOTAL GENERAL", "", "", "",
+      grandDepositos, grandRetiros, "",
+      grandDepositos - grandRetiros,
+    ]);
+    styleTotalRow(totalDR, 8, "FFccfbf1");
+    totalDR.getCell(1).font = { bold: true, size: 11 };
+    totalDR.getCell(5).numFmt = '"$"#,##0.00';
+    totalDR.getCell(5).font = { bold: true, color: { argb: "FF15803d" }, size: 10 };
+    totalDR.getCell(6).numFmt = '"$"#,##0.00';
+    totalDR.getCell(6).font = { bold: true, color: { argb: ROJO }, size: 10 };
+    totalDR.getCell(8).numFmt = '"$"#,##0.00';
+    totalDR.getCell(8).font = { bold: true, size: 10 };
+
+    if (depositosRetiros.length === 0) {
+      const emptyRow = ws7.addRow(["Sin depósitos ni retiros en el período de esta ronda"]);
+      emptyRow.getCell(1).font = { italic: true, color: { argb: "FF6b7280" } };
+    }
+  }
+
   const buf = await wb.xlsx.writeBuffer();
   return buf as Buffer;
 }
