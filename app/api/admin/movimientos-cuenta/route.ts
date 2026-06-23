@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const socioId = searchParams.get("socioId");
   const tipo    = searchParams.get("tipo");    // AHORRO | RETIRO | todos
   const page    = Math.max(1, Number(searchParams.get("page") ?? 1));
-  const limit   = Math.min(100, Number(searchParams.get("limit") ?? 50));
+  const limit   = Math.min(500, Number(searchParams.get("limit") ?? 50));
 
   try {
     const where: any = { monto: { gt: 0 } }; // nunca mostrar montos cero

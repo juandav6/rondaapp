@@ -51,6 +51,7 @@ export async function GET(_req: Request, context: Ctx) {
       prestamos,
       cuentasInversion,
       responsablesSemana,
+      movimientosFondo,
     ] = await Promise.all([
       prisma.aporte.findMany({
         where: { rondaId },
@@ -102,6 +103,11 @@ export async function GET(_req: Request, context: Ctx) {
         include: {
           socio: { select: { nombres: true, apellidos: true } },
         },
+      }),
+      prisma.movimientoCuenta.findMany({
+        where: { rondaId, tipo: { in: ["INVERSION", "DEVOLUCION", "INTERES"] } },
+        select: { id: true, socioId: true, tipo: true, monto: true, nota: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
       }),
     ]);
 
@@ -222,6 +228,21 @@ export async function GET(_req: Request, context: Ctx) {
       });
     }
 
+    // Transferencias de fondo (INVERSION/DEVOLUCION/INTERES) por socio
+    const transferenciasMap = new Map<number, Array<{
+      id: number; tipo: string; monto: number; nota: string | null; fecha: string;
+    }>>();
+    for (const m of movimientosFondo) {
+      if (!transferenciasMap.has(m.socioId)) transferenciasMap.set(m.socioId, []);
+      transferenciasMap.get(m.socioId)!.push({
+        id: m.id,
+        tipo: m.tipo,
+        monto: Number(m.monto),
+        nota: m.nota,
+        fecha: m.createdAt.toISOString(),
+      });
+    }
+
     // ── 4. Build socios array ───────────────────────────────────────────────
     const sociosResult = ronda.participaciones.map((part) => {
       const socio = part.socio;
@@ -287,6 +308,7 @@ export async function GET(_req: Request, context: Ctx) {
         },
         prestamos: prestamosBySocio.get(socio.id) ?? [],
         inversion: inversionMap.get(socio.id) ?? null,
+        transferencias: transferenciasMap.get(socio.id) ?? [],
       };
     });
 

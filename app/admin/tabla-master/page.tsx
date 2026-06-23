@@ -14,6 +14,7 @@ const COL_GROUPS = [
   { key: "multas", label: "Multas", color: "bg-orange-100 text-orange-800", cellBg: "bg-orange-50/50", headerBg: "bg-orange-50", default: true },
   { key: "express", label: "P. Express", color: "bg-amber-100 text-amber-800", cellBg: "bg-amber-50/50", headerBg: "bg-amber-50", default: false },
   { key: "inversion", label: "Fondo Inversión", color: "bg-indigo-100 text-indigo-800", cellBg: "bg-indigo-50/50", headerBg: "bg-indigo-50", default: false },
+  { key: "transferencias", label: "Transferencias", color: "bg-purple-100 text-purple-800", cellBg: "bg-purple-50/50", headerBg: "bg-purple-50", default: false },
 ] as const;
 
 type ColKey = typeof COL_GROUPS[number]["key"];
@@ -284,9 +285,16 @@ export default function TablaMasterPage() {
                     </th>
                   )}
 
+                  {/* Transferencias header (if visible) */}
+                  {visibles.transferencias && (
+                    <th colSpan={3} className="bg-purple-100 border border-purple-200 px-2 py-1.5 text-center text-xs font-bold text-purple-800">
+                      Transferencias de Fondo
+                    </th>
+                  )}
+
                   {/* Week group headers */}
                   {semanaKeys.map(sem => {
-                    const weekCols = activeGroups.filter(g => g.key !== "inversion");
+                    const weekCols = activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias");
                     return (
                       <th key={sem} colSpan={weekCols.length} className="bg-gray-100 border border-gray-300 px-2 py-1.5 text-center text-xs font-bold text-gray-700">
                         Semana {sem}
@@ -313,9 +321,18 @@ export default function TablaMasterPage() {
                     </>
                   )}
 
+                  {/* Transferencias sub-headers */}
+                  {visibles.transferencias && (
+                    <>
+                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Inversión</th>
+                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Devolución</th>
+                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Intereses</th>
+                    </>
+                  )}
+
                   {/* Per-week sub-headers */}
                   {semanaKeys.map(sem =>
-                    activeGroups.filter(g => g.key !== "inversion").map(g => (
+                    activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias").map(g => (
                       <th key={`${sem}-${g.key}`} className={cn("border border-gray-200 px-1 py-1 text-center text-[10px] font-semibold min-w-[80px]", g.headerBg, g.color)}>
                         {g.label}
                       </th>
@@ -350,9 +367,24 @@ export default function TablaMasterPage() {
                         </>
                       )}
 
+                      {/* Transferencias cells */}
+                      {visibles.transferencias && (() => {
+                        const trans = socio.transferencias ?? [];
+                        const invTotal = trans.filter((t: any) => t.tipo === "INVERSION").reduce((s: number, t: any) => s + t.monto, 0);
+                        const devTotal = trans.filter((t: any) => t.tipo === "DEVOLUCION").reduce((s: number, t: any) => s + t.monto, 0);
+                        const intTotal = trans.filter((t: any) => t.tipo === "INTERES").reduce((s: number, t: any) => s + t.monto, 0);
+                        return (
+                          <>
+                            <ReadCell value={invTotal || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
+                            <ReadCell value={devTotal || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
+                            <ReadCell value={intTotal || null} bgClass="bg-purple-50/50 border-r border-purple-100" />
+                          </>
+                        );
+                      })()}
+
                       {/* Per-week data cells */}
                       {semanaKeys.map(sem =>
-                        activeGroups.filter(g => g.key !== "inversion").map(g => {
+                        activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias").map(g => {
                           const val = getVal(socio, sem, g.key);
                           const editable = g.key === "ahorros" || g.key === "aportes";
                           if (editable) {
@@ -370,7 +402,7 @@ export default function TablaMasterPage() {
                       {/* Row total */}
                       <td className="bg-gray-100 border-l border-gray-300 px-2 py-0.5 text-right font-bold tabular-nums text-xs text-gray-800 sticky right-0 z-10">
                         {fmt(
-                          activeGroups.filter(g => g.key !== "inversion").reduce((sum, g) => sum + socioTotal(socio, g.key), 0)
+                          activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias").reduce((sum, g) => sum + socioTotal(socio, g.key), 0)
                         )}
                       </td>
                     </tr>
@@ -392,8 +424,25 @@ export default function TablaMasterPage() {
                     </>
                   )}
 
+                  {visibles.transferencias && (() => {
+                    const allTrans = data.socios.flatMap((s: any) => s.transferencias ?? []);
+                    return (
+                      <>
+                        <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
+                          {fmt(allTrans.filter((t: any) => t.tipo === "INVERSION").reduce((s: number, t: any) => s + t.monto, 0))}
+                        </td>
+                        <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
+                          {fmt(allTrans.filter((t: any) => t.tipo === "DEVOLUCION").reduce((s: number, t: any) => s + t.monto, 0))}
+                        </td>
+                        <td className="bg-purple-100 border-r border-purple-200 px-1 py-2 text-right text-xs font-bold tabular-nums text-purple-800">
+                          {fmt(allTrans.filter((t: any) => t.tipo === "INTERES").reduce((s: number, t: any) => s + t.monto, 0))}
+                        </td>
+                      </>
+                    );
+                  })()}
+
                   {semanaKeys.map(sem =>
-                    activeGroups.filter(g => g.key !== "inversion").map(g => (
+                    activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias").map(g => (
                       <td key={`t-${sem}-${g.key}`} className={cn("px-1 py-2 text-right tabular-nums text-xs border-r border-gray-200", g.headerBg)}>
                         <span className={colTotal(sem, g.key) === 0 ? "text-gray-400" : "text-gray-900 font-bold"}>
                           {fmt(colTotal(sem, g.key))}
@@ -404,7 +453,7 @@ export default function TablaMasterPage() {
 
                   <td className="bg-gray-200 px-2 py-2 text-right text-xs font-extrabold tabular-nums text-gray-900 sticky right-0 z-10">
                     {fmt(
-                      activeGroups.filter(g => g.key !== "inversion").reduce((sum, g) => sum + grandTotal(g.key), 0)
+                      activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias").reduce((sum, g) => sum + grandTotal(g.key), 0)
                     )}
                   </td>
                 </tr>
