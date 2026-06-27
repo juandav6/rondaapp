@@ -466,8 +466,8 @@ export default function TablaMasterPage() {
           <div ref={tableRef} className="overflow-x-auto" style={{ maxHeight: "75vh" }}>
             <table className="border-collapse text-[11px]">
               {/* Header row 1: Socio + Inversión + week groups */}
-              <thead>
-                <tr className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20">
+                <tr>
                   {/* F3: Select-all checkbox */}
                   {deleteMode && (
                     <th rowSpan={2} className="sticky left-0 z-30 bg-gray-200 border border-gray-300 px-2 py-2 text-center w-8">
@@ -513,30 +513,30 @@ export default function TablaMasterPage() {
                 </tr>
 
                 {/* Header row 2: sub-column labels */}
-                <tr className="sticky top-[33px] z-20">
+                <tr>
                   {/* Inversión sub-headers */}
                   {visibles.inversion && (
                     <>
-                      <th className="bg-indigo-50 border border-indigo-200 px-1 py-1 text-center text-[10px] font-semibold text-indigo-700 min-w-[75px]">Valor</th>
-                      <th className="bg-indigo-50 border border-indigo-200 px-1 py-1 text-center text-[10px] font-semibold text-indigo-700 min-w-[60px]">% Interés</th>
+                      <th className="bg-indigo-100 border border-indigo-200 px-1 py-1 text-center text-[10px] font-semibold text-indigo-700 min-w-[75px]">Valor</th>
+                      <th className="bg-indigo-100 border border-indigo-200 px-1 py-1 text-center text-[10px] font-semibold text-indigo-700 min-w-[60px]">% Interés</th>
                     </>
                   )}
 
                   {/* Transferencias sub-headers */}
                   {visibles.transferencias && (
                     <>
-                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Inv. Inicial</th>
-                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Transf. (+)</th>
-                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-800 min-w-[80px] font-bold">Total Inv.</th>
-                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Devolución</th>
-                      <th className="bg-purple-50 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Intereses</th>
+                      <th className="bg-purple-100 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Inv. Inicial</th>
+                      <th className="bg-purple-100 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Transf. (+)</th>
+                      <th className="bg-purple-100 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-800 min-w-[80px] font-bold">Total Inv.</th>
+                      <th className="bg-purple-100 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Devolución</th>
+                      <th className="bg-purple-100 border border-purple-200 px-1 py-1 text-center text-[10px] font-semibold text-purple-700 min-w-[80px]">Intereses</th>
                     </>
                   )}
 
                   {/* Per-week sub-headers */}
                   {semanaKeys.map(sem =>
                     activeGroups.filter(g => g.key !== "inversion" && g.key !== "transferencias").map(g => (
-                      <th key={`${sem}-${g.key}`} className={cn("border border-gray-200 px-1 py-1 text-center text-[10px] font-semibold min-w-[80px]", g.headerBg, g.color)}>
+                      <th key={`${sem}-${g.key}`} className={cn("border border-gray-200 px-1 py-1 text-center text-[10px] font-semibold min-w-[80px] bg-white", g.color)}>
                         {g.label}
                       </th>
                     ))
