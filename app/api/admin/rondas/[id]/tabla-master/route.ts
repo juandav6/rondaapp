@@ -39,7 +39,8 @@ export async function GET(_req: Request, context: Ctx) {
     }
 
     const totalSemanas = ronda.participaciones.length;
-    const semanaActual = ronda.semanaActual;
+    // For finalized rondas with semanaActual=0, use totalSemanas so data is visible
+    const semanaActual = ronda.semanaActual > 0 ? ronda.semanaActual : (!ronda.activa ? totalSemanas : 0);
 
     // ── 2. Fetch all per-week data in parallel ──────────────────────────────
     const [
