@@ -40,7 +40,6 @@ export async function GET() {
     // ── 3. Obtener movimientos detallados por socio (para kardex individual) ─
     const movimientosDetalle = await prisma.movimientoCuenta.findMany({
       orderBy: [{ socioId: "asc" }, { createdAt: "asc" }, { id: "asc" }],
-      include: { ronda: { select: { nombre: true } } },
       select: {
         id: true,
         socioId: true,
