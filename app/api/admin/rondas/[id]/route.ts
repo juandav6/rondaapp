@@ -88,7 +88,7 @@ export async function PUT(req: Request, ctx: Ctx) {
         ...(montoAporte !== undefined && { montoAporte: new Prisma.Decimal(Number(montoAporte)) }),
         ...(ahorroObjetivoPorSocio !== undefined && { ahorroObjetivoPorSocio: new Prisma.Decimal(Number(ahorroObjetivoPorSocio)) }),
         ...(intervaloDiasCobro !== undefined && { intervaloDiasCobro: Number(intervaloDiasCobro) }),
-        ...(semanaActual !== undefined && { semanaActual: Number(semanaActual) }),
+        ...(semanaActual !== undefined && semanaActual !== "" && { semanaActual: Number(semanaActual) }),
         ...(fechaInicio && { fechaInicio: new Date(fechaInicio) }),
         ...(fechaFin !== undefined && { fechaFin: fechaFin ? new Date(fechaFin) : null }),
       },

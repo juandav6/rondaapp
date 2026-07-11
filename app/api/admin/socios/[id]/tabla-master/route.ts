@@ -25,6 +25,7 @@ export async function GET(_req: Request, context: Ctx) {
                 montoAporte: true,
                 fechaInicio: true,
                 fechaFin: true,
+                _count: { select: { participaciones: true } },
               },
             },
           },
@@ -170,7 +171,9 @@ export async function GET(_req: Request, context: Ctx) {
     // ── 4. Build rondas array ───────────────────────────────────────────────
     const rondasResult = socio.participaciones.map((part) => {
       const ronda = part.ronda;
-      const semanaActual = ronda.semanaActual;
+      const totalParticipantes = ronda._count.participaciones;
+      // For finalized rondas with semanaActual=0, use participant count so data is visible
+      const semanaActual = ronda.semanaActual > 0 ? ronda.semanaActual : (!ronda.activa ? totalParticipantes : 0);
       const totalSemanas = semanaActual;
 
       const semanas: Record<

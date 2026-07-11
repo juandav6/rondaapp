@@ -31,7 +31,6 @@ export default function AdminRondasPage() {
       nombre: r.nombre ?? "",
       montoAporte: Number(r.montoAporte) || "",
       ahorroObjetivoPorSocio: Number(r.ahorroObjetivoPorSocio) || "",
-      semanaActual: r.semanaActual ?? "",
       intervaloDiasCobro: r.intervaloDiasCobro ?? 7,
       fechaInicio: r.fechaInicio ? new Date(r.fechaInicio).toISOString().slice(0, 10) : "",
       fechaFin: r.fechaFin ? new Date(r.fechaFin).toISOString().slice(0, 10) : "",

@@ -39,7 +39,8 @@ export async function GET(_req: Request, context: Ctx) {
     }
 
     const totalSemanas = ronda.participaciones.length;
-    const semanaActual = ronda.semanaActual;
+    // For finalized rondas with semanaActual=0, use totalSemanas so data is visible
+    const semanaActual = ronda.semanaActual > 0 ? ronda.semanaActual : (!ronda.activa ? totalSemanas : 0);
 
     // ── 2. Fetch all per-week data in parallel ──────────────────────────────
     const [
@@ -335,6 +336,36 @@ export async function GET(_req: Request, context: Ctx) {
         },
       };
     });
+
+    // ── 4b. Add investor-only socios (have cuentaInversion but no participacion)
+    const participantIds = new Set(ronda.participaciones.map(p => p.socio.id));
+    const investorOnlyIds = [...inversionMap.keys()].filter(id => !participantIds.has(id));
+
+    if (investorOnlyIds.length > 0) {
+      const investorSocios = await prisma.socio.findMany({
+        where: { id: { in: investorOnlyIds } },
+        select: { id: true, nombres: true, apellidos: true, numeroCuenta: true, saldoAhorros: true },
+      });
+      for (const socio of investorSocios) {
+        sociosResult.push({
+          socioId: socio.id,
+          nombres: socio.nombres,
+          apellidos: socio.apellidos,
+          numeroCuenta: socio.numeroCuenta,
+          orden: null,
+          saldoAhorros: Number(socio.saldoAhorros),
+          soloInversor: true,
+          semanas: {},
+          totales: { aportes: 0, ahorros: 0, multas: 0 },
+          prestamos: prestamosBySocio.get(socio.id) ?? [],
+          inversion: inversionMap.get(socio.id) ?? null,
+          transferencias: transferenciasMap.get(socio.id) ?? {
+            inversionInicial: 0, transferenciasIntermedias: [], totalInvertido: 0,
+            devolucion: 0, intereses: 0, historial: [],
+          },
+        });
+      }
+    }
 
     // ── 5. Build per-week totals ────────────────────────────────────────────
     const semanasResult: Record<
