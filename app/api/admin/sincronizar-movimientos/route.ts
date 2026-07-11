@@ -26,7 +26,6 @@ export async function POST(req: Request) {
     }[] = [];
 
     let corregidos = 0;
-    let saldosAjustados = 0;
 
     for (const ahorro of ahorros) {
       const nota1 = `semana ${ahorro.semana} ·`; // "semana 1 · RD00XX"
@@ -69,13 +68,10 @@ export async function POST(req: Request) {
               createdAt: fechaSemana,
             },
           });
-          // Ajustar saldo
-          await prisma.socio.update({
-            where: { id: ahorro.socioId },
-            data: { saldoAhorros: { increment: new Prisma.Decimal(montoAhorro.toFixed(2)) } },
-          });
+          // NO ajustar saldoAhorros aquí — el saldo ya fue incrementado cuando
+          // se registró el ahorro original. Solo estamos creando el MovimientoCuenta
+          // faltante. Usar "Saldos completos" después para recalcular desde movimientos.
           corregidos++;
-          saldosAjustados++;
         }
       } else if (Math.abs(montoAhorro - montoMov!) > 0.01) {
         // El movimiento existe pero tiene monto diferente
@@ -90,13 +86,9 @@ export async function POST(req: Request) {
             where: { id: mov.id },
             data: { monto: new Prisma.Decimal(montoAhorro) },
           });
-          // Ajustar saldo por el delta
-          await prisma.socio.update({
-            where: { id: ahorro.socioId },
-            data: { saldoAhorros: { increment: new Prisma.Decimal(delta.toFixed(2)) } },
-          });
+          // NO ajustar saldoAhorros — solo corregimos el MovimientoCuenta.
+          // El delta real de saldo se aplica con "Saldos completos" tras esta sync.
           corregidos++;
-          saldosAjustados++;
         }
       }
     }
@@ -129,10 +121,8 @@ export async function POST(req: Request) {
         });
         if (!soloVer) {
           await prisma.movimientoCuenta.delete({ where: { id: mov.id } });
-          await prisma.socio.update({
-            where: { id: mov.socioId },
-            data: { saldoAhorros: { increment: new Prisma.Decimal((-Number(mov.monto)).toFixed(2)) } },
-          });
+          // NO ajustar saldoAhorros — solo eliminamos el MovimientoCuenta huérfano.
+          // Usar "Saldos completos" después para recalcular desde movimientos.
           corregidos++;
         }
       }
@@ -144,10 +134,9 @@ export async function POST(req: Request) {
       diferencias: [...diferencias, ...huerfanos],
       totalDiferencias: diferencias.length + huerfanos.length,
       corregidos: soloVer ? 0 : corregidos,
-      saldosAjustados: soloVer ? 0 : saldosAjustados,
       mensaje: soloVer
         ? `Diagnóstico: ${diferencias.length + huerfanos.length} discrepancias encontradas`
-        : `Corrección aplicada: ${corregidos} movimientos, ${saldosAjustados} saldos ajustados`,
+        : `Corrección aplicada: ${corregidos} movimientos. Ejecuta "Saldos completos → Diagnosticar y corregir" para recalcular los saldos.`,
     });
 
   } catch (e: any) {

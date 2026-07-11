@@ -102,6 +102,16 @@ export default function AdminSincronizarPage() {
           </div>
         )}
 
+        {tab === "ahorros" && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <p className="font-semibold mb-1">Orden recomendado para corregir diferencias de saldo:</p>
+            <ol className="list-decimal list-inside space-y-0.5">
+              <li><strong>Paso 1</strong> — Ejecuta "Diagnosticar y corregir" aquí para sincronizar los registros de MovimientoCuenta con la tabla de ahorros.</li>
+              <li><strong>Paso 2</strong> — Ve a la pestaña <strong>Saldos completos</strong> y ejecuta "Diagnosticar y corregir" para recalcular <code>saldoAhorros</code> desde los movimientos.</li>
+            </ol>
+          </div>
+        )}
+
         <div className="flex gap-3 flex-wrap">
           <button onClick={() => ejecutar(true)} disabled={loading}
             className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50">
