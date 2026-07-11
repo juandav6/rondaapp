@@ -10,19 +10,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const soloInactivos = searchParams.get("inactivos") === "1";
 
-    const todos = await prisma.socio.findMany({
+    const socios = await prisma.socio.findMany({
+      where: { activo: soloInactivos ? false : true },
       orderBy: { numeroCuenta: "asc" },
       select: {
         id: true, numeroCuenta: true, nombres: true, apellidos: true,
         cedula: true, edad: true, saldoAhorros: true, multas: true,
+        activo: true,
         _count: { select: { aportes: true, ahorros: true, prestamos: true } },
       },
     });
-
-    // Filtrar por activo usando el campo directo (post-query hasta que prisma generate corra)
-    const socios = soloInactivos
-      ? todos.filter((s: any) => s.activo === false)
-      : todos.filter((s: any) => s.activo !== false);
 
     return NextResponse.json(socios.map((s: any) => ({
       ...s, saldoAhorros: Number(s.saldoAhorros),

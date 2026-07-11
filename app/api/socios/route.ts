@@ -8,10 +8,14 @@ export async function GET(req: Request) {
   const rondaParam = url.searchParams.get("ronda");
   const rondaIdParam = url.searchParams.get("rondaId");
   const includeUsuario = url.searchParams.get("includeUsuario") === "true";
+  const soloInactivos = url.searchParams.get("inactivos") === "1";
+  const todos = url.searchParams.get("todos") === "1";
 
-  // Socios base
+  // Socios base — por defecto solo activos; ?inactivos=1 trae solo inactivos; ?todos=1 trae todos
+  const whereActivo = todos ? {} : soloInactivos ? { activo: false } : { activo: true };
+
   const socios = await prisma.socio.findMany({
-    where: {},
+    where: whereActivo,
     select: {
       id: true,
       numeroCuenta: true,
@@ -21,7 +25,7 @@ export async function GET(req: Request) {
       edad: true,
       multas: true,
       saldoAhorros: true,
-      // Incluir usuario solo si se solicita explícitamente
+      activo: true,
       ...(includeUsuario ? {
         usuario: {
           select: { email: true, rol: true },

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 interface SocioRow {
   id: number; numeroCuenta: string; nombres: string;
   apellidos: string; cedula: string; edad: number;
-  ahorros: number; multas: number;
+  ahorros: number; multas: number; activo: boolean;
   usuario?: { email: string; rol: string } | null;
 }
 interface CreateSocioPayload {
@@ -31,6 +31,7 @@ export default function SociosPage() {
   const [editForm, setEditForm] = useState<Partial<EditSocioPayload>>({});
   const [savingEdit, setSavingEdit] = useState(false);
   const [q, setQ] = useState("");
+  const [verInactivos, setVerInactivos] = useState(false);
 
   // Modal reset contraseña
   const [resetSocio, setResetSocio] = useState<SocioRow | null>(null);
@@ -45,12 +46,14 @@ export default function SociosPage() {
   const [showAccesoPass, setShowAccesoPass] = useState(false);
   const [creatingAcceso, setCreatingAcceso] = useState(false);
 
-  useEffect(() => { fetchSocios(); }, []);
+  useEffect(() => { fetchSocios(verInactivos); }, [verInactivos]);
 
-  const fetchSocios = async () => {
+  const fetchSocios = async (inactivos = false) => {
     try {
       setLoading(true);
-      const r = await fetch("/api/socios?includeUsuario=true");
+      const params = new URLSearchParams({ includeUsuario: "true" });
+      if (inactivos) params.set("inactivos", "1");
+      const r = await fetch(`/api/socios?${params}`);
       if (!r.ok) throw new Error("Error al obtener socios");
       setSocios(await r.json());
       setError(null);
@@ -196,14 +199,24 @@ export default function SociosPage() {
             <h1 className="text-lg sm:text-2xl font-semibold tracking-tight">Gestión de Socios</h1>
             <p className="text-xs sm:text-sm text-gray-500">{sociosConAcceso} de {socios.length} socios con acceso al portal</p>
           </div>
+          <button
+            onClick={() => { setVerInactivos(v => !v); setQ(""); }}
+            className={`ml-auto inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+              verInactivos
+                ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            }`}>
+            <span className={`h-2 w-2 rounded-full ${verInactivos ? "bg-rose-500" : "bg-gray-300"}`} />
+            {verInactivos ? "Viendo inactivos" : "Ver inactivos"}
+          </button>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
-        <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
-          <p className="text-xs text-gray-500">Total socios</p>
-          <p className="mt-1 text-xl sm:text-3xl font-bold text-gray-900">{socios.length}</p>
+        <div className={`rounded-xl shadow-sm border p-3 sm:p-5 ${verInactivos ? "bg-rose-50" : "bg-white"}`}>
+          <p className="text-xs text-gray-500">{verInactivos ? "Socios inactivos" : "Socios activos"}</p>
+          <p className={`mt-1 text-xl sm:text-3xl font-bold ${verInactivos ? "text-rose-700" : "text-gray-900"}`}>{socios.length}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-3 sm:p-5">
           <p className="text-xs text-gray-500">Con portal</p>
@@ -305,10 +318,15 @@ export default function SociosPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                       {sociosFiltrados.map(s => (
-                        <tr key={s.id} className="hover:bg-gray-50">
+                        <tr key={s.id} className={`hover:bg-gray-50 ${!s.activo ? "opacity-70 bg-gray-50" : ""}`}>
                           <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.numeroCuenta}</td>
                           <td className="px-4 py-3">
-                            <p className="font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900">{s.nombres} {s.apellidos}</p>
+                              {!s.activo && (
+                                <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">INACTIVO</span>
+                              )}
+                            </div>
                             <p className="text-xs text-gray-400">CI: {s.cedula} · {s.edad} años</p>
                           </td>
                           <td className="px-4 py-3">
@@ -354,10 +372,15 @@ export default function SociosPage() {
                 {/* Tarjetas móvil */}
                 <ul className="sm:hidden divide-y">
                   {sociosFiltrados.map(s => (
-                    <li key={s.id} className="p-4 space-y-2">
+                    <li key={s.id} className={`p-4 space-y-2 ${!s.activo ? "bg-gray-50" : ""}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 truncate">{s.nombres} {s.apellidos}</p>
+                            {!s.activo && (
+                              <span className="shrink-0 inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">INACTIVO</span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-400 font-mono mt-0.5">{s.numeroCuenta}</p>
                           <p className="text-xs text-gray-400 mt-0.5">CI: {s.cedula} · {s.edad} años</p>
                         </div>

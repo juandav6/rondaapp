@@ -31,7 +31,7 @@ type KardexLine = {
 
 async function getSocios() {
   return prisma.socio.findMany({
-    where: {},
+    where: { activo: true },
     select: { id: true, numeroCuenta: true, nombres: true, apellidos: true, cedula: true, saldoAhorros: true },
   });
 }

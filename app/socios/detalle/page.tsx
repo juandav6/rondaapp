@@ -17,6 +17,7 @@ const fmtDate = (iso: string | Date | null | undefined) => {
 
 async function getSocios() {
   return prisma.socio.findMany({
+    where: { activo: true },
     orderBy: [{ apellidos: "asc" }, { nombres: "asc" }],
     select: { id: true, numeroCuenta: true, nombres: true, apellidos: true, cedula: true, saldoAhorros: true },
   });
