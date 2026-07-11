@@ -14,8 +14,24 @@ const fmtDate = (d: Date | string | null) => {
   }).format(dt);
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    const fechaCorteStr = url.searchParams.get("fechaCorte"); // "YYYY-MM-DD"
+
+    // Fecha de corte: incluir movimientos hasta el final del día indicado
+    let fechaFin: Date | null = null;
+    if (fechaCorteStr && /^\d{4}-\d{2}-\d{2}$/.test(fechaCorteStr)) {
+      fechaFin = new Date(`${fechaCorteStr}T23:59:59.999Z`);
+    }
+    const conCorte = fechaFin !== null;
+    const whereMovs = conCorte ? { createdAt: { lte: fechaFin! } } : {};
+
+    // Etiqueta legible de la fecha de corte para el Excel
+    const labelCorte = conCorte
+      ? new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(fechaFin!)
+      : new Intl.DateTimeFormat("es-EC", { day: "2-digit", month: "long", year: "numeric" }).format(new Date());
+
     // ── 1. Obtener todos los socios con su saldo almacenado ──────────────────
     const socios = await prisma.socio.findMany({
       orderBy: [{ numeroCuenta: "asc" }],
@@ -30,15 +46,17 @@ export async function GET() {
       },
     });
 
-    // ── 2. Agrupar movimientos por socio y tipo en una sola query ────────────
+    // ── 2. Agrupar movimientos por socio y tipo (filtrados por fecha de corte) ─
     const movimientos = await prisma.movimientoCuenta.groupBy({
       by: ["socioId", "tipo"],
+      where: whereMovs,
       _sum: { monto: true },
       _count: { id: true },
     });
 
-    // ── 3. Obtener movimientos detallados por socio (para kardex individual) ─
+    // ── 3. Obtener movimientos detallados por socio (filtrados por fecha de corte) ─
     const movimientosDetalle = await prisma.movimientoCuenta.findMany({
+      where: whereMovs,
       orderBy: [{ socioId: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: {
         id: true,
@@ -97,6 +115,8 @@ export async function GET() {
         countAhorro: 0, countRetiro: 0, countInversion: 0, countDevolucion: 0, countInteres: 0,
       };
       const saldoCalculado = r.AHORRO + r.DEVOLUCION + r.INTERES - r.RETIRO - r.INVERSION;
+      // Con fecha de corte el saldo BD es el actual (no histórico); lo mostramos igual
+      // pero la diferencia refleja movimientos posteriores al corte
       const saldoBD = Number(s.saldoAhorros);
       return {
         numeroCuenta: s.numeroCuenta,
@@ -140,16 +160,29 @@ export async function GET() {
       { key: "diferencia",  width: 13 },
     ];
 
-    // Título
+    // ── Título con fecha de corte destacada ─────────────────────────────────
     ws.mergeCells("A1:L1");
-    ws.getCell("A1").value = "RESUMEN GENERAL DE SALDOS POR SOCIO";
-    ws.getCell("A1").font = { bold: true, size: 13, color: { argb: "FF1e3a5f" } };
+    ws.getCell("A1").value = conCorte
+      ? `RESUMEN GENERAL DE SALDOS POR SOCIO  ·  CORTE AL ${labelCorte.toUpperCase()}`
+      : "RESUMEN GENERAL DE SALDOS POR SOCIO  ·  SALDOS AL DÍA";
+    ws.getCell("A1").font = { bold: true, size: 13, color: { argb: conCorte ? "FF7c3aed" : "FF1e3a5f" } };
+    ws.getCell("A1").fill = {
+      type: "pattern", pattern: "solid",
+      fgColor: { argb: conCorte ? "FFF5F3FF" : "FFFFFFFF" },
+    };
     ws.getCell("A1").alignment = { horizontal: "left", vertical: "middle" };
-    ws.getRow(1).height = 26;
+    ws.getRow(1).height = 28;
 
+    // Fila de fecha de corte (destacada si hay corte)
     ws.mergeCells("A2:L2");
-    ws.getCell("A2").value = `Generado: ${new Date().toLocaleDateString("es-EC", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}   ·   Total socios: ${socios.length}`;
-    ws.getCell("A2").font = { size: 9, color: { argb: "FF6b7280" } };
+    if (conCorte) {
+      ws.getCell("A2").value = `⚠  Movimientos considerados HASTA el ${labelCorte} inclusive  ·  Saldo en BD = saldo actual (hoy ${new Date().toLocaleDateString("es-EC")})  ·  Total socios: ${socios.length}`;
+      ws.getCell("A2").font = { bold: true, size: 9, color: { argb: "FF6d28d9" } };
+      ws.getCell("A2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDE9FE" } };
+    } else {
+      ws.getCell("A2").value = `Generado: ${new Date().toLocaleDateString("es-EC", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}   ·   Total socios: ${socios.length}   ·   Sin fecha de corte (todos los movimientos)`;
+      ws.getCell("A2").font = { size: 9, color: { argb: "FF6b7280" } };
+    }
     ws.getRow(2).height = 16;
 
     ws.addRow([]);
@@ -181,8 +214,9 @@ export async function GET() {
       "Dep./Ahorros", "Retiros",
       "Inv. al fondo", "Dev. capital",
       "Intereses",
-      "Saldo calculado", "Saldo en BD",
-      "Diferencia",
+      conCorte ? `Saldo al ${fechaCorteStr}` : "Saldo calculado",
+      conCorte ? "Saldo BD (actual)" : "Saldo en BD",
+      conCorte ? "Dif. vs hoy" : "Diferencia",
     ]);
     const hColors: Record<number, string> = {
       1: "FF374151", 2: "FF374151", 3: "FF374151", 4: "FF374151",
@@ -306,14 +340,21 @@ export async function GET() {
       { key: "saldo",      width: 13 },
     ];
 
-    // Encabezado global
+    // Encabezado global hoja 2
     wsDet.mergeCells("A1:I1");
-    wsDet.getCell("A1").value = "KARDEX DETALLADO POR SOCIO";
-    wsDet.getCell("A1").font = { bold: true, size: 12, color: { argb: "FF1e3a5f" } };
+    wsDet.getCell("A1").value = conCorte
+      ? `KARDEX DETALLADO POR SOCIO  ·  CORTE AL ${labelCorte.toUpperCase()}`
+      : "KARDEX DETALLADO POR SOCIO";
+    wsDet.getCell("A1").font = { bold: true, size: 12, color: { argb: conCorte ? "FF7c3aed" : "FF1e3a5f" } };
+    if (conCorte) {
+      wsDet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F3FF" } };
+    }
     wsDet.getRow(1).height = 22;
     wsDet.mergeCells("A2:I2");
-    wsDet.getCell("A2").value = `Generado: ${new Date().toLocaleDateString("es-EC")}   ·   ${socios.length} socios`;
-    wsDet.getCell("A2").font = { size: 9, color: { argb: "FF6b7280" } };
+    wsDet.getCell("A2").value = conCorte
+      ? `Movimientos hasta el ${labelCorte} inclusive  ·  Generado: ${new Date().toLocaleDateString("es-EC")}  ·  ${socios.length} socios`
+      : `Generado: ${new Date().toLocaleDateString("es-EC")}   ·   ${socios.length} socios`;
+    wsDet.getCell("A2").font = { size: 9, color: { argb: conCorte ? "FF6d28d9" : "FF6b7280" } };
     wsDet.addRow([]);
 
     const TIPO_CFG: Record<string, { esHaber: boolean; concepto: string; color: string }> = {
@@ -423,8 +464,10 @@ export async function GET() {
 
     // ── Generar buffer y responder ───────────────────────────────────────────
     const buffer = await wb.xlsx.writeBuffer();
-    const fecha = new Date().toISOString().slice(0, 10);
-    const nombre = `kardex-resumen-socios-${fecha}.xlsx`;
+    const fechaHoy = new Date().toISOString().slice(0, 10);
+    const nombre = conCorte
+      ? `kardex-resumen-socios-CORTE-${fechaCorteStr}.xlsx`
+      : `kardex-resumen-socios-${fechaHoy}.xlsx`;
 
     return new Response(buffer as ArrayBuffer, {
       headers: {
