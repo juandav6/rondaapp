@@ -215,7 +215,10 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       // 12. Participaciones
       await tx.participacion.deleteMany({ where: { rondaId } });
 
-      // 13. Si era la ronda activa, marcar la más reciente como activa
+      // 13. Snapshots de la ronda
+      await tx.snapshotRonda.deleteMany({ where: { rondaId } });
+
+      // 14. Si era la ronda activa, marcar la más reciente como activa
       if (ronda.activa) {
         const anterior = await tx.ronda.findFirst({
           where: { id: { not: rondaId } },
@@ -229,7 +232,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         }
       }
 
-      // 14. Eliminar la ronda
+      // 15. Eliminar la ronda
       await tx.ronda.delete({ where: { id: rondaId } });
     }, {
       timeout: 30000, // 30s para rondas con muchos datos
