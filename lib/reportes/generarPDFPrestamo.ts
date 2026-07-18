@@ -34,36 +34,38 @@ export async function generarPDFPrestamo(prestamo: any): Promise<Buffer> {
   const totalCapital = cuotas.reduce((s: number, c: any) => s + Number(c.capital), 0);
   const totalInteres = cuotas.reduce((s: number, c: any) => s + Number(c.interes), 0);
 
-  // Anchos de columna (en caracteres Courier)
-  const C = { num: 4, fecha: 13, cuota: 13, capital: 13, interes: 12, saldo: 13, pago: 5, fechaPago: 13 };
-  // Total = 4+13+13+13+12+13+5+13 = 86 chars — cabe en 107 chars disponibles
+  // Anchos de columna (caracteres Courier). SP = separador entre bloques.
+  // Total: 4+2+13+12+12+11+12+2+4+2+13 = 87 chars — cabe holgado en ~107 disponibles
+  const SP = "  ";
+  const C = { num: 4, fecha: 13, cuota: 12, capital: 12, interes: 11, saldo: 12, pago: 4, fechaPago: 13 };
 
   const colHeader =
-    "Nro".padStart(C.num) + "  " +
+    "Nro".padStart(C.num) + SP +
     "Vencimiento".padEnd(C.fecha) +
-    "Cuota Total".padStart(C.cuota) +
+    "Cuota".padStart(C.cuota) +
     "Capital".padStart(C.capital) +
     "Interes".padStart(C.interes) +
-    "Saldo".padStart(C.saldo) +
-    " Pago".padStart(C.pago + 1) +
-    "  " + "Fecha Pago";
+    "Saldo".padStart(C.saldo) + SP +
+    "Pago".padStart(C.pago) + SP +
+    "Fecha Pago";
 
   const colRow = (c: any) =>
-    String(c.numero).padStart(C.num) + "  " +
+    String(c.numero).padStart(C.num) + SP +
     fmtDate(c.fechaVenc).padEnd(C.fecha) +
     fmtMoney(Number(c.cuota)).padStart(C.cuota) +
     fmtMoney(Number(c.capital)).padStart(C.capital) +
     fmtMoney(Number(c.interes)).padStart(C.interes) +
-    fmtMoney(Number(c.saldo)).padStart(C.saldo) +
-    (c.pagada ? "  Si" : "  No").padStart(C.pago + 1) +
-    "  " + (c.fechaPago ? fmtDate(c.fechaPago) : "—");
+    fmtMoney(Number(c.saldo)).padStart(C.saldo) + SP +
+    (c.pagada ? "Si" : "No").padStart(C.pago) + SP +
+    (c.fechaPago ? fmtDate(c.fechaPago) : "—");
 
+  // Totales: solo cuota, capital e interés (saldo final = 0 por definición)
+  const prefixW = C.num + SP.length + C.fecha;
   const colTotal =
-    "TOTALES".padStart(C.num + 2 + C.fecha) +
+    "TOTALES".padStart(prefixW) +
     fmtMoney(totalCuota).padStart(C.cuota) +
     fmtMoney(totalCapital).padStart(C.capital) +
-    fmtMoney(totalInteres).padStart(C.interes) +
-    "—".padStart(C.saldo);
+    fmtMoney(totalInteres).padStart(C.interes);
 
   // ── Construir líneas del documento ────────────────────────────────────────
   type Line = { text: string; bold?: boolean; separator?: boolean; blank?: boolean };
@@ -137,17 +139,21 @@ export async function generarPDFPrestamo(prestamo: any): Promise<Buffer> {
     bold(`CANCELADO: ${prestamo.notaCancelacion}`);
   }
 
-  // Firmas
+  // Firmas — espacio para escribir + etiquetas con nombres
   blank();
   blank();
   blank();
-  sep();
-  const GAP = 12;
-  const FIRMA_W = 36;
-  const linea = "_".repeat(FIRMA_W);
+  blank();
+  blank();
+  const GAP    = 14;
+  const FIRMA_W = 34;
+  const linea   = "_".repeat(FIRMA_W);
+  const socioNombre = `${prestamo.socio?.nombres ?? ""} ${prestamo.socio?.apellidos ?? ""}`.trim();
+
   norm(`${linea}${" ".repeat(GAP)}${linea}`);
   blank();
-  norm(`${"Responsable de la ronda".padEnd(FIRMA_W + GAP)}Elaborado por`);
+  norm(`${"Responsable de la ronda".padEnd(FIRMA_W + GAP)}${socioNombre}`);
+  norm(`${"".padEnd(FIRMA_W + GAP)}Elaborado por`);
   blank();
   sep();
   norm("MiRonda - Sistema de gestion de rondas de ahorro");
