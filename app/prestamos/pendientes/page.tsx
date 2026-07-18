@@ -211,6 +211,10 @@ export default function PrestamosPendientesPage() {
                         <td className="px-4 py-3 text-right">
                           <div className="inline-flex gap-1.5">
                             <Link href={`/prestamos/${p.id}`} className="rounded border px-2 py-1 text-xs hover:bg-gray-50">Ver</Link>
+                            <a href={`/api/prestamos/${p.id}/pdf`} target="_blank" rel="noopener noreferrer"
+                              className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 hover:bg-red-100" title="Descargar tabla de amortización PDF">
+                              PDF
+                            </a>
                             {p.nextPayment && (
                               <button onClick={() => { setPagarTarget({ prestamo: p, cuotaId: p.nextPayment!.cuotaId, monto: p.nextPayment!.cuota }); setFechaPagoInput(new Date().toISOString().slice(0,10)); }}
                                 className={cn("rounded px-2 py-1 text-xs text-white font-medium", overdue ? "bg-rose-600" : "bg-blue-600")}>

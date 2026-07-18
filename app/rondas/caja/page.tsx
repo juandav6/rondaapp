@@ -11,6 +11,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 type Mov = { id: number; tipo: string; monto: number; socio: any; semana: number | null; descripcion: string | null; fecha: string; prestamoExpressId: number | null };
 type PorSocio = { socio: any; multas: any[]; intereses: any[]; totalMultas: number; totalIntereses: number };
 type Resumen = { totalMultas: number; totalIntereses: number; totalIngresos: number; totalGastos: number; saldoCaja: number };
+type SocioGC = { id: number; nombres: string; apellidos: string; numeroCuenta: string; saldoAhorros: number };
 
 const TIPO_CFG: Record<string, { label: string; color: string; bg: string; border: string; signo: string }> = {
   MULTA:           { label: "Multa",          color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",  signo: "+" },
@@ -27,21 +28,31 @@ export default function CajaPage() {
   const [socios, setSocios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"movimientos" | "porSocio" | "gastos">("movimientos");
+  const [tab, setTab] = useState<"movimientos" | "porSocio" | "gastos" | "compartido">("movimientos");
 
-  // Form gasto
+  // Form gasto de caja
   const [gDesc, setGDesc] = useState("");
   const [gMonto, setGMonto] = useState("");
   const [gFecha, setGFecha] = useState(todayISO());
   const [savingG, setSavingG] = useState(false);
   const [msgG, setMsgG] = useState<{ text: string; ok: boolean } | null>(null);
 
-  // Edit gasto
+  // Edit gasto de caja
   const [editId, setEditId] = useState<number | null>(null);
   const [editDesc, setEditDesc] = useState("");
   const [editMonto, setEditMonto] = useState("");
 
-  const showMsg = (set: any, text: string, ok: boolean) => { set({ text, ok }); setTimeout(() => set(null), 3500); };
+  // Gasto compartido entre socios
+  const [gcDesc, setGcDesc] = useState("");
+  const [gcMonto, setGcMonto] = useState("");
+  const [gcSocios, setGcSocios] = useState<SocioGC[]>([]);
+  const [gcSeleccionados, setGcSeleccionados] = useState<Set<number>>(new Set());
+  const [gcLoadingSocios, setGcLoadingSocios] = useState(false);
+  const [savingGC, setSavingGC] = useState(false);
+  const [msgGC, setMsgGC] = useState<{ text: string; ok: boolean } | null>(null);
+  const [gcResultado, setGcResultado] = useState<{ aplicados: { socioId: number; nombre: string; monto: number }[]; totalSocios: number } | null>(null);
+
+  const showMsg = (set: any, text: string, ok: boolean) => { set({ text, ok }); setTimeout(() => set(null), 4000); };
 
   async function cargar(id?: number) {
     const rid = id ?? rondaId;
@@ -65,6 +76,18 @@ export default function CajaPage() {
     finally { setLoading(false); }
   }
 
+  async function cargarSociosGC(rid: number) {
+    setGcLoadingSocios(true);
+    try {
+      const res = await fetch(`/api/rondas/${rid}/gasto-compartido`);
+      const d = await res.json();
+      const list: SocioGC[] = d.socios ?? [];
+      setGcSocios(list);
+      setGcSeleccionados(new Set(list.filter(s => s.saldoAhorros > 0).map(s => s.id)));
+    } catch {}
+    finally { setGcLoadingSocios(false); }
+  }
+
   useEffect(() => {
     async function init() {
       try {
@@ -77,6 +100,12 @@ export default function CajaPage() {
     }
     init();
   }, []);
+
+  useEffect(() => {
+    if (tab === "compartido" && rondaId) {
+      cargarSociosGC(rondaId);
+    }
+  }, [tab, rondaId]);
 
   async function registrarGasto() {
     if (!rondaId) return;
@@ -114,8 +143,56 @@ export default function CajaPage() {
     } catch (e: any) { showMsg(setMsgG, e.message, false); }
   }
 
+  function toggleSocio(id: number) {
+    setGcSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function aplicarGastoCompartido() {
+    if (!rondaId) return;
+    setSavingGC(true);
+    setGcResultado(null);
+    try {
+      const res = await fetch(`/api/rondas/${rondaId}/gasto-compartido`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          descripcion: gcDesc.trim(),
+          monto: Number(gcMonto),
+          socioIds: [...gcSeleccionados],
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      setGcResultado(d);
+      showMsg(setMsgGC, `Gasto aplicado: ${d.totalSocios} socios descontados correctamente`, true);
+      setGcDesc(""); setGcMonto("");
+      // Recargar saldos actualizados
+      await cargarSociosGC(rondaId);
+    } catch (e: any) { showMsg(setMsgGC, e.message, false); }
+    finally { setSavingGC(false); }
+  }
+
   const gastos = movimientos.filter(m => m.tipo === "GASTO");
   const ingresos = movimientos.filter(m => m.tipo !== "GASTO");
+
+  // Cálculos gasto compartido
+  const gcMontoNum = Number(gcMonto) || 0;
+  const gcListaSeleccionados = gcSocios.filter(s => gcSeleccionados.has(s.id));
+  const gcCount = gcListaSeleccionados.length;
+  const gcBase = gcCount > 0 && gcMontoNum > 0 ? Math.floor((gcMontoNum / gcCount) * 100) / 100 : 0;
+  const gcResiduo = gcCount > 0 && gcMontoNum > 0 ? Math.round((gcMontoNum - gcBase * gcCount) * 100) / 100 : 0;
+  // Monto que paga cada socio (último absorbe residuo)
+  const gcMontoPorSocio = (s: SocioGC) => {
+    const idx = gcListaSeleccionados.indexOf(s);
+    if (idx < 0) return 0;
+    return idx === gcListaSeleccionados.length - 1 ? gcBase + gcResiduo : gcBase;
+  };
+  const gcHayInsuficientes = gcListaSeleccionados.some(s => s.saldoAhorros < gcMontoPorSocio(s));
 
   if (loading) return <div className="p-4 space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100"/>)}</div>;
   if (error) return <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">{error}</div>;
@@ -168,14 +245,15 @@ export default function CajaPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-xl border bg-gray-50 p-1">
+      <div className="flex gap-1 rounded-xl border bg-gray-50 p-1 overflow-x-auto">
         {([
           { key: "movimientos", label: `Movimientos (${movimientos.length})` },
-          { key: "porSocio", label: `Por socio (${porSocio.length})` },
-          { key: "gastos", label: `Gastos (${gastos.length})` },
+          { key: "porSocio",    label: `Por socio (${porSocio.length})` },
+          { key: "gastos",      label: `Gastos (${gastos.length})` },
+          { key: "compartido",  label: "Gasto compartido" },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={cn("flex-1 rounded-lg py-2 text-xs sm:text-sm font-medium transition-colors",
+            className={cn("shrink-0 rounded-lg px-3 py-2 text-xs sm:text-sm font-medium transition-colors",
               tab === t.key ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700")}>
             {t.label}
           </button>
@@ -366,12 +444,12 @@ export default function CajaPage() {
         </div>
       )}
 
-      {/* Tab: Gastos */}
+      {/* Tab: Gastos de caja */}
       {tab === "gastos" && (
         <div className="space-y-4">
           {/* Form gasto */}
           <div className="rounded-xl border bg-white p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Registrar gasto</h3>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">Registrar gasto de caja</h3>
 
             {msgG && (
               <div className={cn("mb-3 rounded-lg p-3 text-xs", msgG.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700")}>
@@ -468,6 +546,227 @@ export default function CajaPage() {
               </ul>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Tab: Gasto compartido entre socios */}
+      {tab === "compartido" && (
+        <div className="space-y-4">
+
+          {/* Banner informativo */}
+          <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 flex gap-3">
+            <span className="text-lg shrink-0">💸</span>
+            <div>
+              <p className="text-sm font-semibold text-violet-900">Gasto compartido entre socios</p>
+              <p className="text-xs text-violet-700 mt-0.5">
+                El monto total se divide equitativamente entre los socios seleccionados y se descuenta de sus ahorros individuales.
+                Aparecerá como <strong>RETIRO</strong> en el kardex de cada socio con la descripción del gasto.
+              </p>
+            </div>
+          </div>
+
+          {/* Formulario */}
+          <div className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
+            <h3 className="text-sm font-semibold text-gray-800">Detalles del gasto</h3>
+
+            {msgGC && (
+              <div className={cn("rounded-lg p-3 text-xs", msgGC.ok ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700")}>
+                {msgGC.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Descripción del gasto *</label>
+                <input
+                  type="text"
+                  value={gcDesc}
+                  onChange={e => setGcDesc(e.target.value)}
+                  placeholder="Ej: Arriendo sala de reuniones, café, materiales…"
+                  className="w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Monto total ($) *</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={gcMonto}
+                  onChange={e => setGcMonto(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-lg border px-3 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-violet-200"
+                />
+              </div>
+            </div>
+
+            {/* Lista de socios — visible cuando hay monto */}
+            {gcMontoNum > 0 && (
+              <div className="space-y-3">
+
+                {/* Barra resumen */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-violet-50 border border-violet-200 px-4 py-2.5 text-xs">
+                  <span className="text-gray-600">
+                    <strong className="text-violet-800">{gcCount}</strong> de{" "}
+                    <strong>{gcSocios.filter(s => s.saldoAhorros > 0).length}</strong> socios seleccionados
+                  </span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-600">
+                    Cada uno paga:{" "}
+                    <strong className="text-violet-800 tabular-nums">{gcCount > 0 ? fmt(gcBase) : "—"}</strong>
+                    {gcResiduo > 0 && gcCount > 0 && (
+                      <span className="text-gray-400"> (último: {fmt(gcBase + gcResiduo)})</span>
+                    )}
+                  </span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-gray-600">
+                    Total efectivo:{" "}
+                    <strong className="tabular-nums">{fmt(gcBase * gcCount + (gcResiduo > 0 ? gcResiduo : 0))}</strong>
+                  </span>
+                </div>
+
+                {/* Tabla socios */}
+                <div className="rounded-lg border overflow-hidden">
+                  {/* Header */}
+                  <div className="grid grid-cols-[auto_1fr_auto_auto] gap-0 bg-gray-50 border-b px-4 py-2 text-[10px] font-semibold uppercase text-gray-500">
+                    <span className="w-8"/>
+                    <span>Socio</span>
+                    <span className="text-right pr-6">Saldo actual</span>
+                    <span className="text-right w-28">A descontar</span>
+                  </div>
+
+                  {gcLoadingSocios ? (
+                    <div className="p-6 text-center text-sm text-gray-400">Cargando socios…</div>
+                  ) : gcSocios.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-gray-400">No hay socios activos</div>
+                  ) : (
+                    <ul className="divide-y">
+                      {gcSocios.map(s => {
+                        const selected = gcSeleccionados.has(s.id);
+                        const m = gcMontoPorSocio(s);
+                        const suficiente = s.saldoAhorros >= m;
+                        const sinSaldo = s.saldoAhorros <= 0;
+                        return (
+                          <li key={s.id}>
+                            <label className={cn(
+                              "grid grid-cols-[auto_1fr_auto_auto] items-center gap-0 px-4 py-3 cursor-pointer transition-colors",
+                              selected && !suficiente && m > 0 ? "bg-red-50 hover:bg-red-50/80" : "hover:bg-gray-50",
+                              sinSaldo && !selected ? "opacity-50" : "",
+                            )}>
+                              <span className="w-8 flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => toggleSocio(s.id)}
+                                  className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-200"
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 leading-tight">
+                                  {s.nombres} {s.apellidos}
+                                </p>
+                                <p className="text-[10px] text-gray-400 font-mono">{s.numeroCuenta}</p>
+                              </span>
+                              <span className={cn("text-xs tabular-nums pr-6 text-right", s.saldoAhorros > 0 ? "text-emerald-700 font-semibold" : "text-gray-400")}>
+                                {fmt(s.saldoAhorros)}
+                              </span>
+                              <span className="w-28 text-right">
+                                {selected ? (
+                                  <span className="space-y-0.5 block">
+                                    <span className={cn("text-sm font-bold tabular-nums block", suficiente ? "text-rose-700" : "text-red-600")}>
+                                      −{fmt(m)}
+                                    </span>
+                                    {!suficiente && (
+                                      <span className="text-[10px] text-red-500 block leading-none">Saldo insuficiente</span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-300">Excluido</span>
+                                )}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Acciones rápidas */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGcSeleccionados(new Set(gcSocios.filter(s => s.saldoAhorros > 0).map(s => s.id)))}
+                    className="text-xs text-violet-600 border border-violet-200 rounded-lg px-3 py-1.5 hover:bg-violet-50"
+                  >
+                    Seleccionar todos con saldo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGcSeleccionados(new Set())}
+                    className="text-xs text-gray-500 border rounded-lg px-3 py-1.5 hover:bg-gray-50"
+                  >
+                    Limpiar selección
+                  </button>
+                </div>
+
+                {/* Botón confirmar */}
+                <div className="flex items-center justify-between pt-1">
+                  {gcHayInsuficientes && (
+                    <p className="text-xs text-red-600">
+                      Algunos socios no tienen saldo suficiente. Deselecta los marcados en rojo.
+                    </p>
+                  )}
+                  <div className="ml-auto">
+                    <button
+                      onClick={aplicarGastoCompartido}
+                      disabled={
+                        savingGC ||
+                        !gcDesc.trim() ||
+                        gcMontoNum <= 0 ||
+                        gcCount === 0 ||
+                        gcHayInsuficientes
+                      }
+                      className="rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-40 transition-colors"
+                    >
+                      {savingGC ? "Aplicando…" : `Confirmar y descontar (${gcCount} socios)`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {gcMontoNum <= 0 && (
+              <p className="text-xs text-gray-400 text-center py-2">
+                Ingresa la descripción y el monto total para ver la distribución entre socios.
+              </p>
+            )}
+          </div>
+
+          {/* Resultado del último gasto aplicado */}
+          {gcResultado && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5 text-emerald-600">
+                  <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clipRule="evenodd"/>
+                </svg>
+                <p className="text-sm font-semibold text-emerald-800">
+                  Gasto aplicado — {gcResultado.totalSocios} socios
+                </p>
+              </div>
+              <ul className="divide-y divide-emerald-100">
+                {gcResultado.aplicados.map(a => (
+                  <li key={a.socioId} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-emerald-800">{a.nombre}</span>
+                    <span className="font-bold text-rose-700 tabular-nums">−{fmt(a.monto)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[10px] text-emerald-600 mt-2">
+                Los movimientos están registrados en el kardex individual de cada socio como RETIRO.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
