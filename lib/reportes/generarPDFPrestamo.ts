@@ -137,6 +137,17 @@ export async function generarPDFPrestamo(prestamo: any): Promise<Buffer> {
     bold(`CANCELADO: ${prestamo.notaCancelacion}`);
   }
 
+  // Firmas
+  blank();
+  blank();
+  blank();
+  sep();
+  const GAP = 12;
+  const FIRMA_W = 36;
+  const linea = "_".repeat(FIRMA_W);
+  norm(`${linea}${" ".repeat(GAP)}${linea}`);
+  blank();
+  norm(`${"Responsable de la ronda".padEnd(FIRMA_W + GAP)}Elaborado por`);
   blank();
   sep();
   norm("MiRonda - Sistema de gestion de rondas de ahorro");

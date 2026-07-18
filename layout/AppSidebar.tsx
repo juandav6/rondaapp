@@ -58,6 +58,7 @@ const navItems: NavItem[] = [
       { name: "Registro de multas", path: "/caja/multas" },
       { name: "Valores pendientes", path: "/caja/pendientes" },
       { name: "Registro de gastos", path: "/caja/gastos" },
+      { name: "Gasto compartido", path: "/caja/gasto-compartido" },
       { name: "Historial", path: "/caja/historial" },
     ],
   },
