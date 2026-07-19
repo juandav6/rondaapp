@@ -106,6 +106,14 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         await tx.movimientoFondo.deleteMany({ where: { cuotaId: { in: cuotaIds } } });
       }
       await tx.prestamoCuota.deleteMany({ where: { prestamoId: id } });
+      // Restaurar el saldo pendiente del préstamo al fondo disponible
+      const saldoPendiente = Number(prestamo.saldoActual);
+      if (saldoPendiente > 0 && prestamo.rondaId) {
+        await tx.ronda.update({
+          where: { id: prestamo.rondaId },
+          data: { saldoFondoDisponible: { increment: dec(saldoPendiente) } },
+        });
+      }
       await tx.prestamo.delete({ where: { id } });
     });
 

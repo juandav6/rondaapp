@@ -10,6 +10,7 @@ const TABS = [
   { id: "saldos", label: "Saldos completos" },
   { id: "fondo", label: "Fondo de inversión" },
   { id: "caja", label: "Caja" },
+  { id: "ceros", label: "Limpiar $0.00" },
 ];
 
 export default function AdminSincronizarPage() {
@@ -23,6 +24,16 @@ export default function AdminSincronizarPage() {
   async function ejecutar(soloVer: boolean) {
     setLoading(true); setError(null); setResultado(null);
     try {
+      // Tab especial: limpiar movimientos $0.00
+      if (tab === "ceros") {
+        const method = soloVer ? "GET" : "POST";
+        const res = await fetch("/api/admin/reconciliar/limpiar-ceros", { method });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setResultado({ ...data, soloVer });
+        return;
+      }
+
       let url = "";
       let body: any = { soloVer };
 
@@ -112,6 +123,14 @@ export default function AdminSincronizarPage() {
           </div>
         )}
 
+        {tab === "ceros" && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 space-y-1.5">
+            <p className="font-semibold">Movimientos con monto $0.00 en el kardex</p>
+            <p>Estos registros son ruido visual — ocurrían cuando un socio con inversión $0.00 era incluido al crear el fondo. No afectan saldos (sumar $0 es neutro), pero ensucian el historial.</p>
+            <p>Este error ya fue corregido en el código. Esta herramienta limpia los que puedan haber quedado de antes.</p>
+          </div>
+        )}
+
         <div className="flex gap-3 flex-wrap">
           <button onClick={() => ejecutar(true)} disabled={loading}
             className="rounded-xl border border-blue-200 bg-blue-50 px-5 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50">
@@ -171,6 +190,49 @@ export default function AdminSincronizarPage() {
               ? "Todo está sincronizado — no hay discrepancias."
               : resultado.mensaje ?? `${resultado.diferencias?.length ?? 0} discrepancias encontradas`}
           </div>
+
+          {/* Tabla de movimientos $0.00 */}
+          {tab === "ceros" && resultado.movimientos?.length > 0 && (
+            <div className="rounded-2xl border bg-white overflow-hidden">
+              <div className="border-b bg-gray-50 px-5 py-3">
+                <p className="text-sm font-semibold text-gray-800">
+                  Movimientos con $0.00 ({resultado.movimientos.length})
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Socio</th>
+                      <th className="px-4 py-3 text-left">Tipo</th>
+                      <th className="px-4 py-3 text-left">Nota</th>
+                      <th className="px-4 py-3 text-left">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resultado.movimientos.map((m: any) => (
+                      <tr key={m.id} className="border-t hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-gray-900">{m.socio}</td>
+                        <td className="px-4 py-3"><span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{m.tipo}</span></td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{m.nota}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{new Date(m.fecha).toLocaleDateString("es-EC")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {tab === "ceros" && resultado.movimientos?.length === 0 && !resultado.eliminados && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 font-medium">
+              No se encontraron movimientos con monto $0.00. El kardex está limpio.
+            </div>
+          )}
+          {tab === "ceros" && resultado.eliminados !== undefined && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 font-medium">
+              {resultado.mensaje}
+            </div>
+          )}
 
           {/* Detail table */}
           {resultado.diferencias?.length > 0 && (

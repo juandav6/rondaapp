@@ -86,6 +86,8 @@ export async function POST(req: Request, context: Context) {
   await prisma.$transaction(async (tx) => {
     for (const aporte of aportes) {
       const monto = Number(aporte.monto);
+      // No crear cuentas de inversión con monto cero — generarían movimientos $0 en el kardex
+      if (monto <= 0) continue;
       const pct = (monto / totalFondo) * 100;
 
       // Crear cuenta de inversión

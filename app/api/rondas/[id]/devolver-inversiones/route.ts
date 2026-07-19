@@ -14,7 +14,7 @@ export async function POST(_req: Request, context: Context) {
 
   // Cuentas de inversión no devueltas
   const cuentas = await prisma.cuentaInversion.findMany({
-    where: { rondaId, devuelto: false },
+    where: { rondaId, devuelto: false, montoInvertido: { gt: 0 } },
     include: { socio: { select: { id: true, nombres: true, apellidos: true } } },
   });
 

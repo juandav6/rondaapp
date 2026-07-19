@@ -506,7 +506,19 @@ export async function DELETE(req: Request) {
       const monto = Number(ahorro.monto);
       await prisma.$transaction(async (tx) => {
         await tx.ahorro.delete({ where: { id: Number(id) } });
-        if (monto > 0) await tx.socio.update({ where: { id: ahorro.socioId }, data: { saldoAhorros: { decrement: new Prisma.Decimal(monto) } } });
+        if (monto > 0) {
+          await tx.socio.update({ where: { id: ahorro.socioId }, data: { saldoAhorros: { decrement: new Prisma.Decimal(monto) } } });
+        }
+        // Eliminar el MovimientoCuenta AHORRO correspondiente del kardex
+        await tx.movimientoCuenta.deleteMany({
+          where: {
+            socioId: ahorro.socioId,
+            rondaId: ahorro.rondaId,
+            tipo: "AHORRO",
+            nota: { contains: `semana ${ahorro.semana}` },
+          },
+        });
+        efectos.push({ tabla: "movimientos_cuenta", registroId: ahorro.socioId, descripcion: `Movimiento AHORRO semana ${ahorro.semana} eliminado del kardex` });
       });
       efectos.push({ tabla: "socios", registroId: ahorro.socioId, descripcion: `saldoAhorros decrementado ${monto} por eliminación de ahorro` });
       await registrarBitacora({ tabla: "ahorros", registroId: Number(id), accion: "ELIMINAR", camposCambios: { monto: { antes: monto, despues: null } }, efectosCadena: efectos });
@@ -590,13 +602,38 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ error: "No se puede eliminar una inversión no devuelta. Primero cierre la ronda o devuelva manualmente." }, { status: 400 });
       }
 
+      // Capital + intereses que se le devolvieron al socio al cerrar la ronda
+      const totalDevuelto = r2(Number(cuenta.montoInvertido) + Number(cuenta.interesesAcumulados));
+
       await prisma.$transaction(async (tx) => {
-        // Eliminar movimientos INVERSION asociados
+        // Revertir saldoAhorros: lo que se le devolvió al cerrar la ronda
+        if (totalDevuelto > 0) {
+          await tx.socio.update({
+            where: { id: cuenta.socioId },
+            data: { saldoAhorros: { decrement: dec(totalDevuelto) } },
+          });
+          efectos.push({
+            tabla: "socios", registroId: cuenta.socioId,
+            descripcion: `saldoAhorros decrementado $${totalDevuelto.toFixed(2)} (capital $${Number(cuenta.montoInvertido).toFixed(2)} + intereses $${Number(cuenta.interesesAcumulados).toFixed(2)})`,
+          });
+        }
+
+        // Eliminar movimientos INVERSION, DEVOLUCION e INTERES del kardex de este socio en esta ronda
         await tx.movimientoCuenta.deleteMany({
-          where: { socioId: cuenta.socioId, rondaId: cuenta.rondaId, tipo: "INVERSION" },
+          where: {
+            socioId: cuenta.socioId,
+            rondaId: cuenta.rondaId,
+            tipo: { in: ["INVERSION", "DEVOLUCION", "INTERES"] },
+          },
         });
+        efectos.push({
+          tabla: "movimientos_cuenta", registroId: cuenta.socioId,
+          descripcion: `Movimientos INVERSION / DEVOLUCION / INTERES eliminados del kardex`,
+        });
+
         // Eliminar la cuenta
         await tx.cuentaInversion.delete({ where: { id: Number(id) } });
+
         // Recalcular % de los demás inversores
         const restantes = await tx.cuentaInversion.findMany({ where: { rondaId: cuenta.rondaId } });
         const totalFondo = restantes.reduce((s, c) => s + Number(c.montoInvertido), 0);
@@ -619,6 +656,8 @@ export async function DELETE(req: Request) {
         camposCambios: {
           socio: { antes: `${cuenta.socio.nombres} ${cuenta.socio.apellidos}`, despues: null },
           montoInvertido: { antes: Number(cuenta.montoInvertido), despues: null },
+          interesesAcumulados: { antes: Number(cuenta.interesesAcumulados), despues: null },
+          saldoRevertido: { antes: totalDevuelto, despues: null },
         },
         efectosCadena: efectos,
       });

@@ -15,7 +15,7 @@ const MULTA_BASE = 100;
 /** Ejecuta la devolución de inversiones al cierre de la ronda */
 async function devolverInversiones(rondaId: number, fechaFin: Date) {
   const cuentas = await prisma.cuentaInversion.findMany({
-    where: { rondaId, devuelto: false },
+    where: { rondaId, devuelto: false, montoInvertido: { gt: 0 } },
     include: { socio: { select: { id: true, nombres: true, saldoAhorros: true } } },
   });
 
