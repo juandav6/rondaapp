@@ -9,6 +9,8 @@ export default withAuth(
     const rol = token?.rol;
 
     // ── Rutas públicas — dejar pasar siempre ──
+    // Nota: /api/mobile ya no llega aquí — está excluida en el matcher de abajo
+    // porque se autentica sola con Bearer JWT (ver lib/mobile-auth.ts).
     const esPublica =
       pathname.startsWith("/login") ||
       pathname.startsWith("/api/auth") ||
@@ -51,7 +53,10 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    // Aplica a todas las rutas excepto archivos estáticos y api/auth
-    "/((?!login|api/auth|_next/static|_next/image|favicon.ico|images).*)",
+    // Aplica a todas las rutas excepto archivos estáticos, api/auth y api/mobile.
+    // api/mobile queda fuera porque el callback `authorized` de withAuth corre
+    // ANTES que la función de arriba y redirigiría a /login (una respuesta HTML)
+    // a cualquier request sin cookie de NextAuth, incluida la app Flutter.
+    "/((?!login|api/auth|api/mobile|_next/static|_next/image|favicon.ico|images).*)",
   ],
 };
