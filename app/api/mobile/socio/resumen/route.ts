@@ -43,7 +43,10 @@ export async function GET(req: NextRequest) {
   ]);
 
   if (!socio) return NextResponse.json({ error: "Socio no encontrado" }, { status: 404 });
-  if (!ronda) return NextResponse.json({ socio, ronda: null });
+  // socio.saldoAhorros es un Decimal de Prisma: si se devuelve tal cual,
+  // JSON.stringify lo serializa como STRING (usa su .toJSON()), no como número.
+  const socioOut = { ...socio, saldoAhorros: Number(socio.saldoAhorros) };
+  if (!ronda) return NextResponse.json({ socio: socioOut, ronda: null });
 
   const miParticipacion = ronda.participaciones.find(p => p.socioId === socioId);
   const semanaActual = ronda.semanaActual;
@@ -99,7 +102,7 @@ export async function GET(req: NextRequest) {
   const semanasRestantes = semanaToca != null ? semanaToca - semanaActual : null;
 
   return NextResponse.json({
-    socio,
+    socio: socioOut,
     ronda: {
       id: ronda.id,
       nombre: ronda.nombre,
